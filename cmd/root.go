@@ -4,6 +4,7 @@ import (
 	"keyop/core"
 	"keyop/util"
 	"keyop/x/heartbeat"
+	"keyop/x/temp"
 	"log/slog"
 
 	"os"
@@ -21,6 +22,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.AddCommand(heartbeat.NewHeartbeatCmd(deps))
+	rootCmd.AddCommand(temp.NewTempCmd(deps))
 
 	return rootCmd
 }
