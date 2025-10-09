@@ -24,12 +24,14 @@ var startTime time.Time
 
 func init() {
 	startTime = time.Now()
+
 }
 
 type Heartbeat struct {
 	Now           time.Time
 	Uptime        string
 	UptimeSeconds int64
+	Hostname      string
 }
 
 func heartbeat(deps core.Dependencies) error {
@@ -41,6 +43,7 @@ func heartbeat(deps core.Dependencies) error {
 		Now:           time.Now(),
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
+		Hostname:      deps.Hostname,
 	}
 	deps.Logger.Info("heartbeat", "data", heartbeat)
 
