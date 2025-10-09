@@ -24,7 +24,6 @@ var startTime time.Time
 
 func init() {
 	startTime = time.Now()
-
 }
 
 type Heartbeat struct {

@@ -11,7 +11,7 @@ import (
 func GetShortHostname() (string, error) {
 	shortHostname, err := os.Hostname()
 	if err != nil {
-		return "", err
+		return shortHostname, err
 	}
 	if idx := strings.Index(shortHostname, "."); idx != -1 {
 		shortHostname = shortHostname[:idx]
