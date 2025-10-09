@@ -7,12 +7,16 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type logMsg struct {
-	Time  string `json:"time"`
-	Level string `json:"level"`
-	Msg   string `json:"msg"`
+	Time      string    `json:"time"`
+	Level     string    `json:"level"`
+	Msg       string    `json:"msg"`
+	Heartbeat Heartbeat `json:"heartbeat"`
 }
 
 func parseLogMessages(logs string) ([]logMsg, error) {
@@ -30,7 +34,7 @@ func parseLogMessages(logs string) ([]logMsg, error) {
 	return messages, nil
 }
 
-func TestHeartbeat_RunE_LogsAndReturnsNil(t *testing.T) {
+func TestHeartbeatCmd(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
@@ -38,20 +42,18 @@ func TestHeartbeat_RunE_LogsAndReturnsNil(t *testing.T) {
 
 	cmd := NewHeartbeatCmd(deps)
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v, want nil", err)
-	}
+	err := cmd.Execute()
+	assert.NoError(t, err, "Execute() error = %v, want nil", err)
 
 	messages, err := parseLogMessages(buf.String())
-	if err != nil {
-		t.Fatalf("failed to parse log messages: %v", err)
-	}
+	assert.NoError(t, err, "parseLogMessages() error = %v, want nil", err)
 
-	if len(messages) != 1 {
-		t.Fatalf("expected 1 info log, got %d", len(messages))
-	}
+	assert.Equal(t, 1, len(messages), "expected 1 log message")
+	assert.Equal(t, "heartbeat", messages[0].Msg, "expected heartbeat message")
+	assert.Equal(t, "INFO", messages[0].Level, "expected INFO level")
 
-	if messages[0].Msg != "heartbeat called" {
-		t.Fatalf("unexpected log message: got %q, want %q", messages[0].Msg, "heartbeat called")
-	}
+	uptime := time.Since(startTime).Round(time.Second)
+	assert.True(t, messages[0].Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
+	assert.True(t, messages[0].Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
+	assert.True(t, messages[0].Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
 }
