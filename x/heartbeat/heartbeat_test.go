@@ -16,7 +16,7 @@ type logMsg struct {
 	Time      string    `json:"time"`
 	Level     string    `json:"level"`
 	Msg       string    `json:"msg"`
-	Heartbeat Heartbeat `json:"heartbeat"`
+	Heartbeat Heartbeat `json:"data"`
 }
 
 func parseLogMessages(logs string) ([]logMsg, error) {
@@ -38,7 +38,7 @@ func TestHeartbeatCmd(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
-	deps := core.Dependencies{Logger: logger}
+	deps := core.Dependencies{Logger: logger, Hostname: "test-host"}
 
 	cmd := NewHeartbeatCmd(deps)
 
@@ -56,4 +56,7 @@ func TestHeartbeatCmd(t *testing.T) {
 	assert.True(t, messages[0].Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
 	assert.True(t, messages[0].Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
 	assert.True(t, messages[0].Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
+
+	assert.Equal(t, messages[0].Heartbeat.Hostname, "test-host", "shortHostname should be present in heartbeat message")
+
 }
