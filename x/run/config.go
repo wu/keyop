@@ -1,9 +1,6 @@
 package run
 
 import (
-	"keyop/core"
-	"keyop/x/heartbeat"
-	"keyop/x/temp"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,12 +14,6 @@ type checkYAML struct {
 	Name string `yaml:"name"`
 	Freq string `yaml:"freq"`
 	X    string `yaml:"x"`
-}
-
-// map the X value in config to the actual check function
-var checkMethods = map[string]func(core.Dependencies) error{
-	"heartbeat": heartbeat.Check,
-	"temp":      temp.Check,
 }
 
 func configFilePath() string {
