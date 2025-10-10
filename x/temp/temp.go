@@ -14,13 +14,14 @@ import (
 
 var devicePath string
 
-func NewTempCmd(deps core.Dependencies) *cobra.Command {
+func NewCmd(deps core.Dependencies) *cobra.Command {
 	tmpCmd := &cobra.Command{
 		Use:   "temp",
 		Short: "Temp Utility",
 		Long:  `Read a Ds18b20 temperature sensor and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Check(deps)
+			svc := NewService(deps)
+			return svc.Check()
 		},
 	}
 
@@ -29,7 +30,15 @@ func NewTempCmd(deps core.Dependencies) *cobra.Command {
 	return tmpCmd
 }
 
-type Temp struct {
+type Service struct {
+	Deps core.Dependencies
+}
+
+func NewService(deps core.Dependencies) core.Service {
+	return &Service{Deps: deps}
+}
+
+type Event struct {
 	Now   time.Time
 	TempC float32 `json:"TempC,omitempty"`
 	TempF float32 `json:"TempF,omitempty"`
@@ -37,22 +46,23 @@ type Temp struct {
 	Error string  `json:"Error,omitempty"`
 }
 
-func Check(deps core.Dependencies) error {
-	_, err := temp(deps)
+func (svc Service) Check() error {
+	_, err := svc.temp()
 	return err
 }
 
-func temp(deps core.Dependencies) (Temp, error) {
-	deps.Logger.Debug("temp check called")
+func (svc Service) temp() (Event, error) {
+	logger := svc.Deps.Logger
+	logger.Debug("temp check called")
 
-	temp := Temp{
+	temp := Event{
 		Now: time.Now(),
 	}
 
 	contentBytes, err := os.ReadFile(devicePath)
 	if err != nil {
 		temp.Error = fmt.Sprintf("could not read from %s: %s", devicePath, err.Error())
-		deps.Logger.Info("temp", "data", temp)
+		logger.Info("temp", "data", temp)
 		return temp, err
 	}
 
@@ -60,26 +70,26 @@ func temp(deps core.Dependencies) (Temp, error) {
 
 	if len(content) == 0 {
 		temp.Error = fmt.Sprintf("no content retrieved from temp device %s", devicePath)
-		deps.Logger.Error("temp", "data", temp)
+		logger.Error("temp", "data", temp)
 		return temp, errors.New(temp.Error)
 	}
 
 	idx := strings.Index(content, "t=")
 
 	temp.Raw = content[idx+2 : len(content)-1]
-	deps.Logger.Debug("Ds18b20", "RAW TEMP", temp.Raw)
+	logger.Debug("Ds18b20", "RAW TEMP", temp.Raw)
 
 	tempInt, err := strconv.Atoi(temp.Raw)
 	if err != nil {
-		temp.Error = fmt.Sprintf("unable to convert temp string to int: %d: %s", tempInt, err.Error())
-		deps.Logger.Error("temp", "data", temp)
+		temp.Error = fmt.Sprintf("unable to convert temp string to int: %s: %s", temp.Raw, err.Error())
+		logger.Error("temp", "data", temp)
 		return temp, errors.New(temp.Error)
 	}
 
 	temp.TempC = float32(tempInt) / 1000
-	temp.TempF = float32(temp.TempC*9/5 + 32.0)
+	temp.TempF = temp.TempC*9/5 + 32.0
 
-	deps.Logger.Info("temp", "data", temp)
+	logger.Info("temp", "data", temp)
 
 	return temp, nil
 }

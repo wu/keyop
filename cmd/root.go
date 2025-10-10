@@ -23,9 +23,9 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	rootCmd.AddCommand(heartbeat.NewHeartbeatCmd(deps))
-	rootCmd.AddCommand(temp.NewTempCmd(deps))
-	rootCmd.AddCommand(run.NewRunCmd(deps))
+	rootCmd.AddCommand(heartbeat.NewCmd(deps))
+	rootCmd.AddCommand(temp.NewCmd(deps))
+	rootCmd.AddCommand(run.NewCmd(deps))
 
 	return rootCmd
 }

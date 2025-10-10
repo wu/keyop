@@ -13,10 +13,10 @@ import (
 )
 
 type logMsg struct {
-	Time      string    `json:"time"`
-	Level     string    `json:"level"`
-	Msg       string    `json:"msg"`
-	Heartbeat Heartbeat `json:"data"`
+	Time      string `json:"time"`
+	Level     string `json:"level"`
+	Msg       string `json:"msg"`
+	Heartbeat Event  `json:"data"`
 }
 
 func parseLogMessages(logs string) ([]logMsg, error) {
@@ -40,7 +40,7 @@ func TestHeartbeatCmd(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
 	deps := core.Dependencies{Logger: logger, Hostname: "test-host"}
 
-	cmd := NewHeartbeatCmd(deps)
+	cmd := NewCmd(deps)
 
 	err := cmd.Execute()
 	assert.NoError(t, err, "Execute() error = %v, want nil", err)

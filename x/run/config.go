@@ -21,7 +21,7 @@ func configFilePath() string {
 	return filepath.Join(".", "config.yaml")
 }
 
-// loadChecks reads config.yaml and converts it into a slice of Check with bound funcs
+// loadChecks reads config.yaml and creates a slice of Check objects
 func loadChecks() ([]Check, error) {
 	p := configFilePath()
 	b, err := os.ReadFile(p)
@@ -41,10 +41,10 @@ func loadChecks() ([]Check, error) {
 			return nil, err
 		}
 		chk := Check{
-			Name: yc.Name,
-			Freq: dur,
-			X:    yc.X,
-			Func: checkMethods[yc.X],
+			Name:    yc.Name,
+			Freq:    dur,
+			X:       yc.X,
+			NewFunc: NewObjectMethods[yc.X],
 		}
 		checks = append(checks, chk)
 	}

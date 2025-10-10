@@ -1,7 +1,6 @@
 package run
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +13,7 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 	// change to an empty temp directory without config.yaml
 	dir := t.TempDir()
 	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Chdir(oldWD)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)
@@ -29,10 +29,11 @@ func Test_loadChecks_success(t *testing.T) {
 	dir := t.TempDir()
 	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n" +
 		"- name: office-temp\n  freq: 2s\n  x: temp\n"
-	if err := ioutil.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Chdir(oldWD)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)
@@ -45,13 +46,13 @@ func Test_loadChecks_success(t *testing.T) {
 		assert.Equal(t, "heartbeat", checks[0].Name)
 		assert.Equal(t, "heartbeat", checks[0].X)
 		assert.Equal(t, 1*time.Second, checks[0].Freq)
-		assert.NotNil(t, checks[0].Func)
+		assert.NotNil(t, checks[0].NewFunc)
 
 		// second check assertions
 		assert.Equal(t, "office-temp", checks[1].Name)
 		assert.Equal(t, "temp", checks[1].X)
 		assert.Equal(t, 2*time.Second, checks[1].Freq)
-		assert.NotNil(t, checks[1].Func)
+		assert.NotNil(t, checks[1].NewFunc)
 	}
 }
 
@@ -59,10 +60,11 @@ func Test_loadChecks_bad_duration(t *testing.T) {
 	// setup: temp dir with an invalid duration string
 	dir := t.TempDir()
 	cfg := "- name: heartbeat\n  freq: not-a-duration\n  x: heartbeat\n"
-	if err := ioutil.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Chdir(oldWD)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)

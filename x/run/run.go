@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRunCmd(deps core.Dependencies) *cobra.Command {
+func NewCmd(deps core.Dependencies) *cobra.Command {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run Utility",
@@ -29,7 +29,7 @@ This utility is a work in progress.
 				deps.Logger.Error("config load", "error", "no checks configured")
 				return fmt.Errorf("no checks configured")
 			}
-			return runWithChecks(deps, checks)
+			return run(deps, checks)
 		},
 	}
 
@@ -37,14 +37,14 @@ This utility is a work in progress.
 }
 
 type Check struct {
-	Name string
-	Freq time.Duration
-	X    string
-	Func func(core.Dependencies) error
-	Err  error
+	Name    string
+	Freq    time.Duration
+	X       string
+	NewFunc func(core.Dependencies) core.Service
+	Err     error
 }
 
-func runWithChecks(deps core.Dependencies, checks []Check) error {
+func run(deps core.Dependencies, checks []Check) error {
 	deps.Logger.Info("run called")
 
 	var wg sync.WaitGroup
@@ -55,8 +55,10 @@ func runWithChecks(deps core.Dependencies, checks []Check) error {
 		go func(check Check) {
 			defer wg.Done()
 
+			obj := check.NewFunc(deps)
+
 			// execute first check immediately
-			if err := check.Func(deps); err != nil {
+			if err := obj.Check(); err != nil {
 				deps.Logger.Error("check", "error", err)
 			}
 
@@ -67,7 +69,7 @@ func runWithChecks(deps core.Dependencies, checks []Check) error {
 			for {
 				select {
 				case <-ticker.C:
-					if err := check.Func(deps); err != nil {
+					if err := obj.Check(); err != nil {
 						deps.Logger.Error("check", "error", err)
 					}
 				case <-deps.Context.Done():
@@ -81,18 +83,4 @@ func runWithChecks(deps core.Dependencies, checks []Check) error {
 	<-deps.Context.Done()
 	wg.Wait()
 	return deps.Context.Err()
-}
-
-// run remains as a wrapper for backward compatibility, but configuration is loaded before calling it in CLI/tests.
-func run(deps core.Dependencies) error {
-	checks, err := loadChecks()
-	if err != nil {
-		deps.Logger.Error("config load", "error", err)
-		return err
-	}
-	if len(checks) == 0 {
-		deps.Logger.Error("config load", "error", "no checks configured")
-		return fmt.Errorf("no checks configured")
-	}
-	return runWithChecks(deps, checks)
 }
