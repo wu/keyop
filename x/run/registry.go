@@ -6,8 +6,7 @@ import (
 	"keyop/x/temp"
 )
 
-// map the X value in config to the actual check function
-var checkMethods = map[string]func(core.Dependencies) error{
-	"heartbeat": heartbeat.Check,
-	"temp":      temp.Check,
+var NewObjectMethods = map[string]func(deps core.Dependencies) core.Service{
+	"heartbeat": heartbeat.NewService,
+	"temp":      temp.NewService,
 }

@@ -3,7 +3,6 @@ package run
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"keyop/core"
 	"keyop/x/heartbeat"
 	"log/slog"
@@ -20,10 +19,11 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 	// prepare a temp working directory with a minimal config.yaml (heartbeat only)
 	dir := t.TempDir()
 	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n"
-	if err := ioutil.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Chdir(oldWD)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)
@@ -44,16 +44,16 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 			Name: "heartbeat",
 			Freq: 1 * time.Second,
 			X:    "heartbeat",
-			Func: func(deps core.Dependencies) error {
+			NewFunc: func(deps core.Dependencies) core.Service {
 				deps.Logger.Info("heartbeat")
-				return heartbeat.Check(deps)
+				return heartbeat.Service{Deps: deps}
 			},
 		},
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		done <- runWithChecks(deps, checks)
+		done <- run(deps, checks)
 	}()
 
 	// give the goroutine a moment to start and immediately execute checks

@@ -1,7 +1,6 @@
 package temp
 
 import (
-	"io/ioutil"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -13,7 +12,7 @@ import (
 
 func Test_NewTempCmd(t *testing.T) {
 	deps := testDeps()
-	cmd := NewTempCmd(deps)
+	cmd := NewCmd(deps)
 
 	// weak assertion
 	assert.NotNil(t, cmd)
@@ -28,7 +27,7 @@ func testDeps() core.Dependencies {
 func writeTempFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
-	if err := ioutil.WriteFile(p, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed writing temp device file: %v", err)
 	}
 	return p
@@ -43,7 +42,8 @@ func Test_temp_success(t *testing.T) {
 	// Point the code to our test file
 	devicePath = p
 
-	got, err := temp(deps)
+	svc := Service{Deps: deps}
+	got, err := svc.temp()
 	assert.NoError(t, err)
 	assert.Empty(t, got.Error)
 	assert.InDelta(t, 23.125, got.TempC, 0.0001)
@@ -58,7 +58,8 @@ func Test_temp_read_error(t *testing.T) {
 	// point to a non-existent file
 	devicePath = filepath.Join(t.TempDir(), "does-not-exist")
 
-	got, err := temp(deps)
+	svc := Service{Deps: deps}
+	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "could not read from")
 }
@@ -69,7 +70,8 @@ func Test_temp_empty_content(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "")
 	devicePath = p
 
-	got, err := temp(deps)
+	svc := Service{Deps: deps}
+	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "no content retrieved from temp device")
 }
@@ -80,7 +82,8 @@ func Test_temp_bad_integer(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "crc YES\nvalue t=abc\n")
 	devicePath = p
 
-	got, err := temp(deps)
+	svc := Service{Deps: deps}
+	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "unable to convert temp string to int")
 }
