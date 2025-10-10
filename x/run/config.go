@@ -19,20 +19,6 @@ type checkYAML struct {
 	X    string `yaml:"x"`
 }
 
-// defaultConfig is retained for reference but not used; config must be present
-var defaultConfig = []Check{
-	{
-		Name: "heartbeat",
-		Freq: 5 * time.Second,
-		X:    "heartbeat",
-	},
-	{
-		Name: "office-temp",
-		Freq: 5 * time.Second,
-		X:    "temp",
-	},
-}
-
 // map the X value in config to the actual check function
 var checkMethods = map[string]func(core.Dependencies) error{
 	"heartbeat": heartbeat.Check,
