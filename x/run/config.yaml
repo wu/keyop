@@ -1,0 +1,6 @@
+- name: heartbeat
+  freq: 5s
+  x: heartbeat
+- name: office-temp
+  freq: 5s
+  x: temp

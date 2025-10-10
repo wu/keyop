@@ -3,8 +3,12 @@ package run
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"keyop/core"
+	"keyop/x/heartbeat"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +17,18 @@ import (
 )
 
 func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
+	// prepare a temp working directory with a minimal config.yaml (heartbeat only)
+	dir := t.TempDir()
+	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n"
+	if err := ioutil.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	oldWD, _ := os.Getwd()
+	defer os.Chdir(oldWD)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
 	// capture logs
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
@@ -23,13 +39,25 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 
 	deps := core.Dependencies{Logger: logger, Hostname: "test-host", Context: ctx}
 
+	checks := []Check{
+		{
+			Name: "heartbeat",
+			Freq: 1 * time.Second,
+			X:    "heartbeat",
+			Func: func(deps core.Dependencies) error {
+				deps.Logger.Info("heartbeat")
+				return heartbeat.Check(deps)
+			},
+		},
+	}
+
 	done := make(chan error, 1)
 	go func() {
-		done <- run(deps)
+		done <- runWithChecks(deps, checks)
 	}()
 
-	// give the goroutine a moment to start and execute the immediate checks
-	time.Sleep(1 * time.Second)
+	// give the goroutine a moment to start and immediately execute checks
+	time.Sleep(200 * time.Millisecond)
 	cancel()
 
 	select {
@@ -45,9 +73,8 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 	// it should log that run was called
 	assert.Contains(t, logs, "\"msg\":\"run called\"")
 
-	// executeChecks should have run immediately: heartbeat.Check logs an INFO with msg "Check"
-	// and temp.Check likely logs either INFO or ERROR depending on environment. We only assert heartbeat presence.
-	if !strings.Contains(logs, "\"msg\":\"Check\"") {
-		t.Fatalf("expected heartbeat Check log in output; got logs: %s", logs)
+	// heartbeat logs an INFO with msg "heartbeat"
+	if !strings.Contains(logs, "\"msg\":\"heartbeat\"") {
+		t.Fatalf("expected heartbeat log in output; got logs: %s", logs)
 	}
 }
