@@ -1,9 +1,9 @@
 ---
 
 - name: heartbeat
-  freq: 5s
+  freq: 3s
   x: heartbeat
 
 - name: office-temp
-  freq: 5s
+  freq: 15s
   x: temp
