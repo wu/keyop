@@ -8,8 +8,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// YAML representation of checks in the config file
-type checkYAML struct {
+// YAML representation of services in the config file
+type serviceConfigYaml struct {
 	Name string `yaml:"name"`
 	Freq string `yaml:"freq"`
 	X    string `yaml:"x"`
@@ -20,32 +20,32 @@ func configFilePath() string {
 	return filepath.Join(".", "config.yaml")
 }
 
-// loadChecks reads config.yaml and creates Check objects
-func loadChecks() ([]Check, error) {
+// loadServices reads config.yaml and creates ServiceConfig objects
+func loadServices() ([]ServiceConfig, error) {
 	p := configFilePath()
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
 
-	var fileCfg []checkYAML
-	if err := yaml.Unmarshal(b, &fileCfg); err != nil {
+	var serviceConfigSource []serviceConfigYaml
+	if err := yaml.Unmarshal(b, &serviceConfigSource); err != nil {
 		return nil, err
 	}
 
-	var checks []Check
-	for _, yc := range fileCfg {
+	var serviceConfigs []ServiceConfig
+	for _, yc := range serviceConfigSource {
 		dur, err := time.ParseDuration(yc.Freq)
 		if err != nil {
 			return nil, err
 		}
-		chk := Check{
+		svcConfig := ServiceConfig{
 			Name:    yc.Name,
 			Freq:    dur,
-			X:       yc.X,
+			Type:    yc.X,
 			NewFunc: ServiceRegistry[yc.X],
 		}
-		checks = append(checks, chk)
+		serviceConfigs = append(serviceConfigs, svcConfig)
 	}
-	return checks, nil
+	return serviceConfigs, nil
 }
