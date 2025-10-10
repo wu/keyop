@@ -13,7 +13,7 @@ func NewHeartbeatCmd(deps core.Dependencies) *cobra.Command {
 		Short: "Heartbeat Utility",
 		Long:  `Execute the heartbeat command and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return heartbeat(deps)
+			return Check(deps)
 		},
 	}
 
@@ -33,7 +33,7 @@ type Heartbeat struct {
 	Hostname      string
 }
 
-func heartbeat(deps core.Dependencies) error {
+func Check(deps core.Dependencies) error {
 	deps.Logger.Debug("heartbeat called")
 
 	uptime := time.Since(startTime)

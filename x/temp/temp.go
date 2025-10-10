@@ -20,8 +20,7 @@ func NewTempCmd(deps core.Dependencies) *cobra.Command {
 		Short: "Temp Utility",
 		Long:  `Read a Ds18b20 temperature sensor and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := temp(deps)
-			return err
+			return Check(deps)
 		},
 	}
 
@@ -31,14 +30,20 @@ func NewTempCmd(deps core.Dependencies) *cobra.Command {
 }
 
 type Temp struct {
-	Now   time.Time `json:"now"`
-	TempC float32   `json:"temp_c,omitempty"`
-	TempF float32   `json:"temp_f,omitempty"`
-	Error string    `json:"error,omitempty"`
+	Now   time.Time
+	TempC float32 `json:"TempC,omitempty"`
+	TempF float32 `json:"TempF,omitempty"`
+	Raw   string  `json:"Raw,omitempty"`
+	Error string  `json:"Error,omitempty"`
+}
+
+func Check(deps core.Dependencies) error {
+	_, err := temp(deps)
+	return err
 }
 
 func temp(deps core.Dependencies) (Temp, error) {
-	deps.Logger.Debug("temp called")
+	deps.Logger.Debug("temp check called")
 
 	temp := Temp{
 		Now: time.Now(),
@@ -61,11 +66,10 @@ func temp(deps core.Dependencies) (Temp, error) {
 
 	idx := strings.Index(content, "t=")
 
-	tempString := content[idx+2 : len(content)-1]
+	temp.Raw = content[idx+2 : len(content)-1]
+	deps.Logger.Debug("Ds18b20", "RAW TEMP", temp.Raw)
 
-	deps.Logger.Debug("Ds18b20", "RAW TEMP", tempString)
-
-	tempInt, err := strconv.Atoi(tempString)
+	tempInt, err := strconv.Atoi(temp.Raw)
 	if err != nil {
 		temp.Error = fmt.Sprintf("unable to convert temp string to int: %d: %s", tempInt, err.Error())
 		deps.Logger.Error("temp", "data", temp)

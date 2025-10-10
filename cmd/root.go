@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"keyop/core"
 	"keyop/util"
 	"keyop/x/heartbeat"
+	"keyop/x/run"
 	"keyop/x/temp"
 	"log/slog"
 
@@ -23,6 +25,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 
 	rootCmd.AddCommand(heartbeat.NewHeartbeatCmd(deps))
 	rootCmd.AddCommand(temp.NewTempCmd(deps))
+	rootCmd.AddCommand(run.NewRunCmd(deps))
 
 	return rootCmd
 }
@@ -34,8 +37,11 @@ func Execute() {
 		logger.Error("failed to get hostname", "error", err)
 		os.Exit(1)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	deps := core.Dependencies{
 		Logger:   logger,
+		Context:  ctx,
 		Hostname: hostname,
 	}
 
