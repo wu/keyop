@@ -1,9 +1,8 @@
 package run
 
 import (
+	"fmt"
 	"keyop/core"
-	"keyop/x/heartbeat"
-	"keyop/x/temp"
 	"sync"
 	"time"
 
@@ -14,58 +13,86 @@ func NewRunCmd(deps core.Dependencies) *cobra.Command {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run Utility",
-		Long:  `Spawn a process to run the extensions at scheduled intervals.`,
+		Long: `Spawn a process to run the extensions at scheduled intervals.
+
+This utility is a work in progress.
+
+`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(deps)
+			// load the check configuration before calling the run method
+			checks, err := loadChecks()
+			if err != nil {
+				deps.Logger.Error("config load", "error", err)
+				return err
+			}
+			if len(checks) == 0 {
+				deps.Logger.Error("config load", "error", "no checks configured")
+				return fmt.Errorf("no checks configured")
+			}
+			return runWithChecks(deps, checks)
 		},
 	}
 
 	return runCmd
 }
 
-func run(deps core.Dependencies) error {
+type Check struct {
+	Name string
+	Freq time.Duration
+	X    string
+	Func func(core.Dependencies) error
+	Err  error
+}
+
+func runWithChecks(deps core.Dependencies, checks []Check) error {
 	deps.Logger.Info("run called")
-
-	type CheckFunc func(core.Dependencies) error
-
-	checks := []CheckFunc{
-		heartbeat.Check,
-		temp.Check,
-	}
 
 	var wg sync.WaitGroup
 
-	runCheck := func(check CheckFunc) {
-		defer wg.Done()
-
-		// Execute check immediately
-		if err := check(deps); err != nil {
-			deps.Logger.Error("check", "error", err)
-		}
-
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if err := check(deps); err != nil {
-					deps.Logger.Error("check", "error", err)
-				}
-			case <-deps.Context.Done():
-				return
-			}
-		}
-	}
-
-	// Start a goroutine for each check
+	// start a goroutine for each check
 	for _, check := range checks {
 		wg.Add(1)
-		go runCheck(check)
+		go func(check Check) {
+			defer wg.Done()
+
+			// execute first check immediately
+			if err := check.Func(deps); err != nil {
+				deps.Logger.Error("check", "error", err)
+			}
+
+			// start a ticker to execute the check at the specified frequency
+			ticker := time.NewTicker(check.Freq)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					if err := check.Func(deps); err != nil {
+						deps.Logger.Error("check", "error", err)
+					}
+				case <-deps.Context.Done():
+					return
+				}
+			}
+		}(check)
 	}
 
 	// Wait for context cancellation
 	<-deps.Context.Done()
 	wg.Wait()
 	return deps.Context.Err()
+}
+
+// run remains as a wrapper for backward compatibility, but configuration is loaded before calling it in CLI/tests.
+func run(deps core.Dependencies) error {
+	checks, err := loadChecks()
+	if err != nil {
+		deps.Logger.Error("config load", "error", err)
+		return err
+	}
+	if len(checks) == 0 {
+		deps.Logger.Error("config load", "error", "no checks configured")
+		return fmt.Errorf("no checks configured")
+	}
+	return runWithChecks(deps, checks)
 }
