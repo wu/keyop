@@ -39,11 +39,11 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 
 	deps := core.Dependencies{Logger: logger, Hostname: "test-host", Context: ctx}
 
-	checks := []Check{
+	serviceConfigs := []ServiceConfig{
 		{
 			Name: "heartbeat",
 			Freq: 1 * time.Second,
-			X:    "heartbeat",
+			Type: "heartbeat",
 			NewFunc: func(deps core.Dependencies) core.Service {
 				deps.Logger.Info("heartbeat")
 				return heartbeat.Service{Deps: deps}
@@ -53,10 +53,10 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- run(deps, checks)
+		done <- run(deps, serviceConfigs)
 	}()
 
-	// give the goroutine a moment to start and immediately execute checks
+	// give the goroutine a moment to start and immediately execute serviceConfigs
 	time.Sleep(200 * time.Millisecond)
 	cancel()
 

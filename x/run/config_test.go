@@ -20,12 +20,12 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 	}
 
 	// load should fail before running
-	_, err := loadChecks()
+	_, err := loadServices()
 	assert.Error(t, err, "expected error when config is missing")
 }
 
-func Test_loadChecks_success(t *testing.T) {
-	// setup: temp dir with a valid config.yaml containing two checks
+func Test_loadServices_success(t *testing.T) {
+	// setup: temp dir with a valid config.yaml containing two svcs
 	dir := t.TempDir()
 	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n" +
 		"- name: office-temp\n  freq: 2s\n  x: temp\n"
@@ -39,24 +39,24 @@ func Test_loadChecks_success(t *testing.T) {
 		t.Fatalf("chdir: %v", err)
 	}
 
-	checks, err := loadChecks()
+	svcs, err := loadServices()
 	assert.NoError(t, err)
-	if assert.Len(t, checks, 2) {
+	if assert.Len(t, svcs, 2) {
 		// first check assertions
-		assert.Equal(t, "heartbeat", checks[0].Name)
-		assert.Equal(t, "heartbeat", checks[0].X)
-		assert.Equal(t, 1*time.Second, checks[0].Freq)
-		assert.NotNil(t, checks[0].NewFunc)
+		assert.Equal(t, "heartbeat", svcs[0].Name)
+		assert.Equal(t, "heartbeat", svcs[0].Type)
+		assert.Equal(t, 1*time.Second, svcs[0].Freq)
+		assert.NotNil(t, svcs[0].NewFunc)
 
 		// second check assertions
-		assert.Equal(t, "office-temp", checks[1].Name)
-		assert.Equal(t, "temp", checks[1].X)
-		assert.Equal(t, 2*time.Second, checks[1].Freq)
-		assert.NotNil(t, checks[1].NewFunc)
+		assert.Equal(t, "office-temp", svcs[1].Name)
+		assert.Equal(t, "temp", svcs[1].Type)
+		assert.Equal(t, 2*time.Second, svcs[1].Freq)
+		assert.NotNil(t, svcs[1].NewFunc)
 	}
 }
 
-func Test_loadChecks_bad_duration(t *testing.T) {
+func Test_loadServices_bad_duration(t *testing.T) {
 	// setup: temp dir with an invalid duration string
 	dir := t.TempDir()
 	cfg := "- name: heartbeat\n  freq: not-a-duration\n  x: heartbeat\n"
@@ -70,6 +70,6 @@ func Test_loadChecks_bad_duration(t *testing.T) {
 		t.Fatalf("chdir: %v", err)
 	}
 
-	_, err := loadChecks()
+	_, err := loadServices()
 	assert.Error(t, err, "expected error for invalid duration in config")
 }
