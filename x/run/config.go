@@ -8,8 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// YAML representation of a check in the config file
-// kept internal to config parsing
+// YAML representation of checks in the config file
 type checkYAML struct {
 	Name string `yaml:"name"`
 	Freq string `yaml:"freq"`
@@ -17,11 +16,11 @@ type checkYAML struct {
 }
 
 func configFilePath() string {
-	// keep it simple: put config.yaml next to the running binary (current working dir)
+	// read config.yaml from the current working directory
 	return filepath.Join(".", "config.yaml")
 }
 
-// loadChecks reads config.yaml and creates a slice of Check objects
+// loadChecks reads config.yaml and creates Check objects
 func loadChecks() ([]Check, error) {
 	p := configFilePath()
 	b, err := os.ReadFile(p)
@@ -44,7 +43,7 @@ func loadChecks() ([]Check, error) {
 			Name:    yc.Name,
 			Freq:    dur,
 			X:       yc.X,
-			NewFunc: NewObjectMethods[yc.X],
+			NewFunc: ServiceRegistry[yc.X],
 		}
 		checks = append(checks, chk)
 	}

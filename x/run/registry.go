@@ -6,7 +6,7 @@ import (
 	"keyop/x/temp"
 )
 
-var NewObjectMethods = map[string]func(deps core.Dependencies) core.Service{
+var ServiceRegistry = map[string]func(deps core.Dependencies) core.Service{
 	"heartbeat": heartbeat.NewService,
 	"temp":      temp.NewService,
 }
