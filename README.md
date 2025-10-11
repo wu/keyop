@@ -12,6 +12,6 @@ Project Goals
 * Support for a variety of IOT sensors and data sources.
 * Trigger custom notifications and reactions based on observations and predictions.
 * Integration with Apple Homekit.
-* Terminal UI to monitor the state of the system.
+* Terminal UI - status HUD to monitor the state of the system.
 
 Join the project to help make event-driven intelligence accessible to everyone!

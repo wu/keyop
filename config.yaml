@@ -3,7 +3,16 @@
 - name: heartbeat
   freq: 3s
   x: heartbeat
+  pubs:
+    events:
+      name: heartbeat
+      description: Publish channel for heartbeat events
 
 - name: office-temp
   freq: 15s
   x: temp
+  pubs:
+    events:
+      name: temp
+      description: Publish channel for office temperature events
+

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"keyop/core"
-	"keyop/x/heartbeat"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -39,15 +38,11 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 
 	deps := core.Dependencies{Logger: logger, Hostname: "test-host", Context: ctx}
 
-	serviceConfigs := []ServiceConfig{
+	serviceConfigs := []core.ServiceConfig{
 		{
 			Name: "heartbeat",
 			Freq: 1 * time.Second,
 			Type: "heartbeat",
-			NewFunc: func(deps core.Dependencies) core.Service {
-				deps.Logger.Info("heartbeat")
-				return heartbeat.Service{Deps: deps}
-			},
 		},
 	}
 

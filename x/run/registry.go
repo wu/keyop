@@ -6,7 +6,9 @@ import (
 	"keyop/x/temp"
 )
 
-var ServiceRegistry = map[string]func(deps core.Dependencies) core.Service{
-	"heartbeat": heartbeat.NewService,
-	"temp":      temp.NewService,
+var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceConfig) core.Service{
+	"heartbeat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return heartbeat.NewService(deps, cfg)
+	},
+	"temp": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service { return temp.NewService(deps, cfg) },
 }
