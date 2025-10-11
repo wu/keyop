@@ -8,8 +8,8 @@ import (
 )
 
 // Compile-time checks that implementations satisfy the interface
-var _ OsProviderIface = OsProvider{}
-var _ OsProviderIface = FakeOsProvider{}
+var _ OsProviderApi = OsProvider{}
+var _ OsProviderApi = FakeOsProvider{}
 
 func TestOsProvider_Hostname_MatchesStdlib(t *testing.T) {
 	want, wantErr := os.Hostname()

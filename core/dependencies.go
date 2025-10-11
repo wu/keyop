@@ -5,9 +5,10 @@ import (
 )
 
 type Dependencies struct {
-	logger  Logger
-	os      OsProviderIface
-	context context.Context
+	logger    Logger
+	os        OsProviderApi
+	messenger MessengerApi
+	context   context.Context
 }
 
 func (d *Dependencies) SetLogger(logger Logger) {
@@ -32,13 +33,24 @@ func (d *Dependencies) MustGetContext() context.Context {
 	return d.context
 }
 
-func (d *Dependencies) SetOsProvider(os OsProviderIface) {
+func (d *Dependencies) SetOsProvider(os OsProviderApi) {
 	d.os = os
 }
 
-func (d *Dependencies) MustGetOsProvider() OsProviderIface {
+func (d *Dependencies) MustGetOsProvider() OsProviderApi {
 	if d.os == nil {
 		panic("ERROR: OS provider is not initialized")
 	}
 	return d.os
+}
+
+func (d *Dependencies) SetMessenger(messenger MessengerApi) {
+	d.messenger = messenger
+}
+
+func (d *Dependencies) MustGetMessenger() MessengerApi {
+	if d.messenger == nil {
+		panic("ERROR: Messenger is not initialized")
+	}
+	return d.messenger
 }
