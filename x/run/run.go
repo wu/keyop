@@ -20,7 +20,7 @@ This utility is a work in progress.
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// load the service configuration before calling the run method
-			svcs, err := loadServices()
+			svcs, err := loadServices(deps)
 			if err != nil {
 				deps.Logger.Error("config load", "error", err)
 				return err
@@ -36,14 +36,7 @@ This utility is a work in progress.
 	return runCmd
 }
 
-type ServiceConfig struct {
-	Name    string
-	Freq    time.Duration
-	Type    string
-	NewFunc func(core.Dependencies) core.Service
-}
-
-func run(deps core.Dependencies, serviceConfigs []ServiceConfig) error {
+func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	deps.Logger.Info("run called")
 
 	var wg sync.WaitGroup
@@ -51,11 +44,11 @@ func run(deps core.Dependencies, serviceConfigs []ServiceConfig) error {
 	// start a goroutine for each check
 	for _, check := range serviceConfigs {
 		wg.Add(1)
-		go func(serviceConfig ServiceConfig) {
+		go func(serviceConfig core.ServiceConfig) {
 			defer wg.Done()
 
-			// TODO: pass service config here
-			service := serviceConfig.NewFunc(deps)
+			// pass service config to constructor
+			service := ServiceRegistry[serviceConfig.Type](deps, serviceConfig)
 
 			// execute first check immediately
 			if err := service.Check(); err != nil {

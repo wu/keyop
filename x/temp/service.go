@@ -14,10 +14,11 @@ var devicePath string
 
 type Service struct {
 	Deps core.Dependencies
+	Cfg  core.ServiceConfig
 }
 
-func NewService(deps core.Dependencies) core.Service {
-	return &Service{Deps: deps}
+func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+	return &Service{Deps: deps, Cfg: cfg}
 }
 
 type Event struct {
