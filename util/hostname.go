@@ -1,15 +1,15 @@
 package util
 
 import (
-	"os"
+	"keyop/core"
 	"strings"
 )
 
 // GetShortHostname returns the system hostname without the domain suffix.
 // For example, "host.example.com" becomes "host".
 // It returns an error if the hostname cannot be determined.
-func GetShortHostname() (string, error) {
-	shortHostname, err := os.Hostname()
+func GetShortHostname(osProvider core.OsProviderIface) (string, error) {
+	shortHostname, err := osProvider.Hostname()
 	if err != nil {
 		return shortHostname, err
 	}

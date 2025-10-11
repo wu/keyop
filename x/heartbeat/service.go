@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"keyop/core"
+	"keyop/util"
 	"time"
 )
 
@@ -12,12 +13,23 @@ func init() {
 }
 
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps          core.Dependencies
+	Cfg           core.ServiceConfig
+	ShortHostname string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return &Service{Deps: deps, Cfg: cfg}
+	logger := deps.MustGetLogger()
+	os := deps.MustGetOsProvider()
+	hostname, err := util.GetShortHostname(os)
+	if err != nil {
+		logger.Error("Error getting hostname", "error", err)
+	}
+	if hostname == "" {
+		logger.Error("Error getting hostname", "error", "hostname was empty")
+	}
+
+	return &Service{Deps: deps, Cfg: cfg, ShortHostname: hostname}
 }
 
 type Event struct {
@@ -29,7 +41,6 @@ type Event struct {
 
 func (svc Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
-	hostname := svc.Deps.MustGetHostname()
 
 	uptime := time.Since(startTime)
 
@@ -37,7 +48,7 @@ func (svc Service) Check() error {
 		Now:           time.Now(),
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
-		Hostname:      hostname,
+		Hostname:      svc.ShortHostname,
 	}
 	logger.Info("heartbeat", "data", heartbeat)
 
