@@ -2,7 +2,16 @@
 
 Project Under Construction!
 
-Keyop is a lightweight framework for collecting and reacting to IOT and other sensor data.
-It makes heavy use of machine learning.
+Keyop is a simple, yet powerful framework for observing, predicting, and reacting to events. Think of it as a
+lightweight and easy-to-use nerve center for your IoT projects, data pipelines, or anything else that generates
+or reacts to interesting events.
 
-More coming soon!
+Project Goals
+
+* Deploy as a standalone instance or scale out to a distributed mesh, no fuss.
+* Support for a variety of IOT sensors and data sources.
+* Trigger custom notifications and reactions based on observations and predictions.
+* Integration with Apple Homekit.
+* Terminal UI to monitor the state of the system.
+
+Join the project to help make event-driven intelligence accessible to everyone!
