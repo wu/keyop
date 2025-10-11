@@ -1,6 +1,7 @@
 package temp
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"keyop/core"
@@ -73,6 +74,27 @@ func (svc Service) temp() (Event, error) {
 	temp.TempF = temp.TempC*9/5 + 32.0
 
 	logger.Info("temp", "data", temp)
+
+	// todo: get messenger at startup
+	messenger := svc.Deps.MustGetMessenger()
+
+	_, ok := svc.Cfg.Pubs["events"]
+	if ok {
+		jsonData, err := json.Marshal(temp)
+		if err != nil {
+			logger.Error("failed to marshal temp data", "error", err)
+			return temp, err
+		}
+		logger.Info("Sending to events channel", "channel", svc.Cfg.Pubs["events"].Name)
+		msg := core.Message{
+			Time:    time.Now(),
+			Service: svc.Cfg.Name,
+			Value:   float64(temp.TempF),
+			Data:    string(jsonData),
+		}
+		logger.Info("Sending to events channel", "message", msg)
+		messenger.Send(svc.Cfg.Pubs["events"].Name, msg)
+	}
 
 	return temp, nil
 }

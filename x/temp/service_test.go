@@ -24,6 +24,7 @@ func testDeps() core.Dependencies {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
 	deps.SetLogger(logger)
+	deps.SetMessenger(core.NewMessenger(logger))
 
 	return deps
 }

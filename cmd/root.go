@@ -35,8 +35,10 @@ func Execute() {
 
 	deps := core.Dependencies{}
 	deps.SetOsProvider(core.OsProvider{})
-	deps.SetLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps.SetLogger(logger)
 	deps.SetContext(ctx)
+	deps.SetMessenger(core.NewMessenger(logger))
 
 	rootCmd := NewRootCmd(deps)
 	err := rootCmd.Execute()
