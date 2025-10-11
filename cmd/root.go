@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"keyop/core"
-	"keyop/util"
 	"keyop/x/heartbeat"
 	"keyop/x/run"
 	"keyop/x/temp"
@@ -31,21 +30,16 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 }
 func Execute() {
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	hostname, err := util.GetShortHostname()
-	if err != nil {
-		logger.Error("failed to get hostname", "error", err)
-		os.Exit(1)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	deps := core.Dependencies{}
-	deps.SetHostname(hostname)
-	deps.SetLogger(logger)
+	deps.SetOsProvider(core.OsProvider{})
+	deps.SetLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	deps.SetContext(ctx)
 
 	rootCmd := NewRootCmd(deps)
-	err = rootCmd.Execute()
+	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}

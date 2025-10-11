@@ -5,9 +5,9 @@ import (
 )
 
 type Dependencies struct {
-	logger   Logger
-	hostname string
-	context  context.Context
+	logger  Logger
+	os      OsProviderIface
+	context context.Context
 }
 
 func (d *Dependencies) SetLogger(logger Logger) {
@@ -32,13 +32,13 @@ func (d *Dependencies) MustGetContext() context.Context {
 	return d.context
 }
 
-func (d *Dependencies) SetHostname(hostname string) {
-	d.hostname = hostname
+func (d *Dependencies) SetOsProvider(os OsProviderIface) {
+	d.os = os
 }
 
-func (d *Dependencies) MustGetHostname() string {
-	if d.hostname == "" {
-		panic("ERROR: Hostname is not initialized")
+func (d *Dependencies) MustGetOsProvider() OsProviderIface {
+	if d.os == nil {
+		panic("ERROR: OS provider is not initialized")
 	}
-	return d.hostname
+	return d.os
 }

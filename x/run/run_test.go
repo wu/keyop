@@ -37,7 +37,7 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 	defer cancel()
 
 	deps := core.Dependencies{}
-	deps.SetHostname("test-host")
+	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
 	deps.SetLogger(logger)
 	deps.SetContext(ctx)
 

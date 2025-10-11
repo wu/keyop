@@ -45,7 +45,7 @@ func (svc Service) temp() (Event, error) {
 	contentBytes, err := os.ReadFile(devicePath)
 	if err != nil {
 		temp.Error = fmt.Sprintf("could not read from %s: %s", devicePath, err.Error())
-		logger.Info("temp", "data", temp)
+		logger.Error("temp", "data", temp)
 		return temp, err
 	}
 

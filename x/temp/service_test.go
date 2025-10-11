@@ -22,7 +22,7 @@ func Test_NewTempCmd(t *testing.T) {
 func testDeps() core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
-	deps.SetHostname("test-host")
+	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
 	deps.SetLogger(logger)
 
 	return deps
