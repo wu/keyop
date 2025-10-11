@@ -6,7 +6,10 @@
   pubs:
     events:
       name: heartbeat
-      description: Publish channel for heartbeat events
+      description: Publish heartbeat events to heartbeat channel
+    errors:
+      name: errors
+      description: Send error events to errors channel
 
 - name: office-temp
   freq: 15s
@@ -14,5 +17,8 @@
   pubs:
     events:
       name: temp
-      description: Publish channel for office temperature events
+      description: Publish office temperature events to temp channel
+    errors:
+      name: errors
+      description: Send error events to errors channel
 
