@@ -8,7 +8,7 @@ import (
 // GetShortHostname returns the system hostname without the domain suffix.
 // For example, "host.example.com" becomes "host".
 // It returns an error if the hostname cannot be determined.
-func GetShortHostname(osProvider core.OsProviderIface) (string, error) {
+func GetShortHostname(osProvider core.OsProviderApi) (string, error) {
 	shortHostname, err := osProvider.Hostname()
 	if err != nil {
 		return shortHostname, err

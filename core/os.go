@@ -2,13 +2,13 @@ package core
 
 import "os"
 
-// OsProviderIface is a minimal interface to retrieve the current hostname.
+// OsProviderApi is a minimal interface to retrieve the current hostname.
 // It allows dependency injection for testing or alternative OS implementations.
-type OsProviderIface interface {
+type OsProviderApi interface {
 	Hostname() (string, error)
 }
 
-// OsProvider is the production implementation of OsProviderIface using the standard library.
+// OsProvider is the production implementation of OsProviderApi using the standard library.
 type OsProvider struct{}
 
 func (OsProvider) Hostname() (string, error) { return os.Hostname() }

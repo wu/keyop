@@ -55,3 +55,17 @@ func TestDependencies_MustGetOs_ReturnsWhenSet(t *testing.T) {
 	got := d.MustGetOsProvider()
 	assert.Equal(t, osProvider, got)
 }
+
+func TestDependencies_MustGetMessenger_PanicsWhenUnset(t *testing.T) {
+	var d Dependencies
+	assert.Panics(t, func() { _ = d.MustGetMessenger() })
+}
+
+func TestDependencies_MustGetMessenger_ReturnsWhenSet(t *testing.T) {
+	var d Dependencies
+	m := NewMessenger()
+	d.SetMessenger(m)
+
+	got := d.MustGetMessenger()
+	assert.Equal(t, m, got)
+}
