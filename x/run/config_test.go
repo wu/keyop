@@ -23,7 +23,10 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 
 	// load should fail before running
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	_, err := loadServices(core.Dependencies{Logger: logger})
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	_, err := loadServices(deps)
 	assert.Error(t, err, "expected error when config is missing")
 }
 
@@ -43,7 +46,10 @@ func Test_loadServices_success(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	svcs, err := loadServices(core.Dependencies{Logger: logger})
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServices(deps)
 	assert.NoError(t, err)
 	if assert.Len(t, svcs, 2) {
 		// first check assertions
@@ -74,7 +80,10 @@ func Test_loadServices_bad_duration(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	_, err := loadServices(core.Dependencies{Logger: logger})
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	_, err := loadServices(deps)
 	assert.Error(t, err, "expected error for invalid duration in config")
 }
 
@@ -99,7 +108,10 @@ func Test_loadServices_pubs_loaded(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	svcs, err := loadServices(core.Dependencies{Logger: logger})
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServices(deps)
 	assert.NoError(t, err)
 	if assert.Len(t, svcs, 1) {
 		assert.Equal(t, "heartbeat", svcs[0].Pubs["events"].Name)

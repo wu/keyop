@@ -30,7 +30,8 @@ func configFilePath() string {
 // loadServices reads config.yaml and creates ServiceConfig objects
 func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 	p := configFilePath()
-	deps.Logger.Info("Loading service config", "path", p)
+	logger := deps.MustGetLogger()
+	logger.Info("Loading service config", "path", p)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			Type: serviceConfigSource.X,
 			Pubs: pubs,
 		}
-		deps.Logger.Info("Loaded service config", "config", svcConfig)
+		logger.Info("Loaded service config", "config", svcConfig)
 
 		serviceConfigs = append(serviceConfigs, svcConfig)
 	}

@@ -21,7 +21,11 @@ func Test_NewTempCmd(t *testing.T) {
 // helper to build dependencies
 func testDeps() core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	return core.Dependencies{Logger: logger, Hostname: "test-host"}
+	deps := core.Dependencies{}
+	deps.SetHostname("test-host")
+	deps.SetLogger(logger)
+
+	return deps
 }
 
 func writeTempFile(t *testing.T, dir, name, content string) string {

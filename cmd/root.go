@@ -39,11 +39,10 @@ func Execute() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	deps := core.Dependencies{
-		Logger:   logger,
-		Context:  ctx,
-		Hostname: hostname,
-	}
+	deps := core.Dependencies{}
+	deps.SetHostname(hostname)
+	deps.SetLogger(logger)
+	deps.SetContext(ctx)
 
 	rootCmd := NewRootCmd(deps)
 	err = rootCmd.Execute()

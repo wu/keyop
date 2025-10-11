@@ -38,7 +38,9 @@ func TestHeartbeatCmd(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
-	deps := core.Dependencies{Logger: logger, Hostname: "test-host"}
+	deps := core.Dependencies{}
+	deps.SetHostname("test-host")
+	deps.SetLogger(logger)
 
 	cmd := NewCmd(deps)
 

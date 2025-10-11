@@ -36,7 +36,10 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	deps := core.Dependencies{Logger: logger, Hostname: "test-host", Context: ctx}
+	deps := core.Dependencies{}
+	deps.SetHostname("test-host")
+	deps.SetLogger(logger)
+	deps.SetContext(ctx)
 
 	serviceConfigs := []core.ServiceConfig{
 		{
