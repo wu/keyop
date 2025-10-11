@@ -19,14 +19,16 @@ This utility is a work in progress.
 
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			logger := deps.MustGetLogger()
+
 			// load the service configuration before calling the run method
 			svcs, err := loadServices(deps)
 			if err != nil {
-				deps.Logger.Error("config load", "error", err)
+				logger.Error("config load", "error", err)
 				return err
 			}
 			if len(svcs) == 0 {
-				deps.Logger.Error("config load", "error", "no services configured")
+				logger.Error("config load", "error", "no services configured")
 				return fmt.Errorf("no services configured")
 			}
 			return run(deps, svcs)
@@ -37,7 +39,9 @@ This utility is a work in progress.
 }
 
 func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
-	deps.Logger.Info("run called")
+	logger := deps.MustGetLogger()
+	logger.Info("run called")
+	ctx := deps.MustGetContext()
 
 	var wg sync.WaitGroup
 
@@ -52,7 +56,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 			// execute first check immediately
 			if err := service.Check(); err != nil {
-				deps.Logger.Error("check", "error", err)
+				logger.Error("check", "error", err)
 			}
 
 			// start a ticker to execute the check at the specified frequency
@@ -63,9 +67,9 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 				select {
 				case <-ticker.C:
 					if err := service.Check(); err != nil {
-						deps.Logger.Error("check", "error", err)
+						logger.Error("check", "error", err)
 					}
-				case <-deps.Context.Done():
+				case <-ctx.Done():
 					return
 				}
 			}
@@ -73,7 +77,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	}
 
 	// Wait for context cancellation
-	<-deps.Context.Done()
+	<-ctx.Done()
 	wg.Wait()
-	return deps.Context.Err()
+	return ctx.Err()
 }

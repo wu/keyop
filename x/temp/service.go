@@ -35,7 +35,7 @@ func (svc Service) Check() error {
 }
 
 func (svc Service) temp() (Event, error) {
-	logger := svc.Deps.Logger
+	logger := svc.Deps.MustGetLogger()
 	logger.Debug("temp check called")
 
 	temp := Event{

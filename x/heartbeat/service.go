@@ -28,8 +28,8 @@ type Event struct {
 }
 
 func (svc Service) Check() error {
-	logger := svc.Deps.Logger
-	logger.Debug("heartbeat called")
+	logger := svc.Deps.MustGetLogger()
+	hostname := svc.Deps.MustGetHostname()
 
 	uptime := time.Since(startTime)
 
@@ -37,7 +37,7 @@ func (svc Service) Check() error {
 		Now:           time.Now(),
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
-		Hostname:      svc.Deps.Hostname,
+		Hostname:      hostname,
 	}
 	logger.Info("heartbeat", "data", heartbeat)
 
