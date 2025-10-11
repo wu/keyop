@@ -13,5 +13,6 @@ Project Goals
 * Trigger custom notifications and reactions based on observations and predictions.
 * Integration with Apple Homekit.
 * Terminal UI - status HUD to monitor the state of the system.
+* Data Privacy - you own your data, choose what you share.
 
 Join the project to help make event-driven intelligence accessible to everyone!

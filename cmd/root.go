@@ -16,7 +16,7 @@ import (
 func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "keyop",
-		Short: "keyop is an IOT tool",
+		Short: "Event-Driven Intelligence Toolkit",
 		Long:  `More information coming soon`,
 	}
 

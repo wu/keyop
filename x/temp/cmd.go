@@ -9,7 +9,7 @@ import (
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	tmpCmd := &cobra.Command{
 		Use:   "temp",
-		Short: "Temp Utility",
+		Short: "Temperature Sensor Utility",
 		Long:  `Read a Ds18b20 temperature sensor and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := NewService(deps, core.ServiceConfig{})
