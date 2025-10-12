@@ -17,6 +17,7 @@ type Service struct {
 	Deps          core.Dependencies
 	Cfg           core.ServiceConfig
 	ShortHostname string
+	messenger     core.MessengerApi
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -29,8 +30,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if hostname == "" {
 		logger.Error("Error getting hostname", "error", "hostname was empty")
 	}
+	messenger := deps.MustGetMessenger()
 
-	svc := &Service{Deps: deps, Cfg: cfg, ShortHostname: hostname}
+	svc := &Service{Deps: deps, Cfg: cfg, ShortHostname: hostname, messenger: messenger}
 	svc.validateConfig()
 	return svc
 }
@@ -45,8 +47,8 @@ func (svc *Service) validateConfig() {
 	if svc.Cfg.Pubs == nil {
 		svc.Cfg.Pubs = make(map[string]core.ChannelInfo)
 	}
-	_, ok := svc.Cfg.Pubs["events"]
-	if !ok {
+	_, eventsChanExists := svc.Cfg.Pubs["events"]
+	if !eventsChanExists {
 		svc.Cfg.Pubs["events"] = core.ChannelInfo{
 			Name:        "events",
 			Description: "General event channel",
@@ -58,14 +60,10 @@ type Event struct {
 	Now           time.Time
 	Uptime        string
 	UptimeSeconds int64
-	Hostname      string
 }
 
 func (svc Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
-
-	// todo: get messenger at startup
-	messenger := svc.Deps.MustGetMessenger()
 
 	uptime := time.Since(startTime)
 
@@ -73,21 +71,20 @@ func (svc Service) Check() error {
 		Now:           time.Now(),
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
-		Hostname:      svc.ShortHostname,
 	}
 	logger.Info("heartbeat", "data", heartbeat)
 
-	eventsChan, ok := svc.Cfg.Pubs["events"]
-	if ok {
-		logger.Info("Sending to events channel", "channel", eventsChan.Name)
+	eventsChan, eventsChanExists := svc.Cfg.Pubs["events"]
+	if eventsChanExists {
+		logger.Debug("Sending to events channel", "channel", eventsChan.Name)
 		msg := core.Message{
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("heartbeat: uptime %s", heartbeat.Uptime),
 			Value:       float64(heartbeat.UptimeSeconds),
 		}
-		logger.Info("Sending to events channel", "message", msg)
-		messenger.Send(eventsChan.Name, msg, heartbeat)
+		logger.Debug("Sending to events channel", "msg", msg, "data", heartbeat)
+		svc.messenger.Send(eventsChan.Name, msg, heartbeat)
 	}
 
 	return nil

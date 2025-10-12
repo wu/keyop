@@ -68,7 +68,7 @@ func (m Messenger) Send(channelName string, msg Message, data interface{}) error
 	}
 
 	m.logger.Info("Sending message", "channel", channelName, "message", msg)
-	if subscribers, ok := m.subscriptions[channelName]; ok {
+	if subscribers, subscribersExists := m.subscriptions[channelName]; subscribersExists {
 		for _, ch := range subscribers {
 			ch <- msg
 		}
@@ -83,7 +83,7 @@ func (m Messenger) Subscribe(channelName string) chan Message {
 
 	m.logger.Info("Subscribing to channel", "channel", channelName)
 	channel := make(chan Message)
-	if _, ok := m.subscriptions[channelName]; !ok {
+	if _, subscriptionsExist := m.subscriptions[channelName]; !subscriptionsExist {
 		m.subscriptions[channelName] = []chan Message{}
 	}
 	m.subscriptions[channelName] = append(m.subscriptions[channelName], channel)

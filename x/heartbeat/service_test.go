@@ -72,8 +72,6 @@ func TestHeartbeatCmd(t *testing.T) {
 	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
 	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
 
-	assert.Equal(t, heartbeatMsg.Heartbeat.Hostname, "test-host", "shortHostname should be present in heartbeat message")
-
 }
 
 func TestValidateConfig_EmptyConfig(t *testing.T) {
