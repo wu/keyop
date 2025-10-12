@@ -87,10 +87,10 @@ func (svc Service) temp() (Event, error) {
 		}
 		logger.Info("Sending to events channel", "channel", svc.Cfg.Pubs["events"].Name)
 		msg := core.Message{
-			Time:    time.Now(),
-			Service: svc.Cfg.Name,
-			Value:   float64(temp.TempF),
-			Data:    string(jsonData),
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Value:       float64(temp.TempF),
+			Data:        string(jsonData),
 		}
 		logger.Info("Sending to events channel", "message", msg)
 		messenger.Send(svc.Cfg.Pubs["events"].Name, msg)

@@ -14,7 +14,7 @@ import (
 var _ MessengerApi = (*Messenger)(nil)
 
 func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
 
 	ch1 := m.Subscribe("alpha")
 	ch2 := m.Subscribe("alpha")
@@ -41,7 +41,7 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 }
 
 func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
 
 	a := m.Subscribe("a")
 	b := m.Subscribe("b")
@@ -67,7 +67,7 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 }
 
 func TestMessenger_Send_OrderPreserved(t *testing.T) {
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
 	ch := m.Subscribe("ordered")
 
 	// Send three messages in order in a single goroutine
@@ -89,7 +89,7 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 }
 
 func TestMessenger_Send_NoSubscribers_NoError(t *testing.T) {
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
 
 	// Should not block and should return nil
 	err := m.Send("nobody", Message{Text: "ignored"})

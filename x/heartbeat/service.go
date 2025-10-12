@@ -1,6 +1,7 @@
 package heartbeat
 
 import (
+	"encoding/json"
 	"keyop/core"
 	"keyop/util"
 	"time"
@@ -42,6 +43,9 @@ type Event struct {
 func (svc Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 
+	// todo: get messenger at startup
+	messenger := svc.Deps.MustGetMessenger()
+
 	uptime := time.Since(startTime)
 
 	heartbeat := Event{
@@ -52,7 +56,23 @@ func (svc Service) Check() error {
 	}
 	logger.Info("heartbeat", "data", heartbeat)
 
-	// TODO: send to svc.Cfg.Pubs["events"].Name)
+	_, ok := svc.Cfg.Pubs["events"]
+	if ok {
+		jsonData, err := json.Marshal(heartbeat)
+		if err != nil {
+			logger.Error("failed to marshal temp data", "error", err)
+			return err
+		}
+		logger.Info("Sending to events channel", "channel", svc.Cfg.Pubs["events"].Name)
+		msg := core.Message{
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Value:       float64(heartbeat.UptimeSeconds),
+			Data:        string(jsonData),
+		}
+		logger.Info("Sending to events channel", "message", msg)
+		messenger.Send(svc.Cfg.Pubs["events"].Name, msg)
+	}
 
 	return nil
 }

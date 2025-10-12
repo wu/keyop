@@ -6,12 +6,13 @@ import (
 )
 
 type Message struct {
-	Time     time.Time
-	Text     string
-	Service  string
-	Value    float64
-	Hostname string
-	Data     string
+	Timestamp   time.Time
+	Text        string
+	ServiceName string
+	ServiceType string
+	Value       float64
+	Hostname    string
+	Data        string
 }
 
 type MessengerApi interface {
@@ -19,25 +20,42 @@ type MessengerApi interface {
 	Subscribe(channelName string) chan Message
 }
 
-func NewMessenger(logger Logger) *Messenger {
+func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 	if logger == nil {
 		panic("logger not properly initialized")
 	}
-	return &Messenger{
+	if osProvider == nil {
+		panic("osProvider not properly initialized")
+	}
+
+	m := &Messenger{
 		subscriptions: make(map[string][]chan Message),
 		logger:        logger,
 	}
+
+	if host, err := osProvider.Hostname(); err == nil {
+		m.hostname = host
+	} else {
+		logger.Error("Failed to determine hostname during initialization", "error", err)
+	}
+
+	return m
 }
 
 type Messenger struct {
 	subscriptions map[string][]chan Message
 	mutex         sync.RWMutex
 	logger        Logger
+	hostname      string
 }
 
 func (m Messenger) Send(channelName string, msg Message) error {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
+
+	// Populate required fields
+	msg.Timestamp = time.Now()
+	msg.Hostname = m.hostname
 
 	m.logger.Info("Sending message", "channel", channelName, "message", msg)
 	if subscribers, ok := m.subscriptions[channelName]; ok {
