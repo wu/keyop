@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -16,7 +17,7 @@ type Message struct {
 }
 
 type MessengerApi interface {
-	Send(channelName string, msg Message) error
+	Send(channelName string, msg Message, data interface{}) error
 	Subscribe(channelName string) chan Message
 }
 
@@ -49,13 +50,22 @@ type Messenger struct {
 	hostname      string
 }
 
-func (m Messenger) Send(channelName string, msg Message) error {
+func (m Messenger) Send(channelName string, msg Message, data interface{}) error {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
 	// Populate required fields
 	msg.Timestamp = time.Now()
 	msg.Hostname = m.hostname
+
+	if data != nil {
+		dataBytes, err := json.Marshal(data)
+		if err == nil {
+			msg.Data = string(dataBytes)
+		} else {
+			m.logger.Error("Failed to serialize data", "error", err)
+		}
+	}
 
 	m.logger.Info("Sending message", "channel", channelName, "message", msg)
 	if subscribers, ok := m.subscriptions[channelName]; ok {

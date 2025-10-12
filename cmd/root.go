@@ -10,7 +10,6 @@ import (
 
 	"os"
 
-	"github.com/MatusOllah/slogcolor"
 	"github.com/spf13/cobra"
 )
 
@@ -34,8 +33,8 @@ func Execute() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	//logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	//logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
 
 	deps := core.Dependencies{}
 	deps.SetOsProvider(core.OsProvider{})

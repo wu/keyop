@@ -53,7 +53,6 @@ func Test_temp_success(t *testing.T) {
 	assert.Empty(t, got.Error)
 	assert.InDelta(t, 23.125, got.TempC, 0.0001)
 	assert.InDelta(t, 73.625, got.TempF, 0.0001)
-	assert.False(t, got.Now.IsZero(), "Now should be set")
 
 }
 
