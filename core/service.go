@@ -13,6 +13,7 @@ type ServiceConfig struct {
 	Freq time.Duration
 	Type string
 	Pubs map[string]ChannelInfo
+	Subs map[string]ChannelInfo
 }
 
 type ChannelInfo struct {

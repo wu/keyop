@@ -5,20 +5,24 @@ import (
 	"keyop/core"
 	"log/slog"
 	"os"
+
+	"github.com/MatusOllah/slogcolor"
 )
 
 func InitializeDependencies() core.Dependencies {
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	//logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
-
 	deps := core.Dependencies{}
-	deps.SetOsProvider(core.OsProvider{})
+
+	//logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
 	deps.SetLogger(logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
 	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+
+	deps.SetOsProvider(core.OsProvider{})
+
 	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
 
 	return deps

@@ -71,3 +71,23 @@ func TestDependencies_MustGetMessenger_ReturnsWhenSet(t *testing.T) {
 	got := d.MustGetMessenger()
 	assert.Equal(t, m, got)
 }
+
+func TestDependencies_MustGetCancel_PanicsWhenUnset(t *testing.T) {
+	var d Dependencies
+	assert.Panics(t, func() { _ = d.MustGetCancel() })
+}
+
+func TestDependencies_SetCancel_AndMustGetCancel_ReturnsAndCallable(t *testing.T) {
+	var d Dependencies
+	called := false
+	cancel := func() { called = true }
+
+	d.SetCancel(cancel)
+
+	got := d.MustGetCancel()
+	assert.NotNil(t, got)
+
+	// Invoke the returned cancel and ensure our side-effect is observed
+	got()
+	assert.True(t, called, "expected cancel function to be invoked")
+}
