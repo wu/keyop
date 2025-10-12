@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var devicePath string
@@ -22,7 +21,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 type Event struct {
-	Now   time.Time
 	TempC float32 `json:"TempC,omitempty"`
 	TempF float32 `json:"TempF,omitempty"`
 	Raw   string  `json:"Raw,omitempty"`
@@ -70,21 +68,21 @@ func (svc Service) temp() (Event, error) {
 	temp.TempC = float32(tempInt) / 1000
 	temp.TempF = temp.TempC*9/5 + 32.0
 
-	logger.Info("temp", "data", temp)
+	logger.Debug("temp", "data", temp)
 
 	// todo: get messenger at startup
 	messenger := svc.Deps.MustGetMessenger()
 
-	eventsChan, ok := svc.Cfg.Pubs["events"]
-	if ok {
-		logger.Info("Sending to events channel", "channel", eventsChan.Name)
+	eventsChan, eventsChanExists := svc.Cfg.Pubs["events"]
+	if eventsChanExists {
+		logger.Debug("Sending to events channel", "channel", eventsChan.Name)
 		msg := core.Message{
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
 			Value:       float64(temp.TempF),
 		}
-		logger.Info("Sending to events channel", "message", msg)
+		logger.Debug("Sending to events channel", "message", msg, "data", temp)
 		messenger.Send(eventsChan.Name, msg, temp)
 	}
 
