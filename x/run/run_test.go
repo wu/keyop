@@ -36,10 +36,13 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	osProvider := core.FakeOsProvider{Host: "test-host"}
+
 	deps := core.Dependencies{}
-	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
+	deps.SetOsProvider(osProvider)
 	deps.SetLogger(logger)
 	deps.SetContext(ctx)
+	deps.SetMessenger(core.NewMessenger(logger, osProvider))
 
 	serviceConfigs := []core.ServiceConfig{
 		{

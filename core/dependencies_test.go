@@ -65,7 +65,7 @@ func TestDependencies_MustGetMessenger_PanicsWhenUnset(t *testing.T) {
 func TestDependencies_MustGetMessenger_ReturnsWhenSet(t *testing.T) {
 	var d Dependencies
 
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
 	d.SetMessenger(m)
 
 	got := d.MustGetMessenger()
