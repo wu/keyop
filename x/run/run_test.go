@@ -5,8 +5,6 @@ import (
 	"context"
 	"keyop/core"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,19 +13,6 @@ import (
 )
 
 func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
-	// prepare a temp working directory with a minimal config.yaml (heartbeat only)
-	dir := t.TempDir()
-	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n"
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-
 	// capture logs
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
@@ -49,6 +34,9 @@ func Test_run_cancels_and_executes_checks_once_immediately(t *testing.T) {
 			Name: "heartbeat",
 			Freq: 1 * time.Second,
 			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "heartbeat", Description: "Heartbeat events"},
+			},
 		},
 	}
 

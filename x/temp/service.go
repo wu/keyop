@@ -83,7 +83,11 @@ func (svc Service) temp() (Event, error) {
 			Value:       float64(temp.TempF),
 		}
 		logger.Debug("Sending to events channel", "message", msg, "data", temp)
-		messenger.Send(eventsChan.Name, msg, temp)
+		err := messenger.Send(eventsChan.Name, msg, temp)
+		if err != nil {
+			logger.Error("Error sending to events channel %s: %s", eventsChan.Name, err.Error())
+			return temp, err
+		}
 	}
 
 	return temp, nil

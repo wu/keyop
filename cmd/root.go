@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"keyop/core"
+	"keyop/util"
 	"keyop/x/heartbeat"
 	"keyop/x/run"
 	"keyop/x/temp"
-	"log/slog"
-
 	"os"
 
 	"github.com/spf13/cobra"
@@ -30,18 +28,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 }
 func Execute() {
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	//logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
-
-	deps := core.Dependencies{}
-	deps.SetOsProvider(core.OsProvider{})
-	deps.SetLogger(logger)
-	deps.SetContext(ctx)
-	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
-
+	deps := util.InitializeDependencies()
 	rootCmd := NewRootCmd(deps)
 	err := rootCmd.Execute()
 	if err != nil {
