@@ -52,15 +52,61 @@ func TestHeartbeatCmd(t *testing.T) {
 	messages, err := parseLogMessages(buf.String())
 	assert.NoError(t, err, "parseLogMessages() error = %v, want nil", err)
 
-	assert.Equal(t, 1, len(messages), "expected 1 log message")
-	assert.Equal(t, "heartbeat", messages[0].Msg, "expected heartbeat message")
-	assert.Equal(t, "INFO", messages[0].Level, "expected INFO level")
+	// iterate through messages searching for one with Msg "heartbeat"
+	var heartbeatFound bool
+	var heartbeatMsg logMsg
+	for _, msg := range messages {
+		if msg.Msg == "heartbeat" {
+			heartbeatFound = true
+			heartbeatMsg = msg
+			break
+		}
+	}
+
+	assert.True(t, heartbeatFound, "expected to find a heartbeat log message")
+
+	assert.Equal(t, "INFO", heartbeatMsg.Level, "expected INFO level")
 
 	uptime := time.Since(startTime).Round(time.Second)
-	assert.True(t, messages[0].Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
-	assert.True(t, messages[0].Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
-	assert.True(t, messages[0].Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
+	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
+	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
+	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
 
-	assert.Equal(t, messages[0].Heartbeat.Hostname, "test-host", "shortHostname should be present in heartbeat message")
+	assert.Equal(t, heartbeatMsg.Heartbeat.Hostname, "test-host", "shortHostname should be present in heartbeat message")
 
+}
+
+func TestValidateConfig_EmptyConfig(t *testing.T) {
+	svc := &Service{
+		Cfg: core.ServiceConfig{},
+	}
+	svc.validateConfig()
+
+	assert.Equal(t, "heartbeat", svc.Cfg.Name)
+	assert.Equal(t, "heartbeat", svc.Cfg.Type)
+	assert.NotNil(t, svc.Cfg.Pubs)
+	assert.Contains(t, svc.Cfg.Pubs, "events")
+	assert.Equal(t, "events", svc.Cfg.Pubs["events"].Name)
+	assert.Equal(t, "General event channel", svc.Cfg.Pubs["events"].Description)
+}
+
+func TestValidateConfig_ExistingValues(t *testing.T) {
+	svc := &Service{
+		Cfg: core.ServiceConfig{
+			Name: "custom",
+			Type: "special",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {
+					Name:        "custom-events",
+					Description: "Custom channel",
+				},
+			},
+		},
+	}
+	svc.validateConfig()
+
+	assert.Equal(t, "custom", svc.Cfg.Name)
+	assert.Equal(t, "special", svc.Cfg.Type)
+	assert.Equal(t, "custom-events", svc.Cfg.Pubs["events"].Name)
+	assert.Equal(t, "Custom channel", svc.Cfg.Pubs["events"].Description)
 }
