@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -143,4 +144,59 @@ func TestNewMessenger_OsProviderNotInitialized(t *testing.T) {
 		}
 	}()
 	NewMessenger(&FakeLogger{}, nil)
+}
+
+func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
+	fl := &FakeLogger{}
+	testErr := errors.New("hostname lookup failed")
+
+	m := NewMessenger(fl, FakeOsProvider{Host: "ignored", Err: testErr})
+
+	// Verify error was logged with expected message and args
+	assert.Equal(t, "Failed to determine hostname during initialization", fl.lastErrMsg)
+	if assert.Len(t, fl.lastErrArgs, 2) {
+		assert.Equal(t, "error", fl.lastErrArgs[0])
+		assert.Equal(t, testErr, fl.lastErrArgs[1])
+	}
+
+	// Verify that resulting messenger uses empty hostname when sending
+	ch := m.Subscribe("test")
+	go func() { _ = m.Send("test", Message{Text: "ping"}, nil) }()
+
+	select {
+	case msg := <-ch:
+		assert.Equal(t, "", msg.Hostname)
+		assert.Equal(t, "ping", msg.Text)
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timeout waiting for message")
+	}
+}
+
+func TestMessenger_Send_FailedToSerializeData_LogsErrorAndSendsWithoutData(t *testing.T) {
+	fl := &FakeLogger{}
+	m := NewMessenger(fl, FakeOsProvider{Host: "h"})
+
+	ch := m.Subscribe("bad")
+
+	// Use a channel value which json.Marshal cannot serialize to trigger an error
+	bad := make(chan int)
+	go func() { _ = m.Send("bad", Message{Text: "oops"}, bad) }()
+
+	select {
+	case msg := <-ch:
+		assert.Equal(t, "oops", msg.Text)
+		// Data should remain empty because serialization failed
+		assert.Equal(t, "", msg.Data)
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timeout waiting for message")
+	}
+
+	// Ensure the error was logged with the expected message and args
+	assert.Equal(t, "Failed to serialize data", fl.lastErrMsg)
+	if assert.Len(t, fl.lastErrArgs, 2) {
+		assert.Equal(t, "error", fl.lastErrArgs[0])
+		if _, ok := fl.lastErrArgs[1].(error); !ok {
+			t.Fatalf("expected an error type for logger arg[1]")
+		}
+	}
 }

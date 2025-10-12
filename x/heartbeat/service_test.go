@@ -74,37 +74,114 @@ func TestHeartbeatCmd(t *testing.T) {
 
 }
 
-func TestValidateConfig_EmptyConfig(t *testing.T) {
-	svc := &Service{
-		Cfg: core.ServiceConfig{},
+func TestValidateConfig(t *testing.T) {
+	makeSvc := func(cfg core.ServiceConfig) Service {
+		return Service{Cfg: cfg}
 	}
-	svc.validateConfig()
 
-	assert.Equal(t, "heartbeat", svc.Cfg.Name)
-	assert.Equal(t, "heartbeat", svc.Cfg.Type)
-	assert.NotNil(t, svc.Cfg.Pubs)
-	assert.Contains(t, svc.Cfg.Pubs, "events")
-	assert.Equal(t, "events", svc.Cfg.Pubs["events"].Name)
-	assert.Equal(t, "General event channel", svc.Cfg.Pubs["events"].Description)
-}
-
-func TestValidateConfig_ExistingValues(t *testing.T) {
-	svc := &Service{
-		Cfg: core.ServiceConfig{
-			Name: "custom",
-			Type: "special",
+	t.Run("valid config", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "hb",
+			Type: "heartbeat",
 			Pubs: map[string]core.ChannelInfo{
-				"events": {
-					Name:        "custom-events",
-					Description: "Custom channel",
-				},
+				"events": {Name: "events-topic"},
 			},
-		},
-	}
-	svc.validateConfig()
+		}
+		svc := makeSvc(cfg)
+		errs := svc.validateConfig()
+		assert.Len(t, errs, 0)
+	})
 
-	assert.Equal(t, "custom", svc.Cfg.Name)
-	assert.Equal(t, "special", svc.Cfg.Type)
-	assert.Equal(t, "custom-events", svc.Cfg.Pubs["events"].Name)
-	assert.Equal(t, "Custom channel", svc.Cfg.Pubs["events"].Description)
+	t.Run("missing name", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "",
+			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events-topic"},
+			},
+		}
+		errs := makeSvc(cfg).validateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "required field 'name' is empty") {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected missing name error")
+	})
+
+	t.Run("missing type", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "hb",
+			Type: "",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events-topic"},
+			},
+		}
+		errs := makeSvc(cfg).validateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "required field 'type' is empty") {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected missing type error")
+	})
+
+	t.Run("nil pubs", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "hb",
+			Type: "heartbeat",
+			Pubs: nil,
+		}
+		errs := makeSvc(cfg).validateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "required field 'pubs' is empty") {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected nil pubs error")
+	})
+
+	t.Run("missing events channel", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "hb",
+			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"other": {Name: "other"},
+			},
+		}
+		errs := makeSvc(cfg).validateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "required publish channel 'events' is missing") {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected missing events channel error")
+	})
+
+	t.Run("events channel missing name", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "hb",
+			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: ""},
+			},
+		}
+		errs := makeSvc(cfg).validateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "required publish channel 'events' is missing a name") {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected events channel missing name error")
+	})
 }

@@ -12,7 +12,14 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 		Short: "Heartbeat Utility",
 		Long:  `Execute the heartbeat command and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc := NewService(deps, core.ServiceConfig{})
+			svcConfig := core.ServiceConfig{
+				Name: "heartbeat",
+				Type: "heartbeat",
+				Pubs: map[string]core.ChannelInfo{
+					"events": {Name: "heartbeat", Description: "Heartbeat events"},
+				},
+			}
+			svc := NewService(deps, svcConfig)
 			return svc.Check()
 		},
 	}
