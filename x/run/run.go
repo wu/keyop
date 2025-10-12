@@ -20,7 +20,12 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			defer wg.Done()
 
 			// pass service config to constructor
-			service := ServiceRegistry[serviceConfig.Type](deps, serviceConfig)
+			serviceFunc, serviceFuncExists := ServiceRegistry[serviceConfig.Type]
+			if !serviceFuncExists {
+				logger.Error("service type not registered", "type", serviceConfig.Type)
+				return
+			}
+			service := serviceFunc(deps, serviceConfig)
 
 			// execute first check immediately
 			if err := service.Check(); err != nil {
@@ -28,26 +33,33 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 				// TODO: send to errors channel
 			}
 
-			// start a ticker to execute the check at the specified frequency
-			ticker := time.NewTicker(serviceConfig.Freq)
-			defer ticker.Stop()
+			if serviceConfig.Freq > 0 {
+				// start a ticker to execute the check at the specified frequency
+				ticker := time.NewTicker(serviceConfig.Freq)
+				defer ticker.Stop()
 
-			for {
-				select {
-				case <-ticker.C:
-					if err := service.Check(); err != nil {
-						logger.Error("check", "error", err)
-						// TODO: send to errors channel
+				for {
+					select {
+					case <-ticker.C:
+						if err := service.Check(); err != nil {
+							logger.Error("check", "error", err)
+							// TODO: send to errors channel
+						}
+					case <-ctx.Done():
+						logger.Error("context done, exiting check loop", "service", serviceConfig.Name)
+						return
 					}
-				case <-ctx.Done():
-					return
 				}
 			}
 		}(check)
 	}
 
-	// Wait for context cancellation
+	logger.Warn("Waiting for context cancellation")
 	<-ctx.Done()
+
+	logger.Warn("Waiting for all checks to complete")
 	wg.Wait()
+
+	logger.Warn("All checks completed, exiting")
 	return ctx.Err()
 }

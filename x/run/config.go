@@ -11,13 +11,14 @@ import (
 
 // YAML representation of services in the config file
 type serviceConfigYaml struct {
-	Name string                  `yaml:"name"`
-	Freq string                  `yaml:"freq"`
-	X    string                  `yaml:"x"`
-	Pubs map[string]eventPubYaml `yaml:"pubs"`
+	Name string                      `yaml:"name"`
+	Freq string                      `yaml:"freq"`
+	X    string                      `yaml:"x"`
+	Pubs map[string]eventChannelYaml `yaml:"pubs"`
+	Subs map[string]eventChannelYaml `yaml:"subs"`
 }
 
-type eventPubYaml struct {
+type eventChannelYaml struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 }
@@ -44,10 +45,6 @@ func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 	var serviceConfigs []core.ServiceConfig
 	for _, serviceConfigSource := range serviceConfigsSource {
-		dur, err := time.ParseDuration(serviceConfigSource.Freq)
-		if err != nil {
-			return nil, err
-		}
 
 		pubs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Pubs {
@@ -57,11 +54,28 @@ func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			}
 		}
 
+		subs := make(map[string]core.ChannelInfo)
+		for key, value := range serviceConfigSource.Subs {
+			subs[key] = core.ChannelInfo{
+				Name:        value.Name,
+				Description: value.Description,
+			}
+		}
+
 		svcConfig := core.ServiceConfig{
 			Name: serviceConfigSource.Name,
-			Freq: dur,
 			Type: serviceConfigSource.X,
 			Pubs: pubs,
+			Subs: subs,
+		}
+
+		if serviceConfigSource.Freq != "" {
+			dur, err := time.ParseDuration(serviceConfigSource.Freq)
+			if err != nil {
+				return nil, err
+			}
+
+			svcConfig.Freq = dur
 		}
 		logger.Info("Loaded service config", "config", svcConfig)
 

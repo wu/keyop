@@ -9,6 +9,7 @@ type Dependencies struct {
 	os        OsProviderApi
 	messenger MessengerApi
 	context   context.Context
+	cancel    context.CancelFunc
 }
 
 func (d *Dependencies) SetLogger(logger Logger) {
@@ -31,6 +32,17 @@ func (d *Dependencies) MustGetContext() context.Context {
 		panic("ERROR: Context is not initialized")
 	}
 	return d.context
+}
+
+func (d *Dependencies) SetCancel(cancel context.CancelFunc) {
+	d.cancel = cancel
+}
+
+func (d *Dependencies) MustGetCancel() context.CancelFunc {
+	if d.cancel == nil {
+		panic("ERROR: Cancel function is not initialized")
+	}
+	return d.cancel
 }
 
 func (d *Dependencies) SetOsProvider(os OsProviderApi) {

@@ -29,6 +29,8 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 func Execute() {
 
 	deps := util.InitializeDependencies()
+	defer deps.MustGetCancel()()
+
 	rootCmd := NewRootCmd(deps)
 	err := rootCmd.Execute()
 	if err != nil {
