@@ -98,7 +98,7 @@ func Test_run_logs_error_when_service_type_not_registered(t *testing.T) {
 
 	select {
 	case err := <-done:
-		assert.ErrorIs(t, err, context.Canceled)
+		assert.ErrorContains(t, err, "service type not registered")
 	case <-time.After(5 * time.Second):
 		t.Fatal("run did not return within timeout")
 	}

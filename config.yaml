@@ -1,24 +1,37 @@
 ---
 
 - name: heartbeat
-  freq: 3s
+  freq: 15s
   x: heartbeat
   pubs:
     events:
       name: heartbeat
       description: Publish heartbeat events to heartbeat channel
-    errors:
-      name: errors
-      description: Send error events to errors channel
 
 - name: office-temp
-  freq: 15s
+  freq: 5s
   x: temp
   pubs:
     events:
       name: temp
       description: Publish office temperature events to temp channel
-    errors:
-      name: errors
-      description: Send error events to errors channel
+
+- name: office-thermostat
+  x: thermostat
+  subs:
+    temp:
+      name: temp
+      description: Read office temperature events from temp channel
+  pubs:
+    events:
+      name: office-thermostat
+      description: Publish office heater events
+
+    heater:
+      name: office-heater-powertail
+      description: Control office heater
+
+    cooler:
+      name: office-fan-powertail
+      description: Control office fan
 

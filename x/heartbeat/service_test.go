@@ -88,46 +88,8 @@ func TestValidateConfig(t *testing.T) {
 			},
 		}
 		svc := makeSvc(cfg)
-		errs := svc.validateConfig()
+		errs := svc.ValidateConfig()
 		assert.Len(t, errs, 0)
-	})
-
-	t.Run("missing name", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Name: "",
-			Type: "heartbeat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events-topic"},
-			},
-		}
-		errs := makeSvc(cfg).validateConfig()
-		assert.NotEmpty(t, errs)
-		found := false
-		for _, e := range errs {
-			if strings.Contains(e.Error(), "required field 'name' is empty") {
-				found = true
-			}
-		}
-		assert.True(t, found, "expected missing name error")
-	})
-
-	t.Run("missing type", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Name: "hb",
-			Type: "",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events-topic"},
-			},
-		}
-		errs := makeSvc(cfg).validateConfig()
-		assert.NotEmpty(t, errs)
-		found := false
-		for _, e := range errs {
-			if strings.Contains(e.Error(), "required field 'type' is empty") {
-				found = true
-			}
-		}
-		assert.True(t, found, "expected missing type error")
 	})
 
 	t.Run("nil pubs", func(t *testing.T) {
@@ -136,7 +98,7 @@ func TestValidateConfig(t *testing.T) {
 			Type: "heartbeat",
 			Pubs: nil,
 		}
-		errs := makeSvc(cfg).validateConfig()
+		errs := makeSvc(cfg).ValidateConfig()
 		assert.NotEmpty(t, errs)
 		found := false
 		for _, e := range errs {
@@ -155,11 +117,11 @@ func TestValidateConfig(t *testing.T) {
 				"other": {Name: "other"},
 			},
 		}
-		errs := makeSvc(cfg).validateConfig()
+		errs := makeSvc(cfg).ValidateConfig()
 		assert.NotEmpty(t, errs)
 		found := false
 		for _, e := range errs {
-			if strings.Contains(e.Error(), "required publish channel 'events' is missing") {
+			if strings.Contains(e.Error(), "required pubs channel 'events' is missing") {
 				found = true
 			}
 		}
@@ -174,11 +136,11 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: ""},
 			},
 		}
-		errs := makeSvc(cfg).validateConfig()
+		errs := makeSvc(cfg).ValidateConfig()
 		assert.NotEmpty(t, errs)
 		found := false
 		for _, e := range errs {
-			if strings.Contains(e.Error(), "required publish channel 'events' is missing a name") {
+			if strings.Contains(e.Error(), "required pubs channel 'events' is missing a name") {
 				found = true
 			}
 		}

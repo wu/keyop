@@ -47,7 +47,13 @@ func Test_temp_success(t *testing.T) {
 	// Point the code to our test file
 	devicePath = p
 
-	svc := Service{Deps: deps}
+	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Pubs: map[string]core.ChannelInfo{"events": {Name: "temp"}}}}
+	errs := svc.ValidateConfig()
+	assert.Empty(t, errs)
+	err := svc.Initialize()
+	assert.NoError(t, err)
+
+	// Validate config with correct pubs
 	got, err := svc.temp()
 	assert.NoError(t, err)
 	assert.Empty(t, got.Error)

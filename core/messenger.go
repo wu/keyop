@@ -14,11 +14,12 @@ type Message struct {
 	Value       float64
 	Hostname    string
 	Data        string
+	State       string
 }
 
 type MessengerApi interface {
 	Send(channelName string, msg Message, data interface{}) error
-	Subscribe(channelName string) chan Message
+	Subscribe(sourceName string, channelName string, messageHandler func(Message) error) error
 }
 
 func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
@@ -30,7 +31,7 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 	}
 
 	m := &Messenger{
-		subscriptions: make(map[string][]chan Message),
+		subscriptions: make(map[string][]func(Message) error),
 		logger:        logger,
 	}
 
@@ -44,13 +45,16 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 }
 
 type Messenger struct {
-	subscriptions map[string][]chan Message
+	subscriptions map[string][]func(Message) error
 	mutex         sync.RWMutex
 	logger        Logger
 	hostname      string
 }
 
+//goland:noinspection GoVetCopyLock
 func (m Messenger) Send(channelName string, msg Message, data interface{}) error {
+	m.logger.Debug("Send message called", "channel", channelName, "message", msg, "data", data)
+
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
@@ -70,22 +74,29 @@ func (m Messenger) Send(channelName string, msg Message, data interface{}) error
 	m.logger.Info("Sending message", "channel", channelName, "message", msg)
 	if subscribers, subscribersExists := m.subscriptions[channelName]; subscribersExists {
 		for _, ch := range subscribers {
-			ch <- msg
+			err := ch(msg)
+			if err != nil {
+				m.logger.Error("Failed to send message to subscriber", "error", err)
+			}
 		}
+	} else {
+		m.logger.Debug("No subscribers for channel", "channel", channelName)
 	}
 
 	return nil
 }
 
-func (m Messenger) Subscribe(channelName string) chan Message {
+//goland:noinspection GoVetCopyLock
+func (m Messenger) Subscribe(source string, channelName string, messageHandler func(Message) error) error {
+
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	m.logger.Info("Subscribing to channel", "channel", channelName)
-	channel := make(chan Message)
+	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source)
+
 	if _, subscriptionsExist := m.subscriptions[channelName]; !subscriptionsExist {
-		m.subscriptions[channelName] = []chan Message{}
+		m.subscriptions[channelName] = []func(Message) error{}
 	}
-	m.subscriptions[channelName] = append(m.subscriptions[channelName], channel)
-	return channel
+	m.subscriptions[channelName] = append(m.subscriptions[channelName], messageHandler)
+	return nil
 }
