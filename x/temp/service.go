@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"os"
 	"strconv"
 	"strings"
@@ -17,7 +18,18 @@ type Service struct {
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return &Service{Deps: deps, Cfg: cfg}
+	return &Service{
+		Deps: deps,
+		Cfg:  cfg,
+	}
+}
+
+func (svc Service) ValidateConfig() []error {
+	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"})
+}
+
+func (svc Service) Initialize() error {
+	return nil
 }
 
 type Event struct {
@@ -35,6 +47,8 @@ func (svc Service) Check() error {
 func (svc Service) temp() (Event, error) {
 	logger := svc.Deps.MustGetLogger()
 	logger.Debug("temp check called")
+
+	messenger := svc.Deps.MustGetMessenger()
 
 	temp := Event{}
 
@@ -70,25 +84,15 @@ func (svc Service) temp() (Event, error) {
 
 	logger.Debug("temp", "data", temp)
 
-	// todo: get messenger at startup
-	messenger := svc.Deps.MustGetMessenger()
-
-	eventsChan, eventsChanExists := svc.Cfg.Pubs["events"]
-	if eventsChanExists {
-		logger.Debug("Sending to events channel", "channel", eventsChan.Name)
-		msg := core.Message{
-			ServiceName: svc.Cfg.Name,
-			ServiceType: svc.Cfg.Type,
-			Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
-			Value:       float64(temp.TempF),
-		}
-		logger.Debug("Sending to events channel", "message", msg, "data", temp)
-		err := messenger.Send(eventsChan.Name, msg, temp)
-		if err != nil {
-			logger.Error("Error sending to events channel %s: %s", eventsChan.Name, err.Error())
-			return temp, err
-		}
+	logger.Debug("Sending to events channel", "channel", svc.Cfg.Pubs["events"])
+	msg := core.Message{
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
+		Value:       float64(temp.TempF),
 	}
+	logger.Debug("Sending to events channel", "message", msg, "data", temp)
+	err = messenger.Send(svc.Cfg.Pubs["events"].Name, msg, temp)
+	return temp, err
 
-	return temp, nil
 }

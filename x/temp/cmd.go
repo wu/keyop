@@ -12,7 +12,25 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 		Short: "Temperature Sensor Utility",
 		Long:  `Read a Ds18b20 temperature sensor and display the message data.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc := NewService(deps, core.ServiceConfig{})
+
+			svc := NewService(deps, core.ServiceConfig{
+				Name: "temp",
+				Type: "temp",
+				Pubs: map[string]core.ChannelInfo{
+					"events": {Name: "temp", Description: "temperature events"},
+				},
+			})
+
+			errs := svc.ValidateConfig()
+			if len(errs) > 0 {
+				return errs[0]
+			}
+
+			err := svc.Initialize()
+			if err != nil {
+				return err
+			}
+
 			return svc.Check()
 		},
 	}
