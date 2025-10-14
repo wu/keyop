@@ -25,10 +25,14 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc Service) ValidateConfig() []error {
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"})
+	logger := svc.Deps.MustGetLogger()
+	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
 }
 
 func (svc Service) Initialize() error {
+
+	// todo: check that temp device exists here
+
 	return nil
 }
 
@@ -84,15 +88,11 @@ func (svc Service) temp() (Event, error) {
 
 	logger.Debug("temp", "data", temp)
 
-	logger.Debug("Sending to events channel", "channel", svc.Cfg.Pubs["events"])
-	msg := core.Message{
+	err = messenger.Send(svc.Cfg.Pubs["events"].Name, core.Message{
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
 		Value:       float64(temp.TempF),
-	}
-	logger.Debug("Sending to events channel", "message", msg, "data", temp)
-	err = messenger.Send(svc.Cfg.Pubs["events"].Name, msg, temp)
+	}, temp)
 	return temp, err
-
 }

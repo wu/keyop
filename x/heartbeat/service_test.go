@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"keyop/core"
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,10 @@ func TestHeartbeatCmd(t *testing.T) {
 
 func TestValidateConfig(t *testing.T) {
 	makeSvc := func(cfg core.ServiceConfig) Service {
-		return Service{Cfg: cfg}
+		logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+		deps := core.Dependencies{}
+		deps.SetLogger(logger)
+		return Service{Cfg: cfg, Deps: deps}
 	}
 
 	t.Run("valid config", func(t *testing.T) {

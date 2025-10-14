@@ -7,8 +7,10 @@ import (
 )
 
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps    core.Dependencies
+	Cfg     core.ServiceConfig
+	MinTemp float64
+	MaxTemp float64
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -19,25 +21,44 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc Service) ValidateConfig() []error {
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler"})
+	logger := svc.Deps.MustGetLogger()
+	logger.Warn("thermostat: ValidateConfig called")
+
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler"}, logger)
+	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
+	errs := append(pubErrs, subErrs...)
+
+	// set default min/max temps if not set in config
+	minTemp, minTempExists := svc.Cfg.Config["minTemp"].(float64)
+	if !minTempExists {
+		err := fmt.Errorf("thermostat: minTemp not set in config")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	}
+	svc.MinTemp = minTemp
+	logger.Info("thermostat: minTemp", "minTemp", svc.MinTemp)
+
+	maxTemp, maxTempExists := svc.Cfg.Config["maxTemp"].(float64)
+	if !maxTempExists {
+		err := fmt.Errorf("thermostat: maxTemp not set in config")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	}
+	svc.MaxTemp = maxTemp
+	logger.Info("thermostat: maxTemp", "maxTemp", svc.MaxTemp)
+
+	if svc.MinTemp >= svc.MaxTemp {
+		err := fmt.Errorf("thermostat: minTemp must be less than maxTemp (minTemp: %f, maxTemp: %f)", svc.MinTemp, svc.MaxTemp)
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	}
+
+	return errs
 }
 
 func (svc Service) Initialize() error {
-	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
-
-	tempChanInfo, exists := svc.Cfg.Subs["temp"]
-	if !exists {
-		logger.Error("thermostat: No temp channel configured in subs, nothing to do")
-		return fmt.Errorf("no temp channel configured in subs")
-	}
-	err := messenger.Subscribe(svc.Cfg.Name, tempChanInfo.Name, svc.tempHandler)
-	if err != nil {
-		logger.Error("thermostat: Error subscribing to temp channel", "channel", tempChanInfo.Name, "error", err)
-		return err
-	}
-
-	return nil
+	return messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["temp"].Name, svc.tempHandler)
 }
 
 type Event struct {
