@@ -16,21 +16,26 @@
       name: temp
       description: Publish office temperature events to temp channel
 
+
 - name: office-thermostat
   x: thermostat
+
+  config:
+    minTemp: 60.0
+    maxTemp: 80.0
+
   subs:
     temp:
       name: temp
       description: Read office temperature events from temp channel
+
   pubs:
     events:
       name: office-thermostat
       description: Publish office heater events
-
     heater:
       name: office-heater-powertail
       description: Control office heater
-
     cooler:
       name: office-fan-powertail
       description: Control office fan

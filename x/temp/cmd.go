@@ -16,13 +16,7 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 
 			logger := deps.MustGetLogger()
 			logger.Info("device path", "path", devicePath)
-			svc := NewService(deps, core.ServiceConfig{
-				Name: "temp",
-				Type: "temp",
-				Pubs: map[string]core.ChannelInfo{
-					"events": {Name: "temp", Description: "temperature events"},
-				},
-			})
+			svc := NewDefaultService(deps)
 
 			logger.Warn("validating config")
 			if errs := svc.ValidateConfig(); len(errs) > 0 {
@@ -45,4 +39,15 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 	cmd.Flags().StringVarP(&devicePath, "device", "d", "/sys/bus/w1/devices/28-000006388d49/w1_slave", "Device Path")
 
 	return cmd
+}
+
+func NewDefaultService(deps core.Dependencies) core.Service {
+	svc := NewService(deps, core.ServiceConfig{
+		Name: "temp",
+		Type: "temp",
+		Pubs: map[string]core.ChannelInfo{
+			"events": {Name: "temp", Description: "temperature events"},
+		},
+	})
+	return svc
 }

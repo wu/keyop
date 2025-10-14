@@ -1,6 +1,7 @@
 package run
 
 import (
+	"fmt"
 	"keyop/core"
 	"os"
 	"path/filepath"
@@ -11,11 +12,12 @@ import (
 
 // YAML representation of services in the config file
 type serviceConfigYaml struct {
-	Name string                      `yaml:"name"`
-	Freq string                      `yaml:"freq"`
-	X    string                      `yaml:"x"`
-	Pubs map[string]eventChannelYaml `yaml:"pubs"`
-	Subs map[string]eventChannelYaml `yaml:"subs"`
+	Name   string                      `yaml:"name"`
+	Freq   string                      `yaml:"freq"`
+	X      string                      `yaml:"x"`
+	Pubs   map[string]eventChannelYaml `yaml:"pubs"`
+	Subs   map[string]eventChannelYaml `yaml:"subs"`
+	Config map[string]interface{}      `yaml:"config,omitempty"`
 }
 
 type eventChannelYaml struct {
@@ -28,8 +30,8 @@ func configFilePath() string {
 	return filepath.Join(".", "config.yaml")
 }
 
-// loadServices reads config.yaml and creates ServiceConfig objects
-func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
+// loadServiceConfigs reads config.yaml and creates ServiceConfig objects
+func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 	p := configFilePath()
 	logger := deps.MustGetLogger()
 	logger.Info("Loading service config", "path", p)
@@ -63,10 +65,11 @@ func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 		}
 
 		svcConfig := core.ServiceConfig{
-			Name: serviceConfigSource.Name,
-			Type: serviceConfigSource.X,
-			Pubs: pubs,
-			Subs: subs,
+			Name:   serviceConfigSource.Name,
+			Type:   serviceConfigSource.X,
+			Pubs:   pubs,
+			Subs:   subs,
+			Config: serviceConfigSource.Config,
 		}
 
 		if serviceConfigSource.Freq != "" {
@@ -81,5 +84,11 @@ func loadServices(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 		serviceConfigs = append(serviceConfigs, svcConfig)
 	}
+
+	if len(serviceConfigs) == 0 {
+		logger.Error("config load", "error", "no services configured")
+		return serviceConfigs, fmt.Errorf("no services configured")
+	}
+
 	return serviceConfigs, nil
 }

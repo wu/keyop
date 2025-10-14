@@ -26,7 +26,7 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 
-	_, err := loadServices(deps)
+	_, err := loadServiceConfigs(deps)
 	assert.Error(t, err, "expected error when config is missing")
 }
 
@@ -49,7 +49,7 @@ func Test_loadServices_success(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 
-	svcs, err := loadServices(deps)
+	svcs, err := loadServiceConfigs(deps)
 	assert.NoError(t, err)
 	if assert.Len(t, svcs, 2) {
 		// first check assertions
@@ -83,7 +83,7 @@ func Test_loadServices_bad_duration(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 
-	_, err := loadServices(deps)
+	_, err := loadServiceConfigs(deps)
 	assert.Error(t, err, "expected error for invalid duration in config")
 }
 
@@ -111,10 +111,65 @@ func Test_loadServices_pubs_loaded(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 
-	svcs, err := loadServices(deps)
+	svcs, err := loadServiceConfigs(deps)
 	assert.NoError(t, err)
 	if assert.Len(t, svcs, 1) {
 		assert.Equal(t, "heartbeat", svcs[0].Pubs["events"].Name)
 		assert.Equal(t, "Publish Heartbeat Events every 1 second", svcs[0].Pubs["events"].Description)
+	}
+}
+
+func Test_loadServices_subs_loaded(t *testing.T) {
+	// setup config with subs structure similar to sample
+	dir := t.TempDir()
+	cfg := "- name: foo\n" +
+		"  x: heartbeat\n" +
+		"  subs:\n" +
+		"    events:\n" +
+		"      name: heartbeat\n" +
+		"      description: Read Heartbeat Events\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
+	defer os.Chdir(oldWD)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "heartbeat", svcs[0].Subs["events"].Name)
+		assert.Equal(t, "Read Heartbeat Events", svcs[0].Subs["events"].Description)
+	}
+}
+
+func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
+	dir := t.TempDir()
+	cfg := "[]\n" // empty YAML array, valid but no services
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	oldWD, _ := os.Getwd()
+	defer os.Chdir(oldWD)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.Error(t, err, "expected error when no services are configured")
+	assert.Empty(t, svcs, "expected no services returned")
+	if err != nil {
+		assert.Contains(t, err.Error(), "no services configured")
 	}
 }
