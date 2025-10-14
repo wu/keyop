@@ -3,8 +3,11 @@ package util
 import (
 	"fmt"
 	"keyop/core"
+	"log/slog"
+	"os"
 	"testing"
 
+	"github.com/MatusOllah/slogcolor"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -77,7 +80,8 @@ func TestValidateConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidateConfig(tt.args.pubSubType, tt.args.chanInfoMap, tt.args.required)
+			logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
+			got := ValidateConfig(tt.args.pubSubType, tt.args.chanInfoMap, tt.args.required, logger)
 			assert.Equalf(t, len(tt.want), len(got), "error count mismatch")
 			for i := range tt.want {
 				assert.EqualError(t, got[i], tt.want[i].Error())

@@ -2,17 +2,20 @@ package temp
 
 import (
 	"keyop/core"
+	"os"
 
 	"github.com/spf13/cobra"
 )
 
 func NewCmd(deps core.Dependencies) *cobra.Command {
-	tmpCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "temp",
 		Short: "Temperature Sensor Utility",
 		Long:  `Read a Ds18b20 temperature sensor and display the message data.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 
+			logger := deps.MustGetLogger()
+			logger.Info("device path", "path", devicePath)
 			svc := NewService(deps, core.ServiceConfig{
 				Name: "temp",
 				Type: "temp",
@@ -21,21 +24,25 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 				},
 			})
 
-			errs := svc.ValidateConfig()
-			if len(errs) > 0 {
-				return errs[0]
+			logger.Warn("validating config")
+			if errs := svc.ValidateConfig(); len(errs) > 0 {
+				logger.Error("validation error", "errors", errs)
+				os.Exit(1)
 			}
 
-			err := svc.Initialize()
-			if err != nil {
-				return err
+			if err := svc.Initialize(); err != nil {
+				logger.Error("service initialization error", "error", err)
+				os.Exit(1)
 			}
 
-			return svc.Check()
+			if err := svc.Check(); err != nil {
+				logger.Error("service check error", "error", err)
+				os.Exit(1)
+			}
 		},
 	}
 
-	tmpCmd.Flags().StringVarP(&devicePath, "device", "d", "/sys/bus/w1/devices/28-000006388d49/w1_slave", "Device Path")
+	cmd.Flags().StringVarP(&devicePath, "device", "d", "/sys/bus/w1/devices/28-000006388d49/w1_slave", "Device Path")
 
-	return tmpCmd
+	return cmd
 }

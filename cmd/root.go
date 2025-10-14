@@ -6,6 +6,7 @@ import (
 	"keyop/x/heartbeat"
 	"keyop/x/run"
 	"keyop/x/temp"
+	"keyop/x/thermostat"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.AddCommand(heartbeat.NewCmd(deps))
 	rootCmd.AddCommand(temp.NewCmd(deps))
 	rootCmd.AddCommand(run.NewCmd(deps))
+	rootCmd.AddCommand(thermostat.NewCmd(deps))
 
 	return rootCmd
 }

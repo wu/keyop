@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"keyop/core"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -11,7 +12,9 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "heartbeat",
 		Short: "Heartbeat Utility",
 		Long:  `Execute the heartbeat command and display the message data.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
+
+			logger := deps.MustGetLogger()
 
 			svc := NewService(deps, core.ServiceConfig{
 				Name: "heartbeat",
@@ -21,18 +24,20 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 				},
 			})
 
-			errs := svc.ValidateConfig()
-			if len(errs) > 0 {
-				return errs[0]
+			if errs := svc.ValidateConfig(); len(errs) > 0 {
+				logger.Error("validation error", "errors", errs)
+				os.Exit(1)
 			}
 
-			err := svc.Initialize()
-			if err != nil {
-				return err
+			if err := svc.Initialize(); err != nil {
+				logger.Error("service initialization error", "error", err)
+				os.Exit(1)
 			}
 
-			return svc.Check()
-
+			if err := svc.Check(); err != nil {
+				logger.Error("service check error", "error", err)
+				os.Exit(1)
+			}
 		},
 	}
 
