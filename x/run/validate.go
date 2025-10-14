@@ -18,6 +18,8 @@ func validateServiceConfig(services []ServiceWrapper, logger core.Logger) error 
 				logger.Error("service config is missing the required field 'type'", "name", serviceWrapper.Config.Name)
 				errCount++
 			}
+
+			logger.Info("validating service config", "name", serviceWrapper.Config.Name, "type", serviceWrapper.Config.Type)
 			errs := serviceWrapper.Service.ValidateConfig()
 			for _, err := range errs {
 				logger.Error("service config validation error", "name", serviceWrapper.Config.Name, "error", err)
@@ -27,6 +29,7 @@ func validateServiceConfig(services []ServiceWrapper, logger core.Logger) error 
 			return fmt.Errorf("service configuration errors detected, see log for details")
 		}
 
+		logger.Info("all service configs validated successfully")
 	}
 	return nil
 }

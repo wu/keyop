@@ -14,38 +14,45 @@ type Service struct {
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return &Service{
+	svc := &Service{
 		Deps: deps,
 		Cfg:  cfg,
 	}
+
+	minTemp, minTempExists := svc.Cfg.Config["minTemp"]
+	if minTempExists {
+		svc.MinTemp = minTemp.(float64)
+	}
+
+	maxTemp, maxTempExists := svc.Cfg.Config["maxTemp"]
+	if maxTempExists {
+		svc.MaxTemp = maxTemp.(float64)
+	}
+
+	return svc
 }
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	logger.Warn("thermostat: ValidateConfig called")
 
 	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler"}, logger)
 	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
 	errs := append(pubErrs, subErrs...)
 
-	// set default min/max temps if not set in config
-	minTemp, minTempExists := svc.Cfg.Config["minTemp"].(float64)
+	// check min/max temps
+	_, minTempExists := svc.Cfg.Config["minTemp"].(float64)
 	if !minTempExists {
 		err := fmt.Errorf("thermostat: minTemp not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
-	svc.MinTemp = minTemp
-	logger.Info("thermostat: minTemp", "minTemp", svc.MinTemp)
 
-	maxTemp, maxTempExists := svc.Cfg.Config["maxTemp"].(float64)
+	_, maxTempExists := svc.Cfg.Config["maxTemp"].(float64)
 	if !maxTempExists {
 		err := fmt.Errorf("thermostat: maxTemp not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
-	svc.MaxTemp = maxTemp
-	logger.Info("thermostat: maxTemp", "maxTemp", svc.MaxTemp)
 
 	if svc.MinTemp >= svc.MaxTemp {
 		err := fmt.Errorf("thermostat: minTemp must be less than maxTemp (minTemp: %f, maxTemp: %f)", svc.MinTemp, svc.MaxTemp)
@@ -101,25 +108,26 @@ func (svc Service) tempHandler(msg core.Message) error {
 
 func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
 	//minTem := svc.Cfg.Config["minTemp"].(float64)
-	minTemp := 50.0
-	maxTemp := 75.0
+
 	heaterTargetState := "OFF"
 	coolerTargetState := "OFF"
 
-	if msg.Value < minTemp {
-		logger.Info("thermostat: temp below min threshold, turning on heat", "temp", msg.Value, "minTemp", minTemp)
+	logger.Info("thermostat: current temp", "temp", msg.Value, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp)
+
+	if msg.Value < svc.MinTemp {
+		logger.Info("thermostat: temp below min threshold, heating", "temp", msg.Value, "minTemp", svc.MinTemp)
 		heaterTargetState = "ON"
-	} else if msg.Value > maxTemp {
-		logger.Info("thermostat: temp above max threshold, turning off heat", "temp", msg.Value, "maxTemp", maxTemp)
+	} else if msg.Value > svc.MaxTemp {
+		logger.Info("thermostat: temp above max threshold, cooling", "temp", msg.Value, "maxTemp", svc.MaxTemp)
 		coolerTargetState = "ON"
 	} else {
-		logger.Info("thermostat: temp above min threshold, turning off heat", "temp", msg.Value, "minTemp", minTemp)
+		logger.Info("thermostat: temp between thresholds, turning off", "temp", msg.Value, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp)
 	}
 
 	thermostatEvent := Event{
 		Temp:              msg.Value,
-		MinTemp:           minTemp,
-		MaxTemp:           maxTemp,
+		MinTemp:           svc.MinTemp,
+		MaxTemp:           svc.MaxTemp,
 		HeaterTargetState: heaterTargetState,
 		CoolerTargetState: coolerTargetState,
 	}

@@ -23,7 +23,7 @@ func testDeps() core.Dependencies {
 
 func Test_updateState_thresholds(t *testing.T) {
 	deps := testDeps()
-	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}}
+	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75}
 	logger := deps.MustGetLogger()
 
 	// below min -> heater ON, cooler OFF
@@ -141,6 +141,10 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 		Subs: map[string]core.ChannelInfo{
 			"temp": {Name: "temp-topic"},
 		},
+		Config: map[string]any{
+			"minTemp": 50.0,
+			"maxTemp": 75.0,
+		},
 	}
 
 	svc := NewService(deps, cfg)
@@ -152,4 +156,117 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 
 	assert.Len(t, gotHeater, 1)
 	assert.Equal(t, "ON", gotHeater[0].State)
+}
+
+func TestValidateConfig(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
+	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
+
+	t.Run("valid config", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs: map[string]core.ChannelInfo{
+				"temp": {Name: "temp"},
+			},
+			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.Empty(t, errs)
+	})
+
+	t.Run("missing pubs", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name:   "thermo",
+			Type:   "thermostat",
+			Pubs:   map[string]core.ChannelInfo{},
+			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
+			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.ErrorContains(t, errs[0], "required pubs channel 'events' is missing")
+	})
+
+	t.Run("missing subs", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs:   map[string]core.ChannelInfo{},
+			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.ErrorContains(t, errs[0], "required subs channel 'temp' is missing")
+	})
+
+	t.Run("missing minTemp", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
+			Config: map[string]any{"maxTemp": 30.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.ErrorContains(t, errs[0], "minTemp not set in config")
+	})
+
+	t.Run("missing maxTemp", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
+			Config: map[string]any{"minTemp": 10.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.ErrorContains(t, errs[0], "maxTemp not set in config")
+	})
+
+	t.Run("minTemp >= maxTemp", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
+			Config: map[string]any{"minTemp": 30.0, "maxTemp": 10.0},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.ErrorContains(t, errs[len(errs)-1], "minTemp must be less than maxTemp")
+	})
 }

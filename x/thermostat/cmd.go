@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var minTemp float64
-var maxTemp float64
+var cmdMinTemp float64
+var cmdMaxTemp float64
 
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	cmd := &cobra.Command{
@@ -20,30 +20,8 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 
 			logger := deps.MustGetLogger()
 
-			tmpSvc := temp.NewService(deps, core.ServiceConfig{
-				Name: "temp",
-				Type: "temp",
-				Pubs: map[string]core.ChannelInfo{
-					"events": {Name: "temp", Description: "temperature events"},
-				},
-			})
-
-			thermoSvc := NewService(deps, core.ServiceConfig{
-				Name: "thermostat",
-				Type: "thermostat",
-				Subs: map[string]core.ChannelInfo{
-					"temp": {Name: "temp", Description: "Read temperature events"},
-				},
-				Pubs: map[string]core.ChannelInfo{
-					"events": {Name: "thermostat", Description: "Publish thermostat events"},
-					"heater": {Name: "heater-control", Description: "Publish to heater controller channel"},
-					"cooler": {Name: "cooler-control", Description: "Publish to fan/ac controller channel"},
-				},
-				Config: map[string]interface{}{
-					"minTemp": minTemp,
-					"maxTemp": maxTemp,
-				},
-			})
+			tmpSvc := temp.NewDefaultService(deps)
+			thermoSvc := NewDefaultService(deps)
 
 			logger.Warn("validating config")
 			if errs := thermoSvc.ValidateConfig(); len(errs) > 0 {
@@ -71,8 +49,28 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Float64VarP(&minTemp, "minTemp", "n", 60.0, "Minimum Temperature")
-	cmd.Flags().Float64VarP(&maxTemp, "maxTemp", "x", 80.0, "Maximum Temperature")
+	cmd.Flags().Float64VarP(&cmdMinTemp, "minTemp", "n", 60.0, "Minimum Temperature")
+	cmd.Flags().Float64VarP(&cmdMaxTemp, "maxTemp", "x", 80.0, "Maximum Temperature")
 
 	return cmd
+}
+
+func NewDefaultService(deps core.Dependencies) core.Service {
+	svc := NewService(deps, core.ServiceConfig{
+		Name: "thermostat",
+		Type: "thermostat",
+		Subs: map[string]core.ChannelInfo{
+			"temp": {Name: "temp", Description: "Read temperature events"},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"events": {Name: "thermostat", Description: "Publish thermostat events"},
+			"heater": {Name: "heater-control", Description: "Publish to heater controller channel"},
+			"cooler": {Name: "cooler-control", Description: "Publish to fan/ac controller channel"},
+		},
+		Config: map[string]interface{}{
+			"minTemp": cmdMinTemp,
+			"maxTemp": cmdMaxTemp,
+		},
+	})
+	return svc
 }
