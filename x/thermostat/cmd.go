@@ -10,6 +10,7 @@ import (
 
 var cmdMinTemp float64
 var cmdMaxTemp float64
+var cmdMode string
 
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	cmd := &cobra.Command{
@@ -51,6 +52,7 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 
 	cmd.Flags().Float64VarP(&cmdMinTemp, "minTemp", "n", 60.0, "Minimum Temperature")
 	cmd.Flags().Float64VarP(&cmdMaxTemp, "maxTemp", "x", 80.0, "Maximum Temperature")
+	cmd.Flags().StringVarP(&cmdMode, "mode", "m", "auto", "Thermostat Mode (off, heat, cool, auto)")
 
 	return cmd
 }
@@ -70,7 +72,9 @@ func NewDefaultService(deps core.Dependencies) core.Service {
 		Config: map[string]interface{}{
 			"minTemp": cmdMinTemp,
 			"maxTemp": cmdMaxTemp,
+			"mode":    cmdMode,
 		},
 	})
+
 	return svc
 }

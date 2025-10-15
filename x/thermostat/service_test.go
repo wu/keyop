@@ -21,29 +21,6 @@ func testDeps() core.Dependencies {
 	return deps
 }
 
-func Test_updateState_thresholds(t *testing.T) {
-	deps := testDeps()
-	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75}
-	logger := deps.MustGetLogger()
-
-	// below min -> heater ON, cooler OFF
-	ev := svc.updateState(core.Message{Value: 40}, logger)
-	assert.Equal(t, "ON", ev.HeaterTargetState)
-	assert.Equal(t, "OFF", ev.CoolerTargetState)
-	assert.InDelta(t, 50.0, ev.MinTemp, 0.001)
-	assert.InDelta(t, 75.0, ev.MaxTemp, 0.001)
-
-	// between -> both OFF
-	ev = svc.updateState(core.Message{Value: 60}, logger)
-	assert.Equal(t, "OFF", ev.HeaterTargetState)
-	assert.Equal(t, "OFF", ev.CoolerTargetState)
-
-	// above max -> cooler ON, heater OFF
-	ev = svc.updateState(core.Message{Value: 90}, logger)
-	assert.Equal(t, "OFF", ev.HeaterTargetState)
-	assert.Equal(t, "ON", ev.CoolerTargetState)
-}
-
 func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	deps := testDeps()
 	messenger := deps.MustGetMessenger()
@@ -82,6 +59,11 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 		},
 		Subs: map[string]core.ChannelInfo{
 			"temp": {Name: "temp-topic"},
+		},
+		Config: map[string]any{
+			"minTemp": 50.0,
+			"maxTemp": 75.0,
+			"mode":    "auto",
 		},
 	}
 
@@ -144,6 +126,7 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 		Config: map[string]any{
 			"minTemp": 50.0,
 			"maxTemp": 75.0,
+			"mode":    "auto",
 		},
 	}
 
@@ -177,7 +160,7 @@ func TestValidateConfig(t *testing.T) {
 			Subs: map[string]core.ChannelInfo{
 				"temp": {Name: "temp"},
 			},
-			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
+			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0, "mode": "auto"},
 		}
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
@@ -262,11 +245,157 @@ func TestValidateConfig(t *testing.T) {
 				"cooler": {Name: "cooler"},
 			},
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
-			Config: map[string]any{"minTemp": 30.0, "maxTemp": 10.0},
+			Config: map[string]any{"minTemp": 30.0, "maxTemp": 10.0, "mode": "auto"},
 		}
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
 		assert.ErrorContains(t, errs[len(errs)-1], "minTemp must be less than maxTemp")
 	})
+
+	t.Run("invalid mode", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Name: "thermo",
+			Type: "thermostat",
+			Pubs: map[string]core.ChannelInfo{
+				"events": {Name: "events"},
+				"heater": {Name: "heater"},
+				"cooler": {Name: "cooler"},
+			},
+			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
+			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0, "mode": "banana"},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+
+		assert.Contains(t, errs[0].Error(), "invalid mode")
+		assert.Contains(t, errs[0].Error(), "banana")
+		assert.Contains(t, errs[0].Error(), "thermostat")
+
+	})
+}
+
+func TestService_updateState(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	baseCfg := core.ServiceConfig{Name: "thermo", Type: "thermostat"}
+
+	testCases := []struct {
+		name      string
+		minTemp   float64
+		maxTemp   float64
+		mode      string
+		inputTemp float64
+		heater    string
+		cooler    string
+	}{
+		{
+			name:      "below min, mode=auto",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "auto",
+			inputTemp: 40,
+			heater:    "ON",
+			cooler:    "OFF",
+		},
+		{
+			name:      "below min, mode=heat",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "heat",
+			inputTemp: 40,
+			heater:    "ON",
+			cooler:    "OFF",
+		},
+		{
+			name:      "below min, mode=cool",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "cool",
+			inputTemp: 40,
+			heater:    "OFF",
+			cooler:    "OFF",
+		},
+		{
+			name:      "above max, mode=auto",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "auto",
+			inputTemp: 80,
+			heater:    "OFF",
+			cooler:    "ON",
+		},
+		{
+			name:      "above max, mode=cool",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "cool",
+			inputTemp: 80,
+			heater:    "OFF",
+			cooler:    "ON",
+		},
+		{
+			name:      "above max, mode=heat",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "heat",
+			inputTemp: 80,
+			heater:    "OFF",
+			cooler:    "OFF",
+		},
+		{
+			name:      "between min and max, mode=auto",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "auto",
+			inputTemp: 60,
+			heater:    "OFF",
+			cooler:    "OFF",
+		},
+		{
+			name:      "between min and max, mode=off",
+			minTemp:   50,
+			maxTemp:   75,
+			mode:      "off",
+			inputTemp: 60,
+			heater:    "OFF",
+			cooler:    "OFF",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := Service{
+				Deps:    core.Dependencies{},
+				Cfg:     baseCfg,
+				MinTemp: tc.minTemp,
+				MaxTemp: tc.maxTemp,
+				Mode:    tc.mode,
+			}
+			msg := core.Message{Value: tc.inputTemp}
+			event := svc.updateState(msg, logger)
+			if event.HeaterTargetState != tc.heater {
+				t.Errorf("expected heater=%s, got %s", tc.heater, event.HeaterTargetState)
+			}
+			if event.CoolerTargetState != tc.cooler {
+				t.Errorf("expected cooler=%s, got %s", tc.cooler, event.CoolerTargetState)
+			}
+			if event.Temp != tc.inputTemp {
+				t.Errorf("expected event.Temp=%v, got %v", tc.inputTemp, event.Temp)
+			}
+			if event.MinTemp != tc.minTemp {
+				t.Errorf("expected event.MinTemp=%v, got %v", tc.minTemp, event.MinTemp)
+			}
+			if event.MaxTemp != tc.maxTemp {
+				t.Errorf("expected event.MaxTemp=%v, got %v", tc.maxTemp, event.MaxTemp)
+			}
+			if event.Mode != tc.mode {
+				t.Errorf("expected event.Mode=%v, got %v", tc.mode, event.Mode)
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && (contains(s[1:], substr) || contains(s[:len(s)-1], substr)))) || (len(substr) > 0 && len(s) > 0 && (s[0] == substr[0] && contains(s[1:], substr[1:])))
 }

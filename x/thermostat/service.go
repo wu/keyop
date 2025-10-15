@@ -11,6 +11,14 @@ type Service struct {
 	Cfg     core.ServiceConfig
 	MinTemp float64
 	MaxTemp float64
+	Mode    string // "heat", "cool", "auto", "off"
+}
+
+var validModes = map[string]bool{
+	"heat": true,
+	"cool": true,
+	"auto": true,
+	"off":  true,
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -29,7 +37,20 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.MaxTemp = maxTemp.(float64)
 	}
 
+	mode, modeExists := svc.Cfg.Config["mode"]
+	if modeExists {
+		svc.Mode = mode.(string)
+	}
+
 	return svc
+}
+
+func getValidModes() []string {
+	modes := make([]string, 0, len(validModes))
+	for mode := range validModes {
+		modes = append(modes, mode)
+	}
+	return modes
 }
 
 func (svc Service) ValidateConfig() []error {
@@ -60,6 +81,20 @@ func (svc Service) ValidateConfig() []error {
 		errs = append(errs, err)
 	}
 
+	// check mode
+	mode, modeExists := svc.Cfg.Config["mode"].(string)
+	if !modeExists {
+		err := fmt.Errorf("thermostat: mode not set in config")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	} else {
+		if _, valid := validModes[mode]; !valid {
+			err := fmt.Errorf("thermostat: invalid mode '%s' in config, must be one of %v", mode, getValidModes())
+			logger.Error(err.Error())
+			errs = append(errs, err)
+		}
+	}
+
 	return errs
 }
 
@@ -74,6 +109,7 @@ type Event struct {
 	Temp              float64 `json:"temp"`
 	MinTemp           float64 `json:"minTemp"`
 	MaxTemp           float64 `json:"maxTemp"`
+	Mode              string  `json:"mode"`
 }
 
 func (svc Service) tempHandler(msg core.Message) error {
@@ -107,7 +143,6 @@ func (svc Service) tempHandler(msg core.Message) error {
 }
 
 func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
-	//minTem := svc.Cfg.Config["minTemp"].(float64)
 
 	heaterTargetState := "OFF"
 	coolerTargetState := "OFF"
@@ -115,11 +150,19 @@ func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
 	logger.Info("thermostat: current temp", "temp", msg.Value, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp)
 
 	if msg.Value < svc.MinTemp {
-		logger.Info("thermostat: temp below min threshold, heating", "temp", msg.Value, "minTemp", svc.MinTemp)
-		heaterTargetState = "ON"
+		if svc.Mode == "heat" || svc.Mode == "auto" {
+			logger.Info("thermostat: temp below min threshold, heating", "temp", msg.Value, "minTemp", svc.MinTemp)
+			heaterTargetState = "ON"
+		} else {
+			logger.Info("thermostat: mode is not heat or auto, not heating", "mode", svc.Mode)
+		}
 	} else if msg.Value > svc.MaxTemp {
-		logger.Info("thermostat: temp above max threshold, cooling", "temp", msg.Value, "maxTemp", svc.MaxTemp)
-		coolerTargetState = "ON"
+		if svc.Mode == "cool" || svc.Mode == "auto" {
+			logger.Info("thermostat: temp above max threshold, cooling", "temp", msg.Value, "maxTemp", svc.MaxTemp)
+			coolerTargetState = "ON"
+		} else {
+			logger.Info("thermostat: mode is not cool or auto, not cooling", "mode", svc.Mode)
+		}
 	} else {
 		logger.Info("thermostat: temp between thresholds, turning off", "temp", msg.Value, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp)
 	}
@@ -128,6 +171,7 @@ func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
 		Temp:              msg.Value,
 		MinTemp:           svc.MinTemp,
 		MaxTemp:           svc.MaxTemp,
+		Mode:              svc.Mode,
 		HeaterTargetState: heaterTargetState,
 		CoolerTargetState: coolerTargetState,
 	}
