@@ -23,6 +23,9 @@
   config:
     minTemp: 60.0
     maxTemp: 80.0
+    # one of auto, heat, cool, off
+    mode: auto
+
 
   subs:
     temp:
