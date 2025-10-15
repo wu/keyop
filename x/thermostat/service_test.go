@@ -13,7 +13,7 @@ import (
 
 // helper to build dependencies similar to other service tests
 func testDeps() core.Dependencies {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}
 	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
 	deps.SetLogger(logger)
@@ -396,6 +396,189 @@ func TestService_updateState(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && (contains(s[1:], substr) || contains(s[:len(s)-1], substr)))) || (len(substr) > 0 && len(s) > 0 && (s[0] == substr[0] && contains(s[1:], substr[1:])))
+func Test_updateState_thresholds_heat(t *testing.T) {
+	for _, mode := range []string{"heat", "auto"} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			deps := testDeps()
+			svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75, Mode: mode, Hysteresis: 2}
+			logger := deps.MustGetLogger()
+
+			// between -> both OFF
+			ev := svc.updateState(core.Message{Value: 60}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+			// drop to 51 -> both OFF
+			ev = svc.updateState(core.Message{Value: 51}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+			// drop to just below min -> heater ON, cooler OFF
+			ev = svc.updateState(core.Message{Value: 49}, logger)
+			assert.Equal(t, "ON", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+			svc.HeaterState = ev.HeaterTargetState // simulate heater turning ON
+
+			// drop to just above min, hysteresis should keep heater ON
+			ev = svc.updateState(core.Message{Value: 51}, logger)
+			assert.Equal(t, "ON", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+			// temp goes above min + hysteresis -> heater OFF
+			ev = svc.updateState(core.Message{Value: 58}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+		})
+	}
+}
+
+func Test_updateState_thresholds_cool(t *testing.T) {
+
+	for _, mode := range []string{"cool", "auto"} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			deps := testDeps()
+			svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75, Mode: mode, Hysteresis: 2}
+			logger := deps.MustGetLogger()
+
+			// between -> both OFF
+			ev := svc.updateState(core.Message{Value: 70}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+			// rise near max -> both OFF
+			ev = svc.updateState(core.Message{Value: 74}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+			// rise just above max -> cooler ON, heater OFF
+			ev = svc.updateState(core.Message{Value: 76}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "ON", ev.CoolerTargetState)
+			svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+
+			// drop just below max, hysteresis should keep cooler ON
+			ev = svc.updateState(core.Message{Value: 74}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "ON", ev.CoolerTargetState)
+
+			// temp goes below max + hysteresis -> heater OFF
+			ev = svc.updateState(core.Message{Value: 70}, logger)
+			assert.Equal(t, "OFF", ev.HeaterTargetState)
+			assert.Equal(t, "OFF", ev.CoolerTargetState)
+		})
+	}
+}
+
+func Test_updateState_cool_min_equals_max(t *testing.T) {
+	deps := testDeps()
+	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "cool", Hysteresis: 2}
+	logger := deps.MustGetLogger()
+
+	// exact -> both OFF
+	ev := svc.updateState(core.Message{Value: 60}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// rise above target -> cooler ON
+	ev = svc.updateState(core.Message{Value: 65}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+
+	// drop just above target -> cooler ON, heater OFF
+	ev = svc.updateState(core.Message{Value: 61}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+
+	// drop just below target, hysteresis should keep cooler ON
+	ev = svc.updateState(core.Message{Value: 59}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+
+	// drop below max + hysteresis -> heater OFF
+	ev = svc.updateState(core.Message{Value: 50}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+}
+
+func Test_updateState_heat_min_equals_max(t *testing.T) {
+	deps := testDeps()
+	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "heat", Hysteresis: 2}
+	logger := deps.MustGetLogger()
+
+	// exact -> both OFF
+	ev := svc.updateState(core.Message{Value: 60}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// drop below target -> heater ON
+	ev = svc.updateState(core.Message{Value: 55}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
+
+	// rise just below target -> heater stays on
+	ev = svc.updateState(core.Message{Value: 59}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// rise just above target, hysteresis should keep heater ON
+	ev = svc.updateState(core.Message{Value: 61}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// temp rises above max + hysteresis -> heater OFF
+	ev = svc.updateState(core.Message{Value: 70}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+}
+
+func Test_updateState_auto_min_equals_max(t *testing.T) {
+	deps := testDeps()
+	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "auto", Hysteresis: 2}
+	logger := deps.MustGetLogger()
+
+	// exact -> both OFF
+	ev := svc.updateState(core.Message{Value: 60}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// rise above target -> cooler ON
+	ev = svc.updateState(core.Message{Value: 65}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+
+	// drop just above target -> cooler ON, heater OFF
+	ev = svc.updateState(core.Message{Value: 61}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+
+	// drop just below target, hysteresis should keep cooler ON
+	ev = svc.updateState(core.Message{Value: 59}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
+
+	// drop below target -> heater ON
+	ev = svc.updateState(core.Message{Value: 55}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
+	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+
+	// rise just below target -> heater stays on
+	ev = svc.updateState(core.Message{Value: 59}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// rise just above target, hysteresis should keep heater ON
+	ev = svc.updateState(core.Message{Value: 61}, logger)
+	assert.Equal(t, "ON", ev.HeaterTargetState)
+	assert.Equal(t, "OFF", ev.CoolerTargetState)
+
+	// temp rises above max + hysteresis -> cooler on
+	ev = svc.updateState(core.Message{Value: 70}, logger)
+	assert.Equal(t, "OFF", ev.HeaterTargetState)
+	assert.Equal(t, "ON", ev.CoolerTargetState)
 }
