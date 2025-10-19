@@ -8,13 +8,13 @@ import (
 
 type Message struct {
 	Timestamp   time.Time
-	Text        string
-	ServiceName string
-	ServiceType string
-	Value       float64
 	Hostname    string
-	Data        string
+	ServiceType string
+	ServiceName string
+	Text        string
+	Metric      float64
 	State       string
+	Data        string
 }
 
 type MessengerApi interface {
