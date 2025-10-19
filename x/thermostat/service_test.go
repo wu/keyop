@@ -74,7 +74,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 
 	// send a temp message to the temp channel
 	// pick a value above max to turn cooler ON
-	err = messenger.Send("temp-topic", core.Message{Value: 80}, nil)
+	err = messenger.Send("temp-topic", core.Message{Metric: 80}, nil)
 	assert.NoError(t, err)
 
 	// Assertions: thermostat should publish to both heater and cooler
@@ -135,7 +135,7 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send a cold temp to turn heater ON
-	_ = messenger.Send("temp-topic", core.Message{Value: 20}, nil)
+	_ = messenger.Send("temp-topic", core.Message{Metric: 20}, nil)
 
 	assert.Len(t, gotHeater, 1)
 	assert.Equal(t, "ON", gotHeater[0].State)
@@ -372,7 +372,7 @@ func TestService_updateState(t *testing.T) {
 				MaxTemp: tc.maxTemp,
 				Mode:    tc.mode,
 			}
-			msg := core.Message{Value: tc.inputTemp}
+			msg := core.Message{Metric: tc.inputTemp}
 			event := svc.updateState(msg, logger)
 			if event.HeaterTargetState != tc.heater {
 				t.Errorf("expected heater=%s, got %s", tc.heater, event.HeaterTargetState)
@@ -404,28 +404,28 @@ func Test_updateState_thresholds_heat(t *testing.T) {
 			logger := deps.MustGetLogger()
 
 			// between -> both OFF
-			ev := svc.updateState(core.Message{Value: 60}, logger)
+			ev := svc.updateState(core.Message{Metric: 60}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// drop to 51 -> both OFF
-			ev = svc.updateState(core.Message{Value: 51}, logger)
+			ev = svc.updateState(core.Message{Metric: 51}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// drop to just below min -> heater ON, cooler OFF
-			ev = svc.updateState(core.Message{Value: 49}, logger)
+			ev = svc.updateState(core.Message{Metric: 49}, logger)
 			assert.Equal(t, "ON", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 			svc.HeaterState = ev.HeaterTargetState // simulate heater turning ON
 
 			// drop to just above min, hysteresis should keep heater ON
-			ev = svc.updateState(core.Message{Value: 51}, logger)
+			ev = svc.updateState(core.Message{Metric: 51}, logger)
 			assert.Equal(t, "ON", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// temp goes above min + hysteresis -> heater OFF
-			ev = svc.updateState(core.Message{Value: 58}, logger)
+			ev = svc.updateState(core.Message{Metric: 58}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 		})
@@ -441,28 +441,28 @@ func Test_updateState_thresholds_cool(t *testing.T) {
 			logger := deps.MustGetLogger()
 
 			// between -> both OFF
-			ev := svc.updateState(core.Message{Value: 70}, logger)
+			ev := svc.updateState(core.Message{Metric: 70}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// rise near max -> both OFF
-			ev = svc.updateState(core.Message{Value: 74}, logger)
+			ev = svc.updateState(core.Message{Metric: 74}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// rise just above max -> cooler ON, heater OFF
-			ev = svc.updateState(core.Message{Value: 76}, logger)
+			ev = svc.updateState(core.Message{Metric: 76}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "ON", ev.CoolerTargetState)
 			svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
 
 			// drop just below max, hysteresis should keep cooler ON
-			ev = svc.updateState(core.Message{Value: 74}, logger)
+			ev = svc.updateState(core.Message{Metric: 74}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "ON", ev.CoolerTargetState)
 
 			// temp goes below max + hysteresis -> heater OFF
-			ev = svc.updateState(core.Message{Value: 70}, logger)
+			ev = svc.updateState(core.Message{Metric: 70}, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 		})
@@ -475,28 +475,28 @@ func Test_updateState_cool_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Value: 60}, logger)
+	ev := svc.updateState(core.Message{Metric: 60}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise above target -> cooler ON
-	ev = svc.updateState(core.Message{Value: 65}, logger)
+	ev = svc.updateState(core.Message{Metric: 65}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
 
 	// drop just above target -> cooler ON, heater OFF
-	ev = svc.updateState(core.Message{Value: 61}, logger)
+	ev = svc.updateState(core.Message{Metric: 61}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop just below target, hysteresis should keep cooler ON
-	ev = svc.updateState(core.Message{Value: 59}, logger)
+	ev = svc.updateState(core.Message{Metric: 59}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop below max + hysteresis -> heater OFF
-	ev = svc.updateState(core.Message{Value: 50}, logger)
+	ev = svc.updateState(core.Message{Metric: 50}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
@@ -508,28 +508,28 @@ func Test_updateState_heat_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Value: 60}, logger)
+	ev := svc.updateState(core.Message{Metric: 60}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// drop below target -> heater ON
-	ev = svc.updateState(core.Message{Value: 55}, logger)
+	ev = svc.updateState(core.Message{Metric: 55}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
 
 	// rise just below target -> heater stays on
-	ev = svc.updateState(core.Message{Value: 59}, logger)
+	ev = svc.updateState(core.Message{Metric: 59}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise just above target, hysteresis should keep heater ON
-	ev = svc.updateState(core.Message{Value: 61}, logger)
+	ev = svc.updateState(core.Message{Metric: 61}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// temp rises above max + hysteresis -> heater OFF
-	ev = svc.updateState(core.Message{Value: 70}, logger)
+	ev = svc.updateState(core.Message{Metric: 70}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 }
@@ -540,45 +540,45 @@ func Test_updateState_auto_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Value: 60}, logger)
+	ev := svc.updateState(core.Message{Metric: 60}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise above target -> cooler ON
-	ev = svc.updateState(core.Message{Value: 65}, logger)
+	ev = svc.updateState(core.Message{Metric: 65}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
 
 	// drop just above target -> cooler ON, heater OFF
-	ev = svc.updateState(core.Message{Value: 61}, logger)
+	ev = svc.updateState(core.Message{Metric: 61}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop just below target, hysteresis should keep cooler ON
-	ev = svc.updateState(core.Message{Value: 59}, logger)
+	ev = svc.updateState(core.Message{Metric: 59}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop below target -> heater ON
-	ev = svc.updateState(core.Message{Value: 55}, logger)
+	ev = svc.updateState(core.Message{Metric: 55}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
 	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
 
 	// rise just below target -> heater stays on
-	ev = svc.updateState(core.Message{Value: 59}, logger)
+	ev = svc.updateState(core.Message{Metric: 59}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise just above target, hysteresis should keep heater ON
-	ev = svc.updateState(core.Message{Value: 61}, logger)
+	ev = svc.updateState(core.Message{Metric: 61}, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// temp rises above max + hysteresis -> cooler on
-	ev = svc.updateState(core.Message{Value: 70}, logger)
+	ev = svc.updateState(core.Message{Metric: 70}, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 }

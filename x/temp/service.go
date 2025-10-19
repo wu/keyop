@@ -92,7 +92,7 @@ func (svc Service) temp() (Event, error) {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
-		Value:       float64(temp.TempF),
+		Metric:      float64(temp.TempF),
 	}, temp)
 	return temp, err
 }
