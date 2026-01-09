@@ -71,7 +71,7 @@ func (m Messenger) Send(channelName string, msg Message, data interface{}) error
 		}
 	}
 
-	m.logger.Info("Sending message", "channel", channelName, "message", msg)
+	m.logger.Info("SEND", "channel", channelName, "message", msg)
 	if subscribers, subscribersExists := m.subscriptions[channelName]; subscribersExists {
 		for _, ch := range subscribers {
 			err := ch(msg)
