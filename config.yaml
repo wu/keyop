@@ -6,7 +6,7 @@
   pubs:
     events:
       name: heartbeat
-      description: Publish heartbeat events to heartbeat channel
+      description: Publish heartbeat events to local heartbeat channel
 
 - name: office-temp
   freq: 5s
@@ -14,7 +14,7 @@
   pubs:
     events:
       name: temp
-      description: Publish office temperature events to temp channel
+      description: Publish office temperature events to local temp channel
 
 
 - name: office-thermostat
@@ -30,16 +30,16 @@
   subs:
     temp:
       name: temp
-      description: Read office temperature events from temp channel
+      description: Read office temperature events from local temp channel
 
   pubs:
     events:
-      name: office-thermostat
-      description: Publish office heater events
+      name: thermostat
+      description: Publish office thermostat events to local thermostat channel
     heater:
-      name: office-heater-powertail
-      description: Control office heater
+      name: powertail
+      description: send office heater power events to local powertail channel
     cooler:
-      name: office-fan-powertail
-      description: Control office fan
+      name: powertail
+      description: send office fan power events to local powertail channel
 
