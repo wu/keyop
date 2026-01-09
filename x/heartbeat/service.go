@@ -10,6 +10,7 @@ import (
 var startTime time.Time
 
 func init() {
+	// capture the service start time for reporting uptime
 	startTime = time.Now()
 }
 
@@ -51,7 +52,7 @@ func (svc Service) Check() error {
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
 	}
-	logger.Info("heartbeat", "data", heartbeat)
+	logger.Debug("heartbeat", "data", heartbeat)
 
 	return messenger.Send(svc.Cfg.Pubs["events"].Name, core.Message{
 		ServiceName: svc.Cfg.Name,
