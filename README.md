@@ -11,6 +11,7 @@ Project Goals
 * Deploy as a standalone instance or scale out to a distributed mesh, no fuss.
 * Support for a variety of IOT sensors and data sources.
 * Trigger custom notifications and reactions based on observations and predictions.
+* Agents can react offline when disconnected from the network.
 * Integration with Apple Homekit.
 * Terminal UI - status HUD to monitor the state of the system.
 * Data Privacy - you own your data, choose what you share.
