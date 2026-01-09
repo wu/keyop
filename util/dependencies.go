@@ -14,7 +14,16 @@ func InitializeDependencies() core.Dependencies {
 	deps := core.Dependencies{}
 
 	//logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger := slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions))
+	slogOptions := slogcolor.DefaultOptions
+	slogOptions.SrcFileMode = slogcolor.Nop
+
+	if os.Getenv("KEYOP_LOG_DEBUG") == "" {
+		slogOptions.Level = slog.LevelInfo
+	} else {
+		slogOptions.Level = slog.LevelDebug
+	}
+
+	logger := slog.New(slogcolor.NewHandler(os.Stderr, slogOptions))
 	deps.SetLogger(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
