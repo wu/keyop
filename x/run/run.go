@@ -1,10 +1,12 @@
 package run
 
 import (
+	"context"
 	"fmt"
 	"keyop/core"
-	"sync"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type ServiceWrapper struct {
@@ -13,11 +15,9 @@ type ServiceWrapper struct {
 }
 
 func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
+	ctx := deps.MustGetContext()
 	logger := deps.MustGetLogger()
 	logger.Info("run called")
-	ctx := deps.MustGetContext()
-
-	var wg sync.WaitGroup
 
 	// iterate over service configs and create service instances
 	logger.Info("Creating service instances")
@@ -41,57 +41,41 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	}
 	logger.Info("OK: Validation successful")
 
-	// initialize each service
+	// initialize each service and create tasks
+	var tasks []Task
 	logger.Info("Initializing services")
 	for _, serviceWrapper := range services {
 		if err := serviceWrapper.Service.Initialize(); err != nil {
 			logger.Error("service initialization failed", "error", err)
 			return fmt.Errorf("service initialization failed: %w", err)
 		}
-	}
-	logger.Info("OK: Initialized services")
+		logger.Info("OK: Initialized service", "name", serviceWrapper.Config.Name)
 
-	// start a goroutine for each service to run its Check method at the specified frequency
-	logger.Info("Starting service check loops")
-	for _, serviceWrapper := range services {
-		wg.Add(1)
-
-		go func(serviceWrapper ServiceWrapper) {
-			defer wg.Done()
-
-			// execute first check immediately
-			if err := serviceWrapper.Service.Check(); err != nil {
-				logger.Error("check", "error", err)
-				// TODO: send to errors channel
-			}
-
-			if serviceWrapper.Config.Freq > 0 {
-				// start a ticker to execute the check at the specified frequency
-				ticker := time.NewTicker(serviceWrapper.Config.Freq)
-				defer ticker.Stop()
-
-				for {
-					select {
-					case <-ticker.C:
-						if err := serviceWrapper.Service.Check(); err != nil {
-							logger.Error("check", "error", err)
-							// TODO: send to errors channel
-						}
-					case <-ctx.Done():
-						logger.Error("context done, exiting check loop", "service", serviceWrapper.Service)
-						return
-					}
-				}
-			}
-		}(serviceWrapper)
+		svcCtx, svcCancel := context.WithCancel(ctx)
+		tasks = append(tasks, Task{
+			Name:     serviceWrapper.Config.Name,
+			Interval: serviceWrapper.Config.Freq,
+			Run: func() error {
+				return serviceWrapper.Service.Check()
+			},
+			Ctx:    svcCtx,
+			Cancel: svcCancel,
+		})
 	}
 
-	logger.Warn("Waiting for context cancellation")
-	<-ctx.Done()
+	// shut down on signal
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-c
+		logger.Warn("run: Received signal, shutting down", "signal", sig)
+		cancel := deps.MustGetCancel()
+		cancel()
+	}()
 
-	logger.Warn("Waiting for all checks to complete")
-	wg.Wait()
+	StartKernel(deps, tasks)
 
-	logger.Warn("All checks completed, exiting")
-	return ctx.Err()
+	logger.Warn("run: All tasks successfully shut down")
+
+	return nil
 }
