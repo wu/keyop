@@ -38,7 +38,11 @@ func parseLogMessages(logs string) ([]logMsg, error) {
 func TestHeartbeatCmd(t *testing.T) {
 
 	var buf bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	opts := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}
+	logger := slog.New(slog.NewJSONHandler(&buf, opts))
+
 	osProvider := core.FakeOsProvider{Host: "test-host"}
 	deps := core.Dependencies{}
 	deps.SetOsProvider(osProvider)
@@ -66,7 +70,7 @@ func TestHeartbeatCmd(t *testing.T) {
 
 	assert.True(t, heartbeatFound, "expected to find a heartbeat log message")
 
-	assert.Equal(t, "INFO", heartbeatMsg.Level, "expected INFO level")
+	assert.Equal(t, "DEBUG", heartbeatMsg.Level, "expected INFO level")
 
 	uptime := time.Since(startTime).Round(time.Second)
 	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
