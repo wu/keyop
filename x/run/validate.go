@@ -7,6 +7,7 @@ import (
 
 func validateServiceConfig(services []ServiceWrapper, logger core.Logger) error {
 	// validate all service configs before initializing any services
+	// report all validation errors found before returning
 	{
 		var errCount int
 		for _, serviceWrapper := range services {
