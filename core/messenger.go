@@ -71,6 +71,8 @@ func (m Messenger) Send(channelName string, msg Message, data interface{}) error
 		}
 	}
 
+	// TODO: don't block on slow subscribers
+	// Consider using buffered channels or worker pools for better performance
 	m.logger.Info("SEND", "channel", channelName, "message", msg)
 	if subscribers, subscribersExists := m.subscriptions[channelName]; subscribersExists {
 		for _, ch := range subscribers {
@@ -95,6 +97,9 @@ func (m Messenger) Subscribe(source string, channelName string, messageHandler f
 	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source)
 
 	if _, subscriptionsExist := m.subscriptions[channelName]; !subscriptionsExist {
+		// this is a bad design because the messenger is executing the check function in the same thread
+		// messenger should really send messages to buffered subscriber channels
+		// need another layer to read from the bufferened subscriber channels and execute the handlers
 		m.subscriptions[channelName] = []func(Message) error{}
 	}
 	m.subscriptions[channelName] = append(m.subscriptions[channelName], messageHandler)
