@@ -250,7 +250,7 @@ func TestValidateConfig(t *testing.T) {
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
-		assert.ErrorContains(t, errs[len(errs)-1], "minTemp must be less than maxTemp")
+		assert.ErrorContains(t, errs[len(errs)-1], "minTemp must be less than or equal to maxTemp")
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
