@@ -73,7 +73,9 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		cancel()
 	}()
 
-	StartKernel(deps, tasks)
+	if err := StartKernel(deps, tasks); err != nil {
+		return fmt.Errorf("run: kernel returned an error: %w", err)
+	}
 
 	logger.Warn("run: All tasks successfully shut down")
 
