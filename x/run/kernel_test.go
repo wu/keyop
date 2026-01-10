@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getDefaultTestDeps(t *testing.T) core.Dependencies {
+func getDefaultTestDeps() core.Dependencies {
 
 	deps := core.Dependencies{}
 
@@ -33,7 +33,7 @@ func getDefaultTestDeps(t *testing.T) core.Dependencies {
 
 func TestStartKernelRunOneTask(t *testing.T) {
 
-	deps := getDefaultTestDeps(t)
+	deps := getDefaultTestDeps()
 	logger := deps.MustGetLogger()
 	ctx := deps.MustGetContext()
 
@@ -52,7 +52,8 @@ func TestStartKernelRunOneTask(t *testing.T) {
 		Ctx:    svcCtx,
 	}}
 
-	StartKernel(deps, tasks)
+	err := StartKernel(deps, tasks)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, taskCounter, "task should have run one time")
 }
@@ -60,7 +61,7 @@ func TestStartKernelRunOneTask(t *testing.T) {
 func TestStartKernelGlobalCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 
-		deps := getDefaultTestDeps(t)
+		deps := getDefaultTestDeps()
 		logger := deps.MustGetLogger()
 		ctx := deps.MustGetContext()
 		cancel := deps.MustGetCancel()
@@ -86,7 +87,9 @@ func TestStartKernelGlobalCancel(t *testing.T) {
 			Cancel: svcCancel,
 			Ctx:    svcCtx,
 		}}
-		StartKernel(deps, tasks)
+
+		err := StartKernel(deps, tasks)
+		assert.NoError(t, err)
 
 		assert.Equal(t, 3, loopCounter, "task should have run 5 times")
 	})
