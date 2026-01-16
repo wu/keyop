@@ -26,7 +26,6 @@
     # one of auto, heat, cool, off
     mode: auto
 
-
   subs:
     temp:
       name: temp
