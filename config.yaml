@@ -8,37 +8,44 @@
       name: heartbeat
       description: Publish heartbeat events to local heartbeat channel
 
-- name: office-temp
-  freq: 5s
-  x: temp
-  pubs:
-    events:
-      name: temp
-      description: Publish office temperature events to local temp channel
-
-
-- name: office-thermostat
-  x: thermostat
-
+- name: http-server
+  freq: 15s
+  x: httpPostServer
   config:
-    minTemp: 60.0
-    maxTemp: 80.0
-    # one of auto, heat, cool, off
-    mode: auto
+    port: 8888
 
-  subs:
-    temp:
-      name: temp
-      description: Read office temperature events from local temp channel
-
-  pubs:
-    events:
-      name: thermostat
-      description: Publish office thermostat events to local thermostat channel
-    heater:
-      name: powertail
-      description: send office heater power events to local powertail channel
-    cooler:
-      name: powertail
-      description: send office fan power events to local powertail channel
-
+#
+#- name: office-temp
+#  freq: 5s
+#  x: temp
+#  pubs:
+#    events:
+#      name: temp
+#      description: Publish office temperature events to local temp channel
+#
+#
+#- name: office-thermostat
+#  x: thermostat
+#
+#  config:
+#    minTemp: 60.0
+#    maxTemp: 80.0
+#    # one of auto, heat, cool, off
+#    mode: auto
+#
+#  subs:
+#    temp:
+#      name: temp
+#      description: Read office temperature events from local temp channel
+#
+#  pubs:
+#    events:
+#      name: thermostat
+#      description: Publish office thermostat events to local thermostat channel
+#    heater:
+#      name: powertail
+#      description: send office heater power events to local powertail channel
+#    cooler:
+#      name: powertail
+#      description: send office fan power events to local powertail channel
+#
