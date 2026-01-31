@@ -81,9 +81,19 @@ func (svc Service) Initialize() error {
 
 	messenger := svc.Deps.MustGetMessenger()
 
-	// TODO: iterate through subscriptions and set up handlers
-	return messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["heartbeat"].Name, svc.messageHandler)
+	var errs []error
 
+	for name, sub := range svc.Cfg.Subs {
+		svc.Deps.MustGetLogger().Info("httpPost: initializing subscription", "name", name, "topic", sub.Name)
+		err := messenger.Subscribe(svc.Cfg.Name, sub.Name, svc.messageHandler)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("httpPost: failed to initialize subscriptions: %v", errs)
+	}
 	return nil
 }
 
