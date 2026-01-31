@@ -3,6 +3,7 @@ package run
 import (
 	"keyop/core"
 	"keyop/x/heartbeat"
+	"keyop/x/httpPost"
 	"keyop/x/httpPostServer"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
@@ -11,6 +12,9 @@ import (
 var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceConfig) core.Service{
 	"heartbeat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return heartbeat.NewService(deps, cfg)
+	},
+	"httpPost": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return httpPost.NewService(deps, cfg)
 	},
 	"httpPostServer": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return httpPostServer.NewService(deps, cfg)
