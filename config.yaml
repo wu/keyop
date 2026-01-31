@@ -9,10 +9,20 @@
       description: Publish heartbeat events to local heartbeat channel
 
 - name: http-server
-  freq: 15s
   x: httpPostServer
   config:
     port: 8888
+    targetDir: data
+
+- name: http-post
+  x: httpPost
+  config:
+    port: 8888
+    hostname: localhost
+  subs:
+    heartbeat:
+      name: heartbeat
+      description: Forward events from local heartbeat channel
 
 #
 #- name: office-temp
