@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -213,6 +214,70 @@ func TestService_MessageHandler_MarshalError(t *testing.T) {
 	err := svc.messageHandler(testMsg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "json: unsupported value")
+}
+
+func TestService_MessageHandler_CreateRequestError(t *testing.T) {
+	deps := testDeps()
+
+	// Use an invalid hostname/port combination that will cause http.NewRequestWithContext to fail.
+	// A URL with a control character or other invalid characters should do it.
+	cfg := core.ServiceConfig{
+		Name: "test-httpPost",
+		Config: map[string]interface{}{
+			"port":     8080,
+			"hostname": "host\x7f", // DEL character is invalid in URL
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
+
+	testMsg := core.Message{
+		ServiceName: "test-service",
+		Data:        "test-data",
+	}
+
+	err := svc.messageHandler(testMsg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid control character in URL")
+}
+
+func TestService_MessageHandler_Timeout(t *testing.T) {
+	deps := testDeps()
+
+	// Create a mock HTTP server that sleeps longer than the timeout
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Parse the server URL to get hostname and port
+	var hostname string
+	var port int
+	fmt.Sscanf(server.URL, "http://%s", &hostname)
+	addr := server.Listener.Addr().String()
+	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
+	if port == 0 {
+		fmt.Sscanf(addr, "[::]:%d", &port)
+	}
+
+	cfg := core.ServiceConfig{
+		Name: "test-httpPost",
+		Config: map[string]interface{}{
+			"port":     port,
+			"hostname": "127.0.0.1",
+			"timeout":  "100ms", // Short timeout
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
+
+	testMsg := core.Message{
+		ServiceName: "test-service",
+		Data:        "test-data",
+	}
+
+	err := svc.messageHandler(testMsg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
 func TestService_Check(t *testing.T) {

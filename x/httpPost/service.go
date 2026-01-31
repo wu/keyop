@@ -2,11 +2,13 @@ package httpPost
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"keyop/core"
 	"keyop/util"
 	"net/http"
+	"time"
 )
 
 type Service struct {
@@ -14,12 +16,14 @@ type Service struct {
 	Cfg      core.ServiceConfig
 	Port     int
 	Hostname string
+	Timeout  time.Duration
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps: deps,
-		Cfg:  cfg,
+		Deps:    deps,
+		Cfg:     cfg,
+		Timeout: 30 * time.Second,
 	}
 
 	port, portExists := svc.Cfg.Config["port"].(int)
@@ -30,6 +34,17 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	hostname, hostnameDirExists := svc.Cfg.Config["hostname"].(string)
 	if hostnameDirExists {
 		svc.Hostname = hostname
+	}
+
+	timeoutStr, timeoutExists := svc.Cfg.Config["timeout"].(string)
+	if timeoutExists {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err == nil {
+			svc.Timeout = timeout
+		}
+	} else {
+		// default timeout
+		svc.Timeout = 30 * time.Second
 	}
 
 	return svc
@@ -91,7 +106,23 @@ func (svc Service) messageHandler(msg core.Message) error {
 		return err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	// TODO: strategy for retry on failure in messenger, return error here
+
+	client := &http.Client{
+		Timeout: svc.Timeout,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), svc.Timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.Error("failed to create HTTP request", "url", url, "error", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error("failed to post message to HTTP endpoint", "url", url, "error", err)
 		return err
