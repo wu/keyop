@@ -14,9 +14,10 @@ import (
 var alphanumeric = regexp.MustCompile("^[a-zA-Z0-9]+$")
 
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
-	Port int
+	Deps      core.Dependencies
+	Cfg       core.ServiceConfig
+	Port      int
+	targetDir string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -30,6 +31,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.Port = port
 	}
 
+	targetDir, targetDirExists := svc.Cfg.Config["targetDir"].(string)
+	if targetDirExists {
+		svc.targetDir = targetDir
+	}
+
 	return svc
 }
 
@@ -41,6 +47,14 @@ func (svc Service) ValidateConfig() []error {
 	_, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {
 		err := fmt.Errorf("httpPostServer: port not set in config")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	}
+
+	// check targetDir
+	_, targetDirExists := svc.Cfg.Config["targetDir"].(string)
+	if !targetDirExists {
+		err := fmt.Errorf("httpPostServer: targetDir not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
@@ -98,7 +112,7 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	today := time.Now().Format("20060102")
-	filename := fmt.Sprintf("%s_%s.json", serviceName, today)
+	filename := fmt.Sprintf("%s/%s_%s.json", svc.targetDir, serviceName, today)
 	osProvider := svc.Deps.MustGetOsProvider()
 	f, err := osProvider.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

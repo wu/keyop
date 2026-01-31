@@ -38,13 +38,19 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: map[string]interface{}{
-				"port": 8080,
+				"port":      8080,
+				"targetDir": ".",
 			},
 			expectError: false,
 		},
 		{
 			name:        "missing port",
-			config:      map[string]interface{}{},
+			config:      map[string]interface{}{"targetDir": "."},
+			expectError: true,
+		},
+		{
+			name:        "missing targetDir",
+			config:      map[string]interface{}{"port": 8080},
 			expectError: true,
 		},
 		{
@@ -81,7 +87,8 @@ func TestService_Initialize_StartsServerAndLogs(t *testing.T) {
 		Name: "test-httpPostServer",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": port,
+			"port":      port,
+			"targetDir": ".",
 		},
 	}
 
@@ -122,7 +129,8 @@ func TestService_FileLogging(t *testing.T) {
 		Name: "test-httpPostServer-file",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": port,
+			"port":      port,
+			"targetDir": ".",
 		},
 	}
 
@@ -168,7 +176,8 @@ func TestService_FileLogging_InvalidServiceName(t *testing.T) {
 		Name: "test-httpPostServer-invalid",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": port,
+			"port":      port,
+			"targetDir": ".",
 		},
 	}
 
@@ -218,7 +227,8 @@ func TestService_MethodNotAllowed(t *testing.T) {
 		Name: "test-httpPostServer-method",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": port,
+			"port":      port,
+			"targetDir": ".",
 		},
 	}
 
@@ -251,7 +261,8 @@ func TestService_ErrorReadingBody(t *testing.T) {
 		Name: "test-httpPostServer-error-read",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8893,
+			"port":      8893,
+			"targetDir": ".",
 		},
 	}
 
@@ -274,7 +285,8 @@ func TestService_InvalidJSON(t *testing.T) {
 		Name: "test-httpPostServer-invalid-json",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8894,
+			"port":      8894,
+			"targetDir": ".",
 		},
 	}
 
@@ -298,7 +310,8 @@ func TestService_MissingServiceName(t *testing.T) {
 		Name: "test-httpPostServer-missing-service-name",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8895,
+			"port":      8895,
+			"targetDir": ".",
 		},
 	}
 
@@ -334,7 +347,8 @@ func TestService_FailedToOpenFileForAppending(t *testing.T) {
 		Name: "test-httpPostServer-fail-open",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8896,
+			"port":      8896,
+			"targetDir": ".",
 		},
 	}
 
@@ -399,7 +413,8 @@ func TestService_FailedToWriteJsonToFile(t *testing.T) {
 		Name: "test-httpPostServer-fail-write",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8897,
+			"port":      8897,
+			"targetDir": ".",
 		},
 	}
 
@@ -436,7 +451,8 @@ func TestService_FailedToWriteNewlineToFile(t *testing.T) {
 		Name: "test-httpPostServer-fail-newline",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": 8898,
+			"port":      8898,
+			"targetDir": ".",
 		},
 	}
 
@@ -472,7 +488,8 @@ func TestService_HTTPServerFailed(t *testing.T) {
 		Name: "test-httpPostServer-fail",
 		Type: "httpPostServer",
 		Config: map[string]interface{}{
-			"port": -1,
+			"port":      -1,
+			"targetDir": ".",
 		},
 	}
 
