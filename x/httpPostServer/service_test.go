@@ -513,3 +513,31 @@ func TestService_Check(t *testing.T) {
 	err := svc.Check()
 	assert.NoError(t, err)
 }
+
+func TestService_Initialize_FailedToCreateTargetDirectory(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	fakeOs := core.FakeOsProvider{Host: "test-host"}
+	expectedErr := fmt.Errorf("permission denied")
+	fakeOs.MkdirAllFunc = func(path string, perm os.FileMode) error {
+		return expectedErr
+	}
+
+	deps := core.Dependencies{}
+	deps.SetOsProvider(fakeOs)
+	deps.SetLogger(logger)
+
+	cfg := core.ServiceConfig{
+		Name: "test-httpPostServer-fail-mkdir",
+		Type: "httpPostServer",
+		Config: map[string]interface{}{
+			"port":      8899,
+			"targetDir": "/restricted-dir",
+		},
+	}
+
+	svc := NewService(deps, cfg)
+	err := svc.Initialize()
+
+	assert.Error(t, err)
+	assert.Equal(t, expectedErr, err)
+}

@@ -10,6 +10,7 @@ import (
 type OsProviderApi interface {
 	Hostname() (string, error)
 	OpenFile(name string, flag int, perm os.FileMode) (FileApi, error)
+	MkdirAll(path string, perm os.FileMode) error
 }
 
 type FileApi interface {
@@ -25,6 +26,9 @@ func (OsProvider) Hostname() (string, error) { return os.Hostname() }
 func (OsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, error) {
 	return os.OpenFile(name, flag, perm)
 }
+func (OsProvider) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
 
 // FakeOsProvider is provided for testing
 type FakeOsProvider struct {
@@ -32,6 +36,7 @@ type FakeOsProvider struct {
 	Err  error
 
 	OpenFileFunc func(name string, flag int, perm os.FileMode) (FileApi, error)
+	MkdirAllFunc func(path string, perm os.FileMode) error
 }
 
 func (f FakeOsProvider) Hostname() (string, error) { return f.Host, f.Err }
@@ -40,4 +45,10 @@ func (f FakeOsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileA
 		return f.OpenFileFunc(name, flag, perm)
 	}
 	return nil, os.ErrNotExist
+}
+func (f FakeOsProvider) MkdirAll(path string, perm os.FileMode) error {
+	if f.MkdirAllFunc != nil {
+		return f.MkdirAllFunc(path, perm)
+	}
+	return nil
 }
