@@ -64,6 +64,14 @@ func (svc Service) ValidateConfig() []error {
 
 func (svc Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
+	osProvider := svc.Deps.MustGetOsProvider()
+
+	// Create target directory if it doesn't exist
+	if err := osProvider.MkdirAll(svc.targetDir, 0755); err != nil {
+		logger.Error("failed to create target directory", "error", err, "targetDir", svc.targetDir)
+		return err
+	}
+	logger.Info("target directory ready", "targetDir", svc.targetDir)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", svc.ServeHTTP)
