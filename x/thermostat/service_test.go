@@ -1,7 +1,6 @@
 package thermostat
 
 import (
-	"encoding/json"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -39,22 +38,16 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
-	// capture publishes
-	type captured struct {
-		msg  core.Message
-		data Event
-	}
 	var mu sync.Mutex
-	got := map[string][]captured{}
+	got := map[string][]core.Message{}
 
 	// subscribe to heater and cooler channels to capture what thermostat sends
 	capture := func(ch string) {
 		_ = messenger.Subscribe("test", ch, func(m core.Message) error {
-			var ev Event
-			_ = json.Unmarshal([]byte(m.Data), &ev)
+
 			mu.Lock()
 			defer mu.Unlock()
-			got[ch] = append(got[ch], captured{msg: m, data: ev})
+			got[ch] = append(got[ch], m)
 			return nil
 		})
 	}
@@ -88,7 +81,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 
 	// send a temp message to the temp channel
 	// pick a value above max to turn cooler ON
-	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80}, nil)
+	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80})
 	assert.NoError(t, err)
 
 	// wait for processing
@@ -101,21 +94,34 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	if assert.Contains(t, got, heaterCh) {
 		assert.Len(t, got[heaterCh], 1)
 		m := got[heaterCh][0]
-		assert.Equal(t, "thermo", m.msg.ServiceName)
-		assert.Equal(t, "thermostat", m.msg.ServiceType)
-		assert.Equal(t, "OFF", m.msg.State) // heater should be OFF at 80
-		assert.Equal(t, 80.0, m.data.Temp)
-		assert.Equal(t, "OFF", m.data.HeaterTargetState)
+		assert.Equal(t, "thermo", m.ServiceName)
+		assert.Equal(t, "thermostat", m.ServiceType)
+		assert.Equal(t, "OFF", m.State) // heater should be OFF at 80
+
+		t.Logf("Heater message: %+v\n", m)
+
+		data, ok := m.Data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected type not matched in data, got %T", m.Data)
+		}
+		assert.Equal(t, 80.0, data["temp"])
+		assert.Equal(t, "OFF", data["heaterTargetState"])
 	}
 
 	if assert.Contains(t, got, coolerCh) {
 		assert.Len(t, got[coolerCh], 1)
 		m := got[coolerCh][0]
-		assert.Equal(t, "thermo", m.msg.ServiceName)
-		assert.Equal(t, "thermostat", m.msg.ServiceType)
-		assert.Equal(t, "ON", m.msg.State) // cooler should be ON at 80
-		assert.Equal(t, 80.0, m.data.Temp)
-		assert.Equal(t, "ON", m.data.CoolerTargetState)
+		assert.Equal(t, "thermo", m.ServiceName)
+		assert.Equal(t, "thermostat", m.ServiceType)
+		assert.Equal(t, "ON", m.State) // cooler should be ON at 80
+
+		data, ok := m.Data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected type not matched in data, got %T", m.Data)
+		}
+
+		assert.Equal(t, 80.0, data["temp"])
+		assert.Equal(t, "ON", data["coolerTargetState"])
 	}
 }
 
@@ -152,7 +158,7 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send a cold temp to turn heater ON
-	_ = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20}, nil)
+	_ = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20})
 
 	time.Sleep(100 * time.Millisecond)
 

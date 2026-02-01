@@ -15,11 +15,11 @@ type Message struct {
 	Text        string
 	Metric      float64
 	State       string
-	Data        string
+	Data        interface{}
 }
 
 type MessengerApi interface {
-	Send(msg Message, data interface{}) error
+	Send(msg Message) error
 	Subscribe(sourceName string, channelName string, messageHandler func(Message) error) error
 }
 
@@ -59,9 +59,9 @@ type Messenger struct {
 }
 
 //goland:noinspection GoVetCopyLock
-func (m *Messenger) Send(msg Message, data interface{}) error {
+func (m *Messenger) Send(msg Message) error {
 	channelName := msg.ChannelName
-	m.logger.Debug("Send message called", "channel", channelName, "message", msg, "data", data)
+	m.logger.Debug("Send message called", "channel", channelName, "message", msg)
 
 	err := m.initializePersistentQueue(channelName)
 	if err != nil {
@@ -74,16 +74,6 @@ func (m *Messenger) Send(msg Message, data interface{}) error {
 	// Populate required fields
 	msg.Timestamp = time.Now()
 	msg.Hostname = m.hostname
-
-	// TODO: get rid of data serialization
-	if data != nil {
-		dataBytes, err := json.Marshal(data)
-		if err == nil {
-			msg.Data = string(dataBytes)
-		} else {
-			m.logger.Error("Failed to serialize data", "error", err)
-		}
-	}
 
 	m.logger.Info("SEND", "channel", channelName, "message", msg)
 	msgBytes, err := json.Marshal(msg)

@@ -142,7 +142,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
 			State:       event.HeaterTargetState,
-		}, event)
+			Data:        event,
+		})
 	}
 
 	if ch, ok := svc.Cfg.Pubs["cooler"]; ok {
@@ -154,7 +155,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
 			State:       event.CoolerTargetState,
-		}, event)
+			Data:        event,
+		})
 	}
 
 	if ch, ok := svc.Cfg.Pubs["events"]; ok {
@@ -166,7 +168,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
 			State:       event.HeaterTargetState, // or some aggregate state
-		}, event)
+			Data:        event,
+		})
 	}
 
 	return nil
