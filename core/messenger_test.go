@@ -20,6 +20,7 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
@@ -50,6 +51,7 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
@@ -76,6 +78,7 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
@@ -104,6 +107,7 @@ func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
@@ -139,6 +143,7 @@ func TestMessenger_Send_NoSubscribers_NoError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
@@ -154,6 +159,7 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	m := NewMessenger(&FakeLogger{}, OsProvider{})
@@ -216,6 +222,7 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	fl := &FakeLogger{}
@@ -272,6 +279,7 @@ func TestMessenger_Send_EnqueueError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	fl := &FakeLogger{}
@@ -308,6 +316,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	fl := &FakeLogger{}

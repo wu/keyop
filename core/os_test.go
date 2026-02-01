@@ -229,7 +229,9 @@ func TestFakeFile(t *testing.T) {
 
 		// Let's use a temporary file to provide a real ReadWriteSeeker for the test
 		tmp, _ := os.CreateTemp("", "fakefiletest")
+		//goland:noinspection GoUnhandledErrorResult
 		defer os.Remove(tmp.Name())
+		//goland:noinspection GoUnhandledErrorResult
 		defer tmp.Close()
 
 		f := &FakeFile{
