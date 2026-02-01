@@ -7,22 +7,36 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 // helper to build dependencies similar to other service tests
-func testDeps() core.Dependencies {
+func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}
-	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
+
+	tmpDir, err := os.MkdirTemp("", "httpPost_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	deps.SetOsProvider(core.OsProvider{})
 	deps.SetLogger(logger)
-	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
+	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
+	messenger.SetDataDir(tmpDir)
+
+	deps.SetMessenger(messenger)
+
 	return deps
 }
 
 func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
 	// capture publishes
@@ -77,6 +91,9 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	err = messenger.Send("temp-topic", core.Message{Metric: 80}, nil)
 	assert.NoError(t, err)
 
+	// wait for processing
+	time.Sleep(100 * time.Millisecond)
+
 	// Assertions: thermostat should publish to both heater and cooler
 	mu.Lock()
 	defer mu.Unlock()
@@ -103,7 +120,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 }
 
 func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
 	// capture only heater channel
@@ -136,6 +153,8 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 
 	// Send a cold temp to turn heater ON
 	_ = messenger.Send("temp-topic", core.Message{Metric: 20}, nil)
+
+	time.Sleep(100 * time.Millisecond)
 
 	assert.Len(t, gotHeater, 1)
 	assert.Equal(t, "ON", gotHeater[0].State)
@@ -399,7 +418,7 @@ func TestService_updateState(t *testing.T) {
 func Test_updateState_thresholds_heat(t *testing.T) {
 	for _, mode := range []string{"heat", "auto"} {
 		t.Run("mode="+mode, func(t *testing.T) {
-			deps := testDeps()
+			deps := testDeps(t)
 			svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75, Mode: mode, Hysteresis: 2}
 			logger := deps.MustGetLogger()
 
@@ -436,7 +455,7 @@ func Test_updateState_thresholds_cool(t *testing.T) {
 
 	for _, mode := range []string{"cool", "auto"} {
 		t.Run("mode="+mode, func(t *testing.T) {
-			deps := testDeps()
+			deps := testDeps(t)
 			svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 50, MaxTemp: 75, Mode: mode, Hysteresis: 2}
 			logger := deps.MustGetLogger()
 
@@ -470,7 +489,7 @@ func Test_updateState_thresholds_cool(t *testing.T) {
 }
 
 func Test_updateState_cool_min_equals_max(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "cool", Hysteresis: 2}
 	logger := deps.MustGetLogger()
 
@@ -503,7 +522,7 @@ func Test_updateState_cool_min_equals_max(t *testing.T) {
 }
 
 func Test_updateState_heat_min_equals_max(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "heat", Hysteresis: 2}
 	logger := deps.MustGetLogger()
 
@@ -535,7 +554,7 @@ func Test_updateState_heat_min_equals_max(t *testing.T) {
 }
 
 func Test_updateState_auto_min_equals_max(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Name: "thermo", Type: "thermostat"}, MinTemp: 60, MaxTemp: 60, Mode: "auto", Hysteresis: 2}
 	logger := deps.MustGetLogger()
 

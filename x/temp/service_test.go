@@ -11,7 +11,7 @@ import (
 )
 
 func Test_NewTempCmd(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	cmd := NewCmd(deps)
 
 	// weak assertion
@@ -19,12 +19,24 @@ func Test_NewTempCmd(t *testing.T) {
 }
 
 // helper to build dependencies
-func testDeps() core.Dependencies {
+func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
-	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
+
+	tmpDir, err := os.MkdirTemp("", "httpPost_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	deps.SetOsProvider(core.OsProvider{})
 	deps.SetLogger(logger)
-	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
+	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
+	messenger.SetDataDir(tmpDir)
+
+	deps.SetMessenger(messenger)
 
 	return deps
 }
@@ -39,7 +51,7 @@ func writeTempFile(t *testing.T, dir, name, content string) string {
 }
 
 func Test_temp_success(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	dir := t.TempDir()
 	// Typical w1_slave content includes a line with t=VALUE
 	p := writeTempFile(t, dir, "w1_slave", "aa bb cc YES\nxyz t=23125\n")
@@ -63,7 +75,7 @@ func Test_temp_success(t *testing.T) {
 }
 
 func Test_temp_read_error(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
 	// point to a non-existent file
 	devicePath = filepath.Join(t.TempDir(), "does-not-exist")
@@ -75,7 +87,7 @@ func Test_temp_read_error(t *testing.T) {
 }
 
 func Test_temp_empty_content(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	dir := t.TempDir()
 	p := writeTempFile(t, dir, "w1_slave", "")
 	devicePath = p
@@ -87,7 +99,7 @@ func Test_temp_empty_content(t *testing.T) {
 }
 
 func Test_temp_bad_integer(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	dir := t.TempDir()
 	p := writeTempFile(t, dir, "w1_slave", "crc YES\nvalue t=abc\n")
 	devicePath = p

@@ -158,7 +158,7 @@ func TestService_FileLogging(t *testing.T) {
 
 	// Check if file exists
 	today := time.Now().Format("20060102")
-	expectedFilename := fmt.Sprintf("%s_%s.json", serviceName, today)
+	expectedFilename := fmt.Sprintf("httpPostServer_%s_%s.jsonl", serviceName, today)
 
 	_, err = os.Stat(expectedFilename)
 	assert.NoError(t, err, "Log file should exist")

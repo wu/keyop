@@ -133,23 +133,38 @@ func (svc Service) tempHandler(msg core.Message) error {
 	svc.HeaterState = event.HeaterTargetState
 	svc.CoolerState = event.CoolerTargetState
 
-	logger.Debug("Sending to heater channel", "channel", svc.Cfg.Pubs["heater"].Name)
-	//goland:noinspection GoUnhandledErrorResult
-	messenger.Send(svc.Cfg.Pubs["heater"].Name, core.Message{
-		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
-		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
-		State:       event.HeaterTargetState,
-	}, event)
+	if ch, ok := svc.Cfg.Pubs["heater"]; ok {
+		logger.Debug("Sending to heater channel", "channel", ch.Name)
+		//goland:noinspection GoUnhandledErrorResult
+		messenger.Send(ch.Name, core.Message{
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
+			State:       event.HeaterTargetState,
+		}, event)
+	}
 
-	logger.Debug("Sending to cooler channel", "channel", svc.Cfg.Pubs["cooler"].Name)
-	//goland:noinspection GoUnhandledErrorResult
-	messenger.Send(svc.Cfg.Pubs["cooler"].Name, core.Message{
-		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
-		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
-		State:       event.CoolerTargetState,
-	}, event)
+	if ch, ok := svc.Cfg.Pubs["cooler"]; ok {
+		logger.Debug("Sending to cooler channel", "channel", ch.Name)
+		//goland:noinspection GoUnhandledErrorResult
+		messenger.Send(ch.Name, core.Message{
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
+			State:       event.CoolerTargetState,
+		}, event)
+	}
+
+	if ch, ok := svc.Cfg.Pubs["events"]; ok {
+		logger.Debug("Sending to events channel", "channel", ch.Name)
+		//goland:noinspection GoUnhandledErrorResult
+		messenger.Send(ch.Name, core.Message{
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
+			State:       event.HeaterTargetState, // or some aggregate state
+		}, event)
+	}
 
 	return nil
 }

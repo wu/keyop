@@ -119,8 +119,10 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: send to a message queue instead of writing to file
+	// TODO: need to prevent routing loop in messenger - record route
 	today := time.Now().Format("20060102")
-	filename := fmt.Sprintf("%s/%s_%s.json", svc.targetDir, serviceName, today)
+	filename := fmt.Sprintf("%s/httpPostServer_%s_%s.jsonl", svc.targetDir, serviceName, today)
 	osProvider := svc.Deps.MustGetOsProvider()
 	f, err := osProvider.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
