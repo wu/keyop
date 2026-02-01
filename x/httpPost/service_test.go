@@ -189,7 +189,8 @@ func TestService_MessageHandler_Success(t *testing.T) {
 		Data:        "test-data",
 	}
 
-	err = deps.MustGetMessenger().Send("heartbeat-channel", testMsg, nil)
+	testMsg.ChannelName = "heartbeat-channel"
+	err = deps.MustGetMessenger().Send(testMsg, nil)
 	assert.NoError(t, err)
 
 	select {

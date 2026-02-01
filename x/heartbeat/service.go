@@ -54,7 +54,8 @@ func (svc Service) Check() error {
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
 
-	return messenger.Send(svc.Cfg.Pubs["events"].Name, core.Message{
+	return messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("heartbeat: uptime %s", heartbeat.Uptime),

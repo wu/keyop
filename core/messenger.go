@@ -11,6 +11,7 @@ type Message struct {
 	Hostname    string
 	ServiceType string
 	ServiceName string
+	ChannelName string
 	Text        string
 	Metric      float64
 	State       string
@@ -18,7 +19,7 @@ type Message struct {
 }
 
 type MessengerApi interface {
-	Send(channelName string, msg Message, data interface{}) error
+	Send(msg Message, data interface{}) error
 	Subscribe(sourceName string, channelName string, messageHandler func(Message) error) error
 }
 
@@ -58,7 +59,8 @@ type Messenger struct {
 }
 
 //goland:noinspection GoVetCopyLock
-func (m *Messenger) Send(channelName string, msg Message, data interface{}) error {
+func (m *Messenger) Send(msg Message, data interface{}) error {
+	channelName := msg.ChannelName
 	m.logger.Debug("Send message called", "channel", channelName, "message", msg, "data", data)
 
 	err := m.initializePersistentQueue(channelName)

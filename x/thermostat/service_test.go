@@ -88,7 +88,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 
 	// send a temp message to the temp channel
 	// pick a value above max to turn cooler ON
-	err = messenger.Send("temp-topic", core.Message{Metric: 80}, nil)
+	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80}, nil)
 	assert.NoError(t, err)
 
 	// wait for processing
@@ -152,7 +152,7 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send a cold temp to turn heater ON
-	_ = messenger.Send("temp-topic", core.Message{Metric: 20}, nil)
+	_ = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20}, nil)
 
 	time.Sleep(100 * time.Millisecond)
 

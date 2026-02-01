@@ -136,7 +136,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 	if ch, ok := svc.Cfg.Pubs["heater"]; ok {
 		logger.Debug("Sending to heater channel", "channel", ch.Name)
 		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(ch.Name, core.Message{
+		messenger.Send(core.Message{
+			ChannelName: ch.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
@@ -147,7 +148,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 	if ch, ok := svc.Cfg.Pubs["cooler"]; ok {
 		logger.Debug("Sending to cooler channel", "channel", ch.Name)
 		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(ch.Name, core.Message{
+		messenger.Send(core.Message{
+			ChannelName: ch.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
@@ -158,7 +160,8 @@ func (svc Service) tempHandler(msg core.Message) error {
 	if ch, ok := svc.Cfg.Pubs["events"]; ok {
 		logger.Debug("Sending to events channel", "channel", ch.Name)
 		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(ch.Name, core.Message{
+		messenger.Send(core.Message{
+			ChannelName: ch.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
