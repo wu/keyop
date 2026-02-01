@@ -14,6 +14,7 @@ import (
 func TestPersistentQueue_Basic(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -40,6 +41,7 @@ func TestPersistentQueue_Basic(t *testing.T) {
 func TestPersistentQueue_Persistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_persist")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -71,6 +73,7 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 func TestPersistentQueue_Rotation(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_rotation")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -103,6 +106,7 @@ func TestPersistentQueue_Rotation(t *testing.T) {
 func TestPersistentQueue_Blocking(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_blocking")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -139,6 +143,7 @@ func TestPersistentQueue_Blocking(t *testing.T) {
 func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_before")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -179,6 +184,7 @@ func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 func TestPersistentQueue_MultipleReaders(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_multi")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -216,6 +222,7 @@ func TestPersistentQueue_MultipleReaders(t *testing.T) {
 func TestPersistentQueue_MultipleQueues(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_multi_queues")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	osProvider := OsProvider{}
@@ -262,6 +269,7 @@ func TestPersistentQueue_MultipleQueues(t *testing.T) {
 func TestPersistentQueue_Errors(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_errors")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	logger := &FakeLogger{}
