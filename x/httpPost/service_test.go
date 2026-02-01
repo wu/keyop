@@ -17,18 +17,30 @@ import (
 )
 
 // helper to build dependencies
-func testDeps() core.Dependencies {
+func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
-	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
+
+	tmpDir, err := os.MkdirTemp("", "httpPost_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	deps.SetOsProvider(core.OsProvider{})
 	deps.SetLogger(logger)
-	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
+	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
+	messenger.SetDataDir(tmpDir)
+
+	deps.SetMessenger(messenger)
 
 	return deps
 }
 
 func TestService_ValidateConfig(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
 	tests := []struct {
 		name        string
@@ -108,7 +120,7 @@ func TestService_ValidateConfig(t *testing.T) {
 }
 
 func TestService_Initialize(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	cfg := core.ServiceConfig{
 		Name: "test-httpPost",
 		Subs: map[string]core.ChannelInfo{
@@ -126,8 +138,9 @@ func TestService_Initialize(t *testing.T) {
 }
 
 func TestService_MessageHandler_Success(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
+	done := make(chan bool)
 	// Create a mock HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -141,6 +154,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 		assert.Equal(t, "test-data", msg.Data)
 
 		w.WriteHeader(http.StatusOK)
+		done <- true
 	}))
 	defer server.Close()
 
@@ -177,10 +191,17 @@ func TestService_MessageHandler_Success(t *testing.T) {
 
 	err = deps.MustGetMessenger().Send("heartbeat-channel", testMsg, nil)
 	assert.NoError(t, err)
+
+	select {
+	case <-done:
+		// success
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for message processing")
+	}
 }
 
 func TestService_MessageHandler_PostError(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
 	// Use an invalid port to trigger a post error
 	cfg := core.ServiceConfig{
@@ -205,7 +226,7 @@ func TestService_MessageHandler_PostError(t *testing.T) {
 }
 
 func TestService_MessageHandler_MarshalError(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	svc := NewService(deps, core.ServiceConfig{}).(*Service)
 
 	testMsg := core.Message{
@@ -217,7 +238,7 @@ func TestService_MessageHandler_MarshalError(t *testing.T) {
 }
 
 func TestService_MessageHandler_CreateRequestError(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
 	// Use an invalid hostname/port combination that will cause http.NewRequestWithContext to fail.
 	// A URL with a control character or other invalid characters should do it.
@@ -241,7 +262,7 @@ func TestService_MessageHandler_CreateRequestError(t *testing.T) {
 }
 
 func TestService_MessageHandler_Timeout(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 
 	// Create a mock HTTP server that sleeps longer than the timeout
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +302,7 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 }
 
 func TestService_Check(t *testing.T) {
-	deps := testDeps()
+	deps := testDeps(t)
 	svc := NewService(deps, core.ServiceConfig{})
 	assert.NoError(t, svc.Check())
 }

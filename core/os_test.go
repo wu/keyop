@@ -72,6 +72,42 @@ func TestOsProvider_MkdirAll(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
+func TestOsProvider_ReadDir(t *testing.T) {
+	provider := OsProvider{}
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(tmpDir+"/file1", []byte("1"), 0644)
+	assert.NoError(t, err)
+	err = os.WriteFile(tmpDir+"/file2", []byte("2"), 0644)
+	assert.NoError(t, err)
+
+	entries, err := provider.ReadDir(tmpDir)
+	assert.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
+func TestOsProvider_Stat(t *testing.T) {
+	provider := OsProvider{}
+	tmpFile := t.TempDir() + "/testfile"
+	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
+
+	info, err := provider.Stat(tmpFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "testfile", info.Name())
+}
+
+func TestOsProvider_Remove(t *testing.T) {
+	provider := OsProvider{}
+	tmpFile := t.TempDir() + "/testfile"
+	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
+
+	err := provider.Remove(tmpFile)
+	assert.NoError(t, err)
+
+	_, err = os.Stat(tmpFile)
+	assert.True(t, os.IsNotExist(err))
+}
+
 func TestFakeOsProvider_OpenFile(t *testing.T) {
 	t.Run("default behavior", func(t *testing.T) {
 		f := FakeOsProvider{}
@@ -91,6 +127,121 @@ func TestFakeOsProvider_OpenFile(t *testing.T) {
 		file, err := f.OpenFile("testfile", os.O_RDONLY, 0)
 		assert.ErrorIs(t, err, testErr)
 		assert.Nil(t, file)
+	})
+
+	t.Run("provided file", func(t *testing.T) {
+		mockFile := &FakeFile{}
+		f := FakeOsProvider{
+			File: mockFile,
+		}
+		file, err := f.OpenFile("any", os.O_RDONLY, 0)
+		assert.NoError(t, err)
+		assert.Equal(t, mockFile, file)
+	})
+}
+
+func TestFakeOsProvider_ReadDir(t *testing.T) {
+	t.Run("default behavior", func(t *testing.T) {
+		f := FakeOsProvider{}
+		entries, err := f.ReadDir("any")
+		assert.NoError(t, err)
+		assert.Nil(t, entries)
+	})
+
+	t.Run("custom behavior", func(t *testing.T) {
+		testErr := assert.AnError
+		f := FakeOsProvider{
+			ReadDirFunc: func(dirname string) ([]os.DirEntry, error) {
+				assert.Equal(t, "testdir", dirname)
+				return nil, testErr
+			},
+		}
+		entries, err := f.ReadDir("testdir")
+		assert.ErrorIs(t, err, testErr)
+		assert.Nil(t, entries)
+	})
+}
+
+func TestFakeOsProvider_Stat(t *testing.T) {
+	t.Run("default behavior", func(t *testing.T) {
+		f := FakeOsProvider{}
+		info, err := f.Stat("any")
+		assert.ErrorIs(t, err, os.ErrNotExist)
+		assert.Nil(t, info)
+	})
+
+	t.Run("custom behavior", func(t *testing.T) {
+		testErr := assert.AnError
+		f := FakeOsProvider{
+			StatFunc: func(name string) (os.FileInfo, error) {
+				assert.Equal(t, "testfile", name)
+				return nil, testErr
+			},
+		}
+		info, err := f.Stat("testfile")
+		assert.ErrorIs(t, err, testErr)
+		assert.Nil(t, info)
+	})
+}
+
+func TestFakeOsProvider_Remove(t *testing.T) {
+	t.Run("default behavior", func(t *testing.T) {
+		f := FakeOsProvider{}
+		err := f.Remove("any")
+		assert.NoError(t, err)
+	})
+
+	t.Run("custom behavior", func(t *testing.T) {
+		testErr := assert.AnError
+		f := FakeOsProvider{
+			RemoveFunc: func(name string) error {
+				assert.Equal(t, "testfile", name)
+				return testErr
+			},
+		}
+		err := f.Remove("testfile")
+		assert.ErrorIs(t, err, testErr)
+	})
+}
+
+func TestFakeFile(t *testing.T) {
+	t.Run("Close", func(t *testing.T) {
+		closed := false
+		f := &FakeFile{
+			CloseFunc: func() error {
+				closed = true
+				return nil
+			},
+		}
+		err := f.Close()
+		assert.NoError(t, err)
+		assert.True(t, closed)
+
+		f2 := &FakeFile{}
+		err = f2.Close()
+		assert.NoError(t, err)
+	})
+
+	t.Run("WriteString", func(t *testing.T) {
+		// We need something that implements io.ReadWriteSeeker
+		// A simple way is to use a custom implementation or just a buffer if it satisfies it
+		// But FakeFile expects io.ReadWriteSeeker which bytes.Buffer doesn't fully (it lacks Seek)
+
+		// Let's use a temporary file to provide a real ReadWriteSeeker for the test
+		tmp, _ := os.CreateTemp("", "fakefiletest")
+		defer os.Remove(tmp.Name())
+		defer tmp.Close()
+
+		f := &FakeFile{
+			ReadWriteSeeker: tmp,
+		}
+		n, err := f.WriteString("test")
+		assert.NoError(t, err)
+		assert.Equal(t, 4, n)
+
+		_, _ = tmp.Seek(0, 0)
+		content, _ := os.ReadFile(tmp.Name())
+		assert.Equal(t, "test", string(content))
 	})
 }
 

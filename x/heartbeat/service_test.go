@@ -43,11 +43,14 @@ func TestHeartbeatCmd(t *testing.T) {
 	}
 	logger := slog.New(slog.NewJSONHandler(&buf, opts))
 
-	osProvider := core.FakeOsProvider{Host: "test-host"}
+	osProvider := core.OsProvider{}
 	deps := core.Dependencies{}
 	deps.SetOsProvider(osProvider)
 	deps.SetLogger(logger)
-	deps.SetMessenger(core.NewMessenger(logger, osProvider))
+	messenger := core.NewMessenger(logger, osProvider)
+	tmpDir := t.TempDir()
+	messenger.SetDataDir(tmpDir)
+	deps.SetMessenger(messenger)
 
 	cmd := NewCmd(deps)
 
@@ -70,7 +73,7 @@ func TestHeartbeatCmd(t *testing.T) {
 
 	assert.True(t, heartbeatFound, "expected to find a heartbeat log message")
 
-	assert.Equal(t, "DEBUG", heartbeatMsg.Level, "expected INFO level")
+	assert.Equal(t, "DEBUG", heartbeatMsg.Level, "expected DEBUG level")
 
 	uptime := time.Since(startTime).Round(time.Second)
 	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
