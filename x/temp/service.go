@@ -88,7 +88,8 @@ func (svc Service) temp() (Event, error) {
 
 	logger.Debug("temp", "data", temp)
 
-	err = messenger.Send(svc.Cfg.Pubs["events"].Name, core.Message{
+	err = messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),

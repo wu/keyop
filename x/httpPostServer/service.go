@@ -121,6 +121,10 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: send to a message queue instead of writing to file
 	// TODO: need to prevent routing loop in messenger - record route
+
+	//channel := ""
+	//err = messenger.Send(core.Message{ChannelName: channel}, msg)
+
 	today := time.Now().Format("20060102")
 	filename := fmt.Sprintf("%s/httpPostServer_%s_%s.jsonl", svc.targetDir, serviceName, today)
 	osProvider := svc.Deps.MustGetOsProvider()
