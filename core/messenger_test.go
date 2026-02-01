@@ -99,6 +99,41 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 	}
 }
 
+func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "messenger_test_discard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
+	m.dataDir = tmpDir
+
+	channelName := "discard-test"
+	hostname, _ := m.osProvider.Hostname()
+	addRoute := fmt.Sprintf("%s:%s", hostname, channelName)
+
+	var received bool
+	err = m.Subscribe("test", channelName, func(msg Message) error {
+		received = true
+		return nil
+	})
+	assert.NoError(t, err)
+
+	// Send message that already has the route
+	msg := Message{
+		ChannelName: channelName,
+		Text:        "should be discarded",
+		Route:       []string{addRoute},
+	}
+
+	err = m.Send(msg)
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.False(t, received, "Message should have been discarded and not received by subscriber")
+}
+
 func TestMessenger_Send_NoSubscribers_NoError(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "messenger_test_none")
 	if err != nil {
