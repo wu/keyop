@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,7 +34,7 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 
 	// Send in a goroutine to avoid blocking on unbuffered channels
 	go func() {
-		_ = m.Send(Message{ChannelName: "alpha", Text: "hello"}, nil)
+		_ = m.Send(Message{ChannelName: "alpha", Text: "hello"})
 	}()
 
 	time.Sleep(500 * time.Millisecond)
@@ -64,7 +63,7 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send to channel "a" only
-	go func() { _ = m.Send(Message{ChannelName: "a", Text: "foo"}, nil) }()
+	go func() { _ = m.Send(Message{ChannelName: "a", Text: "foo"}) }()
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -88,7 +87,7 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 
 	// Send three messages in order in a single goroutine
 	for i := 1; i <= 3; i++ {
-		_ = m.Send(Message{ChannelName: "ordered", Text: fmt.Sprintf("%d", i)}, nil)
+		_ = m.Send(Message{ChannelName: "ordered", Text: fmt.Sprintf("%d", i)})
 	}
 
 	time.Sleep(500 * time.Millisecond)
@@ -111,11 +110,11 @@ func TestMessenger_Send_NoSubscribers_NoError(t *testing.T) {
 	m.dataDir = tmpDir
 
 	// Should not block and should return nil
-	err = m.Send(Message{ChannelName: "nobody", Text: "ignored"}, nil)
+	err = m.Send(Message{ChannelName: "nobody", Text: "ignored"})
 	assert.NoError(t, err)
 }
 
-func TestMessenger_Send_SerializesDataToJSON(t *testing.T) {
+func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "messenger_test_json")
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +129,7 @@ func TestMessenger_Send_SerializesDataToJSON(t *testing.T) {
 	err = m.Subscribe("test", "json", func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
-	// Define a struct to ensure stable JSON field order
+	// Define a struct
 	type payload struct {
 		K string `json:"k"`
 		N int    `json:"n"`
@@ -138,7 +137,7 @@ func TestMessenger_Send_SerializesDataToJSON(t *testing.T) {
 	p := payload{K: "v", N: 123}
 
 	go func() {
-		_ = m.Send(Message{ChannelName: "json", Text: "with-data"}, p)
+		_ = m.Send(Message{ChannelName: "json", Text: "with-data", Data: p})
 	}()
 
 	time.Sleep(500 * time.Millisecond)
@@ -146,8 +145,17 @@ func TestMessenger_Send_SerializesDataToJSON(t *testing.T) {
 	assert.Equal(t, "host-1", gotMessage.Hostname)
 	assert.False(t, gotMessage.Timestamp.IsZero())
 
-	b, _ := json.Marshal(p)
-	assert.Equal(t, string(b), gotMessage.Data)
+	// Verify Data contains the payload
+	if assert.NotNil(t, gotMessage.Data) {
+		data, ok := gotMessage.Data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected Data to be map[string]interface{}, got %T", gotMessage.Data)
+		}
+
+		t.Logf("Data type: %T, Data: %+v\n", gotMessage.Data, data)
+		assert.Equal(t, "v", data["k"])
+		assert.Equal(t, 123.0, data["n"])
+	}
 }
 
 func TestNewMessenger_LoggerNotInitialized(t *testing.T) {
@@ -195,45 +203,12 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 	err = m.Subscribe("test", "test", func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
-	go func() { _ = m.Send(Message{ChannelName: "test", Text: "ping"}, nil) }()
+	go func() { _ = m.Send(Message{ChannelName: "test", Text: "ping"}) }()
 
 	time.Sleep(500 * time.Millisecond)
 
 	assert.Equal(t, "", gotMessage.Hostname)
 	assert.Equal(t, "ping", gotMessage.Text)
-}
-
-func TestMessenger_Send_FailedToSerializeData_LogsErrorAndSendsWithoutData(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "messenger_test_failed_serialize")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	fl := &FakeLogger{}
-	m := NewMessenger(fl, OsProvider{})
-	m.dataDir = tmpDir
-
-	var gotMessage Message
-	err = m.Subscribe("test", "bad", func(msg Message) error { gotMessage = msg; return nil })
-	assert.NoError(t, err)
-
-	// Use a channel value which json.Marshal cannot serialize to trigger an error
-	bad := make(chan int)
-	go func() { _ = m.Send(Message{ChannelName: "bad", Text: "oops"}, bad) }()
-
-	time.Sleep(500 * time.Millisecond)
-
-	assert.Equal(t, "oops", gotMessage.Text)
-
-	// Ensure the error was logged with the expected message and args
-	assert.Equal(t, "Failed to serialize data", fl.lastErrMsg)
-	if assert.Len(t, fl.lastErrArgs, 2) {
-		assert.Equal(t, "error", fl.lastErrArgs[0])
-		if _, ok := fl.lastErrArgs[1].(error); !ok {
-			t.Fatalf("expected an error type for logger arg[1]")
-		}
-	}
 }
 
 func TestMessenger_SetDataDir(t *testing.T) {
@@ -252,7 +227,7 @@ func TestMessenger_InitializePersistentQueue_Error(t *testing.T) {
 		},
 	}
 	m := NewMessenger(fl, osProv)
-	err := m.Send(Message{ChannelName: "test", Text: "foo"}, nil)
+	err := m.Send(Message{ChannelName: "test", Text: "foo"})
 	assert.Error(t, err)
 	assert.Equal(t, myErr, err)
 }
@@ -289,7 +264,7 @@ func TestMessenger_Send_EnqueueError(t *testing.T) {
 	// Clear the existing queue to force re-initialization with the bad OsProvider
 	m.queues = make(map[string]*PersistentQueue)
 
-	err = m.Send(Message{ChannelName: "fail-channel", Text: "foo"}, nil)
+	err = m.Send(Message{ChannelName: "fail-channel", Text: "foo"})
 	assert.Error(t, err)
 }
 
@@ -358,7 +333,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	err = m.Subscribe("source", "handler-err", func(msg Message) error { return handlerErr })
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "handler-err", Text: "trigger"}, nil)
+	_ = m.Send(Message{ChannelName: "handler-err", Text: "trigger"})
 
 	assert.Eventually(t, func() bool {
 		return fl.lastErrMsg == "Message handler returned error"

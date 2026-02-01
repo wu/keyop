@@ -151,7 +151,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 		err := json.Unmarshal(body, &msg)
 		assert.NoError(t, err)
 		assert.Equal(t, "test-service", msg.ServiceName)
-		assert.Equal(t, "test-data", msg.Data)
+		assert.Equal(t, "test-data", msg.Data.(string))
 
 		w.WriteHeader(http.StatusOK)
 		done <- true
@@ -190,7 +190,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 	}
 
 	testMsg.ChannelName = "heartbeat-channel"
-	err = deps.MustGetMessenger().Send(testMsg, nil)
+	err = deps.MustGetMessenger().Send(testMsg)
 	assert.NoError(t, err)
 
 	select {

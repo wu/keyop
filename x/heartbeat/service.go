@@ -60,6 +60,7 @@ func (svc Service) Check() error {
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("heartbeat: uptime %s", heartbeat.Uptime),
 		Metric:      float64(heartbeat.UptimeSeconds),
-	}, heartbeat)
+		Data:        heartbeat,
+	})
 
 }
