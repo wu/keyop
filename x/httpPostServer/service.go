@@ -6,9 +6,7 @@ import (
 	"io"
 	"keyop/core"
 	"net/http"
-	"os"
 	"regexp"
-	"time"
 )
 
 var alphanumeric = regexp.MustCompile("^[a-zA-Z0-9]+$")
@@ -90,6 +88,7 @@ func (svc Service) Initialize() error {
 
 func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -104,7 +103,7 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	var msg map[string]interface{}
+	var msg core.Message
 	if err := json.Unmarshal(body, &msg); err != nil {
 		logger.Error("failed to unmarshal json", "error", err, "body", string(body))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -112,41 +111,16 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Debug("received json message", "message", msg)
-	serviceName, serviceNameExists := msg["ServiceName"].(string)
-	if !serviceNameExists || !alphanumeric.MatchString(serviceName) {
-		logger.Info("Missing or invalid ServiceName")
-		http.Error(w, "Missing or invalid ServiceName", http.StatusBadRequest)
+	if msg.ChannelName == "" || !alphanumeric.MatchString(msg.ChannelName) {
+		logger.Info("Missing or invalid ChannelName")
+		http.Error(w, "Missing or invalid ChannelName", http.StatusBadRequest)
 		return
 	}
 
-	// TODO: send to a message queue instead of writing to file
-	// TODO: need to prevent routing loop in messenger - record route
-
-	//channel := ""
-	//err = messenger.Send(core.Message{ChannelName: channel}, msg)
-
-	today := time.Now().Format("20060102")
-	filename := fmt.Sprintf("%s/httpPostServer_%s_%s.jsonl", svc.targetDir, serviceName, today)
-	osProvider := svc.Deps.MustGetOsProvider()
-	f, err := osProvider.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	err = messenger.Send(msg)
 	if err != nil {
-		logger.Error("failed to open file for appending", "error", err, "filename", filename)
-		http.Error(w, "failed to open file for appending", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	} else {
-		if _, err := f.Write(body); err != nil {
-			logger.Error("failed to write json to file", "error", err, "filename", filename)
-			http.Error(w, "failed to write json to file", http.StatusInternalServerError)
-			return
-		} else {
-			if _, err := f.WriteString("\n"); err != nil {
-				logger.Error("failed to write newline to file", "error", err, "filename", filename)
-				http.Error(w, "failed to write newline to file", http.StatusInternalServerError)
-				return
-			}
-			logger.Info("logged json to file", "filename", filename)
-		}
-		f.Close()
 	}
 
 	w.WriteHeader(http.StatusOK)

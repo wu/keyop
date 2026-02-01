@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -16,6 +17,7 @@ type Message struct {
 	Metric      float64
 	State       string
 	Data        interface{}
+	Route       []string
 }
 
 type MessengerApi interface {
@@ -62,6 +64,18 @@ type Messenger struct {
 func (m *Messenger) Send(msg Message) error {
 	channelName := msg.ChannelName
 	m.logger.Debug("Send message called", "channel", channelName, "message", msg)
+
+	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
+
+	// Check if addRoute already exists in the route array
+	for _, route := range msg.Route {
+		if route == addRoute {
+			m.logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
+			return nil
+		}
+	}
+
+	msg.Route = append(msg.Route, addRoute)
 
 	err := m.initializePersistentQueue(channelName)
 	if err != nil {
