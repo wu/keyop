@@ -62,6 +62,9 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 	}
 
+	today := time.Now().Format("20060102")
+	filename := fmt.Sprintf("httpPostServer_TestSvc_%s.jsonl", today)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := core.ServiceConfig{
@@ -75,8 +78,11 @@ func TestService_ValidateConfig(t *testing.T) {
 			} else {
 				assert.Empty(t, errs)
 			}
+
+			os.Remove(filename)
 		})
 	}
+
 }
 
 func TestService_Initialize_StartsServerAndLogs(t *testing.T) {
@@ -117,7 +123,7 @@ func TestService_Initialize_StartsServerAndLogs(t *testing.T) {
 
 	// Clean up
 	today := time.Now().Format("20060102")
-	filename := fmt.Sprintf("TestSvc_%s.json", today)
+	filename := fmt.Sprintf("httpPostServer_TestSvc_%s.jsonl", today)
 	os.Remove(filename)
 }
 
