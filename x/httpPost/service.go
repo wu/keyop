@@ -105,7 +105,7 @@ func (svc Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 
 	// process incoming message
-	logger.Warn("httpPost: received temp message", "message", msg)
+	logger.Warn("httpPost: forwarding message", "message", msg)
 
 	// send message to HTTP endpoint
 	url := fmt.Sprintf("http://%s:%d", svc.Hostname, svc.Port)
