@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -42,6 +43,10 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 	}
 
 	if host, err := osProvider.Hostname(); err == nil {
+		// get short hostname
+		if idx := strings.Index(host, "."); idx != -1 {
+			host = host[:idx]
+		}
 		m.hostname = host
 	} else {
 		logger.Error("Failed to determine hostname during initialization", "error", err)
@@ -86,8 +91,12 @@ func (m *Messenger) Send(msg Message) error {
 	defer m.mutex.RUnlock()
 
 	// Populate required fields
-	msg.Timestamp = time.Now()
-	msg.Hostname = m.hostname
+	if msg.Timestamp.IsZero() {
+		msg.Timestamp = time.Now()
+	}
+	if msg.Hostname == "" {
+		msg.Hostname = m.hostname
+	}
 
 	m.logger.Info("SEND", "channel", channelName, "message", msg)
 	msgBytes, err := json.Marshal(msg)

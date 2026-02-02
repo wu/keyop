@@ -2,11 +2,9 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 # Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+keyop
+keyop-linux-amd64
+keyop-linux-arm64
 
 # Test binary, built with `go test -c`
 *.test

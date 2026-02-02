@@ -115,6 +115,10 @@ func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
 
 	channelName := "discard-test"
 	hostname, _ := m.osProvider.Hostname()
+	// get short hostname
+	if idx := strings.Index(hostname, "."); idx != -1 {
+		hostname = hostname[:idx]
+	}
 	addRoute := fmt.Sprintf("%s:%s", hostname, channelName)
 
 	var received bool
