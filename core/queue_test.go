@@ -32,10 +32,14 @@ func TestPersistentQueue_Basic(t *testing.T) {
 	item, err := pq.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
+	err = pq.Ack("test")
+	require.NoError(t, err)
 
 	item, err = pq.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
+	err = pq.Ack("test")
+	require.NoError(t, err)
 }
 
 func TestPersistentQueue_Persistence(t *testing.T) {
@@ -57,6 +61,8 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 	item, err := pq.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
+	err = pq.Ack("test")
+	require.NoError(t, err)
 
 	err = pq.Enqueue("item2")
 	require.NoError(t, err)
@@ -68,6 +74,68 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 	item, err = pq2.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
+	err = pq2.Ack("test")
+	require.NoError(t, err)
+}
+
+func TestPersistentQueue_Ack(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "queue_test_ack")
+	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
+	defer os.RemoveAll(tmpDir)
+
+	osProvider := OsProvider{}
+	logger := &FakeLogger{}
+
+	pq, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
+	require.NoError(t, err)
+
+	err = pq.Enqueue("item1")
+	require.NoError(t, err)
+	err = pq.Enqueue("item2")
+	require.NoError(t, err)
+
+	// Dequeue item1
+	item, err := pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item1", item)
+
+	// Dequeue again without Ack, should get item1 again
+	item, err = pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item1", item)
+
+	// Ack item1
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
+
+	// Dequeue should now get item2
+	item, err = pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item2", item)
+
+	// Dequeue again without Ack, should get item2 again
+	item, err = pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item2", item)
+
+	// Ack item2
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
+
+	// Next Dequeue should block (we'll check with a timeout)
+	resChan := make(chan string, 1)
+	go func() {
+		item, _ := pq.Dequeue("reader1")
+		resChan <- item
+	}()
+
+	select {
+	case <-resChan:
+		t.Fatal("should have blocked")
+	case <-time.After(100 * time.Millisecond):
+		// OK
+	}
 }
 
 func TestPersistentQueue_Rotation(t *testing.T) {
@@ -96,11 +164,15 @@ func TestPersistentQueue_Rotation(t *testing.T) {
 	item, err := pq.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "old_item", item)
+	err = pq.Ack("test")
+	require.NoError(t, err)
 
 	// Should then read new_item (rotation)
 	item, err = pq.Dequeue("test")
 	require.NoError(t, err)
 	assert.Equal(t, "new_item", item)
+	err = pq.Ack("test")
+	require.NoError(t, err)
 }
 
 func TestPersistentQueue_Blocking(t *testing.T) {
@@ -115,9 +187,10 @@ func TestPersistentQueue_Blocking(t *testing.T) {
 	pq, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
 	require.NoError(t, err)
 
-	resChan := make(chan string)
+	resChan := make(chan string, 1)
 	go func() {
 		item, _ := pq.Dequeue("test")
+		_ = pq.Ack("test")
 		resChan <- item
 	}()
 
@@ -152,12 +225,13 @@ func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 	pq, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
 	require.NoError(t, err)
 
-	resChan := make(chan string)
+	resChan := make(chan string, 1)
 	go func() {
 		item, err := pq.Dequeue("test")
 		if err != nil {
 			t.Errorf("Dequeue error: %v", err)
 		}
+		_ = pq.Ack("test")
 		resChan <- item
 	}()
 
@@ -202,21 +276,29 @@ func TestPersistentQueue_MultipleReaders(t *testing.T) {
 	item, err := pq.Dequeue("reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
 
 	// Reader 2 reads item1 (should be independent)
 	item, err = pq.Dequeue("reader2")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
+	err = pq.Ack("reader2")
+	require.NoError(t, err)
 
 	// Reader 1 reads item2
 	item, err = pq.Dequeue("reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
 
 	// Reader 2 reads item2
 	item, err = pq.Dequeue("reader2")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
+	err = pq.Ack("reader2")
+	require.NoError(t, err)
 }
 
 func TestPersistentQueue_MultipleQueues(t *testing.T) {
@@ -243,10 +325,14 @@ func TestPersistentQueue_MultipleQueues(t *testing.T) {
 	item, err := pq1.Dequeue("reader")
 	require.NoError(t, err)
 	assert.Equal(t, "q1_item", item)
+	err = pq1.Ack("reader")
+	require.NoError(t, err)
 
 	item, err = pq2.Dequeue("reader")
 	require.NoError(t, err)
 	assert.Equal(t, "q2_item", item)
+	err = pq2.Ack("reader")
+	require.NoError(t, err)
 
 	// Verify files exist with correct names
 	entries, err := os.ReadDir(tmpDir)

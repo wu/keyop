@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -351,7 +353,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
-		return fl.lastErrMsg == "Failed to dequeue message"
+		return fl.LastErrMsg() == "Failed to dequeue message"
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 2. Unmarshal error
@@ -370,22 +372,97 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
-		return fl.lastErrMsg == "Failed to unmarshal dequeued message"
+		return fl.LastErrMsg() == "Failed to unmarshal dequeued message"
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 3. Handler error
-	err = m.initializePersistentQueue("handler-err")
+	// Use a fresh messenger and logger to avoid interference
+	m2 := NewMessenger(&FakeLogger{}, OsProvider{})
+	m2.dataDir = tmpDir
+	err = m2.initializePersistentQueue("handler-err")
 	assert.NoError(t, err)
 
 	handlerErr := errors.New("handler failed")
-	err = m.Subscribe("source", "handler-err", func(msg Message) error { return handlerErr })
+	err = m2.Subscribe("source", "handler-err", func(msg Message) error { return handlerErr })
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "handler-err", Text: "trigger"})
+	_ = m2.Send(Message{ChannelName: "handler-err", Text: "trigger"})
 
 	assert.Eventually(t, func() bool {
-		return fl.lastErrMsg == "Message handler returned error"
+		return m2.logger.(*FakeLogger).LastErrMsg() == "Message handler returned error, retrying"
 	}, 2*time.Second, 100*time.Millisecond)
+}
+
+func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "messenger_retry_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	fl := &FakeLogger{}
+	m := NewMessenger(fl, OsProvider{})
+	m.dataDir = tmpDir
+
+	var callCount int32
+	handlerErr := errors.New("temporary handler failure")
+
+	err = m.Subscribe("retry-source", "retry-chan", func(msg Message) error {
+		count := atomic.AddInt32(&callCount, 1)
+		if count < 3 {
+			return handlerErr
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+
+	_ = m.Send(Message{ChannelName: "retry-chan", Text: "retry-me"})
+
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&callCount) >= 3
+	}, 10*time.Second, 100*time.Millisecond, "Expected at least 3 calls due to retries")
+}
+
+func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "messenger_order_retry_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	fl := &FakeLogger{}
+	m := NewMessenger(fl, OsProvider{})
+	m.dataDir = tmpDir
+
+	var received []string
+	var mu sync.Mutex
+	var callCount int32
+
+	err = m.Subscribe("order-source", "order-chan", func(msg Message) error {
+		mu.Lock()
+		defer mu.Unlock()
+
+		count := atomic.AddInt32(&callCount, 1)
+		if msg.Text == "first" && count == 1 {
+			return errors.New("fail first once")
+		}
+		received = append(received, msg.Text)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	_ = m.Send(Message{ChannelName: "order-chan", Text: "first"})
+	_ = m.Send(Message{ChannelName: "order-chan", Text: "second"})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received) == 2
+	}, 10*time.Second, 100*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"first", "second"}, received)
 }
 
 func TestMessenger_InitializePersistentQueue_NilQueues(t *testing.T) {

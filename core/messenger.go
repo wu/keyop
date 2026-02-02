@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -127,6 +128,12 @@ func (m *Messenger) Subscribe(source string, channelName string, messageHandler 
 	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source)
 
 	go func() {
+		const (
+			minBackoff = time.Second
+			maxBackoff = 5 * time.Minute
+		)
+		retryCount := 0
+
 		for {
 			msgStr, err := queue.Dequeue(source)
 			if err != nil {
@@ -141,8 +148,34 @@ func (m *Messenger) Subscribe(source string, channelName string, messageHandler 
 				continue
 			}
 
-			if err := messageHandler(msg); err != nil {
-				m.logger.Error("Message handler returned error", "error", err, "message", msg)
+			for {
+				if err := messageHandler(msg); err != nil {
+					retryCount++
+					m.logger.Error("Message handler returned error, retrying", "error", err, "message", msg, "retryCount", retryCount)
+
+					// Truncated exponential backoff with jitter
+					backoff := minBackoff * time.Duration(1<<uint(retryCount-1))
+					if backoff > maxBackoff || backoff < minBackoff { // overflow check
+						backoff = maxBackoff
+					}
+
+					// Apply jitter: [0.5 * backoff, 1.5 * backoff]
+					jitter := time.Duration(rand.Float64() * float64(backoff))
+					sleepTime := (backoff / 2) + jitter
+					if sleepTime > maxBackoff {
+						sleepTime = maxBackoff
+					}
+
+					m.logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "source", source, "sleep", sleepTime)
+					time.Sleep(sleepTime)
+					continue
+				}
+
+				retryCount = 0
+				if err := queue.Ack(source); err != nil {
+					m.logger.Error("Failed to ack message", "error", err, "channel", channelName)
+				}
+				break
 			}
 		}
 	}()

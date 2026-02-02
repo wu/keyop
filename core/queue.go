@@ -20,6 +20,7 @@ type PersistentQueue struct {
 	logger     Logger
 	mu         sync.Mutex
 	cond       *sync.Cond
+	pending    map[string]readerState // In-memory track of what's been dequeued but not acked
 }
 
 type readerState struct {
@@ -46,6 +47,7 @@ func NewPersistentQueue(name string, dir string, osProvider OsProviderApi, logge
 		osProvider: osProvider,
 		logger:     logger,
 		mu:         sync.Mutex{},
+		pending:    make(map[string]readerState),
 	}
 	pq.cond = sync.NewCond(&pq.mu)
 	return pq, nil
@@ -102,9 +104,9 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 			entry, nextOffset, err := pq.readEntry(state.FileName, state.Offset)
 			if err == nil {
 				pq.logger.Debug("Dequeue: read entry successfully", "reader", readerName, "entry", entry)
-				state.Offset = nextOffset
-				if err := pq.saveState(readerName, state); err != nil {
-					return "", err
+				pq.pending[readerName] = readerState{
+					FileName: state.FileName,
+					Offset:   nextOffset,
 				}
 				return entry, nil
 			}
@@ -130,6 +132,7 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 						}
 					}
 					if found {
+						// Update persistent state to next file so we don't keep checking the old file
 						if err := pq.saveState(readerName, state); err != nil {
 							return "", err
 						}
@@ -144,6 +147,26 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 		// No more entries, block
 		pq.cond.Wait()
 	}
+}
+
+func (pq *PersistentQueue) Ack(readerName string) error {
+	pq.mu.Lock()
+	defer pq.mu.Unlock()
+
+	pq.logger.Debug("Ack called", "reader", readerName)
+
+	state, ok := pq.pending[readerName]
+	if !ok {
+		// Nothing to ack, or already acked
+		return nil
+	}
+
+	if err := pq.saveState(readerName, state); err != nil {
+		return err
+	}
+
+	delete(pq.pending, readerName)
+	return nil
 }
 
 func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
