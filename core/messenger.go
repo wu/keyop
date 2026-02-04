@@ -17,6 +17,7 @@ type Message struct {
 	ChannelName string
 	Text        string
 	Metric      float64
+	MetricName  string
 	State       string
 	Data        interface{}
 	Route       []string

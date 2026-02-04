@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,6 +83,73 @@ func TestHeartbeatCmd(t *testing.T) {
 
 }
 
+type mockMessenger struct {
+	messages []core.Message
+	mu       sync.Mutex
+}
+
+func (m *mockMessenger) Send(msg core.Message) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.messages = append(m.messages, msg)
+	return nil
+}
+
+func (m *mockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
+	return nil
+}
+
+func TestHeartbeatMetricName(t *testing.T) {
+	deps := core.Dependencies{}
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	deps.SetLogger(logger)
+
+	t.Run("no metricPrefix", func(t *testing.T) {
+		messenger := &mockMessenger{}
+		deps.SetMessenger(messenger)
+		cfg := core.ServiceConfig{
+			Name: "hb-service",
+			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"events":  {Name: "events-topic"},
+				"metrics": {Name: "metrics-topic"},
+			},
+		}
+		svc := NewService(deps, cfg).(Service)
+		err := svc.Check()
+		assert.NoError(t, err)
+
+		assert.Len(t, messenger.messages, 2)
+		for _, msg := range messenger.messages {
+			assert.Equal(t, "hb-service", msg.MetricName)
+		}
+	})
+
+	t.Run("with metricPrefix", func(t *testing.T) {
+		messenger := &mockMessenger{}
+		deps.SetMessenger(messenger)
+		cfg := core.ServiceConfig{
+			Name: "hb-service",
+			Type: "heartbeat",
+			Pubs: map[string]core.ChannelInfo{
+				"events":  {Name: "events-topic"},
+				"metrics": {Name: "metrics-topic"},
+			},
+			Config: map[string]interface{}{
+				"metricPrefix": "env.prod.",
+			},
+		}
+		svc := NewService(deps, cfg).(Service)
+		err := svc.Check()
+		assert.NoError(t, err)
+
+		assert.Len(t, messenger.messages, 2)
+		for _, msg := range messenger.messages {
+			assert.Equal(t, "env.prod.hb-service", msg.MetricName)
+		}
+	})
+}
+
 func TestValidateConfig(t *testing.T) {
 	makeSvc := func(cfg core.ServiceConfig) Service {
 		logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -95,7 +163,8 @@ func TestValidateConfig(t *testing.T) {
 			Name: "hb",
 			Type: "heartbeat",
 			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events-topic"},
+				"events":  {Name: "events-topic"},
+				"metrics": {Name: "metrics-topic"},
 			},
 		}
 		svc := makeSvc(cfg)

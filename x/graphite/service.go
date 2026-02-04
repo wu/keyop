@@ -88,7 +88,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		"service", msg.ServiceName,
 		"value", value,
 	)
-	metric := graphite.NewMetric(msg.ServiceName, fmt.Sprintf("%v", value), unixTime)
+	metricName := msg.MetricName
+	if metricName == "" {
+		metricName = msg.ServiceName
+	}
+
+	metric := graphite.NewMetric(metricName, fmt.Sprintf("%v", value), unixTime)
 
 	if svc.Graphite == nil {
 		logger.Warn("Graphite connection is nil, attempting to connect to Graphite", "host", svc.Host, "port", svc.Port)
