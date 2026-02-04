@@ -37,6 +37,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	logger.Info("Validating service configurations")
 	err := validateServiceConfig(services, logger)
 	if err != nil {
+		logger.Error("ERROR: Validation failed", "error", err)
 		return err
 	}
 	logger.Info("OK: Validation successful")
