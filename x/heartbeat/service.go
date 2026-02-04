@@ -47,6 +47,12 @@ func (svc Service) Check() error {
 
 	uptime := time.Since(startTime)
 
+	metricPrefix, _ := svc.Cfg.Config["metricPrefix"].(string)
+	metricName := svc.Cfg.Name
+	if metricPrefix != "" {
+		metricName = metricPrefix + svc.Cfg.Name
+	}
+
 	heartbeat := Event{
 		Now:           time.Now(),
 		Uptime:        uptime.Round(time.Second).String(),
@@ -70,6 +76,7 @@ func (svc Service) Check() error {
 		ChannelName: svc.Cfg.Pubs["metrics"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		MetricName:  metricName,
 		Text:        fmt.Sprintf("heartbeat metric: uptime_seconds %d", heartbeat.UptimeSeconds),
 		Metric:      float64(heartbeat.UptimeSeconds),
 	})
