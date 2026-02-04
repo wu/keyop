@@ -109,7 +109,7 @@ func (svc Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 
 	// process incoming message
-	logger.Warn("httpPost: forwarding message", "message", msg)
+	logger.Info("httpPost: forwarding message", "message", msg)
 
 	// send message to HTTP endpoint
 	url := fmt.Sprintf("http://%s:%d", svc.Hostname, svc.Port)
@@ -143,7 +143,7 @@ func (svc Service) messageHandler(msg core.Message) error {
 	}
 	defer resp.Body.Close()
 
-	logger.Info("successfully posted message to HTTP endpoint", "url", url, "status", resp.Status)
+	logger.Debug("successfully posted message to HTTP endpoint", "url", url, "status", resp.Status)
 
 	return nil
 }
