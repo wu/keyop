@@ -54,7 +54,7 @@ func Test_validateServiceConfig(t *testing.T) {
 				Service: &fakeService{validateErrs: []error{fmt.Errorf("bad config")}},
 				Config:  core.ServiceConfig{Name: "svc", Type: "foo"},
 			}},
-			wantErr: assert.NoError,
+			wantErr: assert.Error,
 			logMsgs: []string{"service config validation error"},
 		},
 		{

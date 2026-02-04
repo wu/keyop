@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"net/http"
 	"time"
 )
@@ -55,13 +54,10 @@ func (svc Service) ValidateConfig() []error {
 
 	var errs []error
 
-	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
-	errs = append(errs, subErrs...)
-
 	// check port
 	_, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {
-		err := fmt.Errorf("httpPostServer: port not set in config")
+		err := fmt.Errorf("httpPost: port not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
@@ -69,9 +65,17 @@ func (svc Service) ValidateConfig() []error {
 	// check hostname
 	_, hostnameExists := svc.Cfg.Config["hostname"].(string)
 	if !hostnameExists {
-		err := fmt.Errorf("httpPostServer: hostname not set in config")
+		err := fmt.Errorf("httpPost: hostname not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
+	}
+
+	// validate subscriptions
+	if svc.Cfg.Subs == nil {
+		err := fmt.Errorf("httpPost: no subscriptions defined in config")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+		return errs
 	}
 
 	return errs

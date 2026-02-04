@@ -85,18 +85,6 @@ func TestService_ValidateConfig(t *testing.T) {
 				"port":     8080,
 				"hostname": "localhost",
 			},
-			subs:        map[string]core.ChannelInfo{},
-			expectError: true,
-		},
-		{
-			name: "missing temp subscription",
-			config: map[string]interface{}{
-				"port":     8080,
-				"hostname": "localhost",
-			},
-			subs: map[string]core.ChannelInfo{
-				"heartbeat": {Name: "heartbeat-channel"},
-			},
 			expectError: true,
 		},
 	}
