@@ -4,6 +4,7 @@ go 1.25
 
 require (
 	github.com/MatusOllah/slogcolor v1.7.0
+	github.com/marpaia/graphite-golang v0.0.0-20190519024811-caf161d2c2b1
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
