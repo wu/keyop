@@ -42,10 +42,10 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				done := make(chan struct{})
 				go func() {
 					defer close(done)
-					logger.Info("Starting task run", "service", task.Name)
+					logger.Debug("Starting task run", "service", task.Name)
 					err := task.Run()
 					if err == nil {
-						logger.Info("Task run completed", "service", task.Name)
+						logger.Debug("Task run completed", "service", task.Name)
 					} else {
 						// TODO: send to errors channel
 						logger.Error("Task run completed with error", "service", task.Name, "error", err)
@@ -71,7 +71,7 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				case <-done:
 					// Task returned without explicit cancel; treat as a normal completion
 					// and restart after interval
-					logger.Info("Task completed normally", "service", task.Name)
+					logger.Debug("Task completed normally", "service", task.Name)
 				}
 
 				if task.Interval <= 0 {
