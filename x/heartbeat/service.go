@@ -28,7 +28,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
+	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics"}, logger)
 }
 
 func (svc Service) Initialize() error {
@@ -54,7 +54,7 @@ func (svc Service) Check() error {
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
 
-	return messenger.Send(core.Message{
+	eventErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -62,5 +62,16 @@ func (svc Service) Check() error {
 		Metric:      float64(heartbeat.UptimeSeconds),
 		Data:        heartbeat,
 	})
+	if eventErr != nil {
+		return eventErr
+	}
 
+	metricErr := messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Text:        fmt.Sprintf("heartbeat metric: uptime_seconds %d", heartbeat.UptimeSeconds),
+		Metric:      float64(heartbeat.UptimeSeconds),
+	})
+	return metricErr
 }
