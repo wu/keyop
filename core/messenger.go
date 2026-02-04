@@ -10,17 +10,17 @@ import (
 )
 
 type Message struct {
-	Timestamp   time.Time
-	Hostname    string
-	ServiceType string
-	ServiceName string
-	ChannelName string
-	Text        string
-	Metric      float64
-	MetricName  string
-	State       string
-	Data        interface{}
-	Route       []string
+	Timestamp   time.Time   `json:"timestamp,omitempty"`
+	Hostname    string      `json:"hostname,omitempty"`
+	ServiceType string      `json:"serviceType,omitempty"`
+	ServiceName string      `json:"serviceName,omitempty"`
+	ChannelName string      `json:"channelName,omitempty"`
+	Text        string      `json:"text,omitempty"`
+	Metric      float64     `json:"metric,omitempty"`
+	MetricName  string      `json:"metricName,omitempty"`
+	State       string      `json:"state,omitempty"`
+	Data        interface{} `json:"data,omitempty"`
+	Route       []string    `json:"route,omitempty"`
 }
 
 type MessengerApi interface {
