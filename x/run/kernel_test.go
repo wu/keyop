@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"fmt"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -93,4 +94,47 @@ func TestStartKernelGlobalCancel(t *testing.T) {
 
 		assert.Equal(t, 3, loopCounter, "task should have run 5 times")
 	})
+}
+
+func TestStartKernelErrorChannel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		deps := getDefaultTestDeps()
+		ctx := deps.MustGetContext()
+		cancel := deps.MustGetCancel()
+
+		messenger := &mockMessenger{}
+		deps.SetMessenger(messenger)
+
+		svcCtx, svcCancel := context.WithCancel(ctx)
+		tasks := []Task{{
+			Name:             "error task",
+			ErrorChannelName: "errors",
+			Run: func() error {
+				cancel()
+				return fmt.Errorf("task failed")
+			},
+			Cancel: svcCancel,
+			Ctx:    svcCtx,
+		}}
+
+		err := StartKernel(deps, tasks)
+		assert.NoError(t, err)
+
+		assert.Len(t, messenger.messages, 1)
+		assert.Equal(t, "errors", messenger.messages[0].ChannelName)
+		assert.Contains(t, messenger.messages[0].Text, "task failed")
+	})
+}
+
+type mockMessenger struct {
+	messages []core.Message
+}
+
+func (m *mockMessenger) Send(msg core.Message) error {
+	m.messages = append(m.messages, msg)
+	return nil
+}
+
+func (m *mockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
+	return nil
 }

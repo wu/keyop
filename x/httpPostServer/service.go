@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
+	"keyop/util"
 	"net/http"
 	"regexp"
 )
@@ -40,6 +41,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
+
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"errors"}, logger)
+	if len(pubErrs) > 0 {
+		errs = append(errs, pubErrs...)
+	}
 
 	// check port
 	_, portExists := svc.Cfg.Config["port"].(int)

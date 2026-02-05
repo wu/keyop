@@ -36,7 +36,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics"}, logger)
+	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors"}, logger)
 
 	if _, ok := svc.Cfg.Config["devicePath"].(string); !ok {
 		errs = append(errs, fmt.Errorf("temp: devicePath not set in config"))

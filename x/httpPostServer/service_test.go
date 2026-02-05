@@ -33,6 +33,7 @@ func TestService_ValidateConfig(t *testing.T) {
 	tests := []struct {
 		name        string
 		config      map[string]interface{}
+		pubs        map[string]core.ChannelInfo
 		expectError bool
 	}{
 		{
@@ -40,6 +41,9 @@ func TestService_ValidateConfig(t *testing.T) {
 			config: map[string]interface{}{
 				"port":      8080,
 				"targetDir": ".",
+			},
+			pubs: map[string]core.ChannelInfo{
+				"errors": {Name: "errors-topic"},
 			},
 			expectError: false,
 		},
@@ -69,6 +73,7 @@ func TestService_ValidateConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := core.ServiceConfig{
 				Config: tt.config,
+				Pubs:   tt.pubs,
 			}
 			svc := NewService(deps, cfg)
 			errs := svc.ValidateConfig()

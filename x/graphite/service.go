@@ -41,6 +41,11 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, subErrs...)
 	}
 
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"errors"}, logger)
+	if len(pubErrs) > 0 {
+		errs = append(errs, pubErrs...)
+	}
+
 	// check port
 	port, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {

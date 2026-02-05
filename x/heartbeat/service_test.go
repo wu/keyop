@@ -114,6 +114,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 			Pubs: map[string]core.ChannelInfo{
 				"events":  {Name: "events-topic"},
 				"metrics": {Name: "metrics-topic"},
+				"errors":  {Name: "errors-topic"},
 			},
 		}
 		svc := NewService(deps, cfg).(Service)
@@ -136,6 +137,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 			Pubs: map[string]core.ChannelInfo{
 				"events":  {Name: "events-topic"},
 				"metrics": {Name: "metrics-topic"},
+				"errors":  {Name: "errors-topic"},
 			},
 			Config: map[string]interface{}{
 				"metricPrefix": "env.prod.",
@@ -167,6 +169,7 @@ func TestValidateConfig(t *testing.T) {
 			Pubs: map[string]core.ChannelInfo{
 				"events":  {Name: "events-topic"},
 				"metrics": {Name: "metrics-topic"},
+				"errors":  {Name: "errors-topic"},
 			},
 		}
 		svc := makeSvc(cfg)

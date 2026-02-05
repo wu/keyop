@@ -53,7 +53,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		logger.Info("OK: Initialized service", "name", serviceWrapper.Config.Name)
 
 		svcCtx, svcCancel := context.WithCancel(ctx)
-		tasks = append(tasks, Task{
+		task := Task{
 			Name:     serviceWrapper.Config.Name,
 			Interval: serviceWrapper.Config.Freq,
 			Run: func() error {
@@ -61,7 +61,11 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			},
 			Ctx:    svcCtx,
 			Cancel: svcCancel,
-		})
+		}
+		if errorChan, ok := serviceWrapper.Config.Pubs["errors"]; ok {
+			task.ErrorChannelName = errorChan.Name
+		}
+		tasks = append(tasks, task)
 	}
 
 	// shut down on signal

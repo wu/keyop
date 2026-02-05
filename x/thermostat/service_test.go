@@ -181,6 +181,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs: map[string]core.ChannelInfo{
 				"temp": {Name: "temp"},
@@ -214,6 +215,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs:   map[string]core.ChannelInfo{},
 			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
@@ -232,6 +234,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"maxTemp": 30.0},
@@ -250,6 +253,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 10.0},
@@ -268,6 +272,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 30.0, "maxTemp": 10.0, "mode": "auto"},
@@ -286,6 +291,7 @@ func TestValidateConfig(t *testing.T) {
 				"events": {Name: "events"},
 				"heater": {Name: "heater"},
 				"cooler": {Name: "cooler"},
+				"errors": {Name: "errors"},
 			},
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0, "mode": "banana"},
@@ -294,9 +300,9 @@ func TestValidateConfig(t *testing.T) {
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
 
-		assert.Contains(t, errs[0].Error(), "invalid mode")
-		assert.Contains(t, errs[0].Error(), "banana")
-		assert.Contains(t, errs[0].Error(), "thermostat")
+		assert.Contains(t, errs[len(errs)-1].Error(), "invalid mode")
+		assert.Contains(t, errs[len(errs)-1].Error(), "banana")
+		assert.Contains(t, errs[len(errs)-1].Error(), "thermostat")
 
 	})
 }

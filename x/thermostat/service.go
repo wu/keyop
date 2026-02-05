@@ -64,7 +64,7 @@ func getValidModes() []string {
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler"}, logger)
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler", "errors"}, logger)
 	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
 	errs := append(pubErrs, subErrs...)
 

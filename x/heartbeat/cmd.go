@@ -22,6 +22,7 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 				Pubs: map[string]core.ChannelInfo{
 					"events":  {Name: "heartbeat", Description: "Heartbeat events"},
 					"metrics": {Name: "metrics", Description: "Heartbeat metrics"},
+					"errors":  {Name: "errors", Description: "Heartbeat errors"},
 				},
 			})
 

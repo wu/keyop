@@ -28,7 +28,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics"}, logger)
+	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors"}, logger)
 }
 
 func (svc Service) Initialize() error {
