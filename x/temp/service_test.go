@@ -52,6 +52,7 @@ func Test_temp_success(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"events":  {Name: "temp"},
 			"metrics": {Name: "metrics"},
+			"errors":  {Name: "errors"},
 		},
 		Config: map[string]interface{}{
 			"devicePath": p,
@@ -82,6 +83,7 @@ func Test_temp_read_error(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"events":  {Name: "events"},
 			"metrics": {Name: "metrics"},
+			"errors":  {Name: "errors"},
 		},
 		Config: map[string]interface{}{
 			"devicePath": p,
@@ -102,6 +104,7 @@ func Test_temp_empty_content(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"events":  {Name: "events"},
 			"metrics": {Name: "metrics"},
+			"errors":  {Name: "errors"},
 		},
 		Config: map[string]interface{}{
 			"devicePath": p,
@@ -122,6 +125,7 @@ func Test_temp_bad_integer(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"events":  {Name: "events"},
 			"metrics": {Name: "metrics"},
+			"errors":  {Name: "errors"},
 		},
 		Config: map[string]interface{}{
 			"devicePath": p,
@@ -143,6 +147,7 @@ func Test_temp_max_temp_exceeded(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"events":  {Name: "temp"},
 			"metrics": {Name: "metrics"},
+			"errors":  {Name: "errors"},
 		},
 		Config: map[string]interface{}{
 			"devicePath": p,

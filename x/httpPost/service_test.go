@@ -46,6 +46,7 @@ func TestService_ValidateConfig(t *testing.T) {
 		name        string
 		config      map[string]interface{}
 		subs        map[string]core.ChannelInfo
+		pubs        map[string]core.ChannelInfo
 		expectError bool
 	}{
 		{
@@ -56,6 +57,9 @@ func TestService_ValidateConfig(t *testing.T) {
 			},
 			subs: map[string]core.ChannelInfo{
 				"temp": {Name: "temp-channel"},
+			},
+			pubs: map[string]core.ChannelInfo{
+				"errors": {Name: "errors-channel"},
 			},
 			expectError: false,
 		},
@@ -94,6 +98,7 @@ func TestService_ValidateConfig(t *testing.T) {
 			cfg := core.ServiceConfig{
 				Config: tt.config,
 				Subs:   tt.subs,
+				Pubs:   tt.pubs,
 			}
 			svc := NewService(deps, cfg)
 			errs := svc.ValidateConfig()

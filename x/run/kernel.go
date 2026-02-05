@@ -2,17 +2,19 @@ package run
 
 import (
 	"context"
+	"fmt"
 	"keyop/core"
 	"sync"
 	"time"
 )
 
 type Task struct {
-	Name     string
-	Interval time.Duration
-	Run      func() error
-	Cancel   func()
-	Ctx      context.Context
+	Name             string
+	Interval         time.Duration
+	Run              func() error
+	Cancel           func()
+	Ctx              context.Context
+	ErrorChannelName string
 }
 
 func StartKernel(deps core.Dependencies, tasks []Task) error {
@@ -47,8 +49,16 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 					if err == nil {
 						logger.Debug("Task run completed", "service", task.Name)
 					} else {
-						// TODO: send to errors channel
 						logger.Error("Task run completed with error", "service", task.Name, "error", err)
+						if task.ErrorChannelName != "" {
+							messenger := deps.MustGetMessenger()
+							_ = messenger.Send(core.Message{
+								ChannelName: task.ErrorChannelName,
+								ServiceName: task.Name,
+								Text:        fmt.Sprintf("Task %s failed: %v", task.Name, err),
+								Data:        err.Error(),
+							})
+						}
 					}
 				}()
 

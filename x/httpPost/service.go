@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"net/http"
 	"time"
 )
@@ -70,6 +71,11 @@ func (svc Service) ValidateConfig() []error {
 		errs = append(errs, err)
 	}
 
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"errors"}, logger)
+	if len(pubErrs) > 0 {
+		errs = append(errs, pubErrs...)
+	}
+
 	// validate subscriptions
 	if svc.Cfg.Subs == nil {
 		err := fmt.Errorf("httpPost: no subscriptions defined in config")
@@ -119,8 +125,6 @@ func (svc Service) messageHandler(msg core.Message) error {
 		logger.Error("failed to marshal message to JSON", "error", err)
 		return err
 	}
-
-	// TODO: strategy for retry on failure in messenger, return error here
 
 	client := &http.Client{
 		Timeout: svc.Timeout,
