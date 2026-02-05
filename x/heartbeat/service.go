@@ -64,6 +64,7 @@ func (svc Service) Check() error {
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		MetricName:  metricName,
 		Text:        fmt.Sprintf("heartbeat: uptime %s", heartbeat.Uptime),
 		Metric:      float64(heartbeat.UptimeSeconds),
 		Data:        heartbeat,
