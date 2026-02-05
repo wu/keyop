@@ -69,6 +69,9 @@ type Messenger struct {
 
 //goland:noinspection GoVetCopyLock
 func (m *Messenger) Send(msg Message) error {
+	if msg.ChannelName == "" {
+		return fmt.Errorf("message must have a ChannelName")
+	}
 	channelName := msg.ChannelName
 	m.logger.Debug("Send message called", "channel", channelName, "message", msg)
 
