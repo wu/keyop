@@ -105,11 +105,18 @@ func (svc Service) temp() (Event, error) {
 
 	logger.Debug("temp", "data", temp)
 
+	metricPrefix, _ := svc.Cfg.Config["metricPrefix"].(string)
+	metricName := svc.Cfg.Name
+	if metricPrefix != "" {
+		metricName = metricPrefix + svc.Cfg.Name
+	}
+
 	eventErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
+		MetricName:  metricName,
 		Metric:      float64(temp.TempF),
 		Data:        temp,
 	})
@@ -117,19 +124,13 @@ func (svc Service) temp() (Event, error) {
 		return temp, eventErr
 	}
 
-	metricPrefix, _ := svc.Cfg.Config["metricPrefix"].(string)
-	metricName := svc.Cfg.Name
-	if metricPrefix != "" {
-		metricName = metricPrefix + svc.Cfg.Name
-	}
-
 	metricErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Pubs["metrics"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		MetricName:  metricName,
-		Text:        fmt.Sprintf("%s metric: %.3fF", svc.Cfg.Name, temp.TempF),
 		Metric:      float64(temp.TempF),
+		Text:        fmt.Sprintf("%s metric: %.3fF", svc.Cfg.Name, temp.TempF),
 	})
 	return temp, metricErr
 }

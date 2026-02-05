@@ -3,6 +3,7 @@ package heartbeat
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -121,6 +122,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 
 		assert.Len(t, messenger.messages, 2)
 		for _, msg := range messenger.messages {
+			fmt.Printf("Checking heartbeat metric for service %s: %v\n", svc.Cfg.Name, msg)
 			assert.Equal(t, "hb-service", msg.MetricName)
 		}
 	})
