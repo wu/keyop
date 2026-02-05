@@ -132,3 +132,30 @@ func Test_temp_bad_integer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "unable to convert temp string to int")
 }
+
+func Test_temp_max_temp_exceeded(t *testing.T) {
+	deps := testDeps(t)
+	dir := t.TempDir()
+	// 100.000C = 212F
+	p := writeTempFile(t, dir, "w1_slave", "aa bb cc YES\nxyz t=100000\n")
+
+	cfg := core.ServiceConfig{
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "temp"},
+			"metrics": {Name: "metrics"},
+		},
+		Config: map[string]interface{}{
+			"devicePath": p,
+			"maxTemp":    float64(100), // Max 100F
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
+
+	got, err := svc.temp()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "temperature 212.000 exceeds max 100.000")
+	assert.Equal(t, float32(100), got.TempC)
+	assert.Equal(t, float32(212), got.TempF)
+}

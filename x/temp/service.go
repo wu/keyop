@@ -14,6 +14,7 @@ type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig
 	DevicePath string
+	MaxTemp    *float64
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -26,6 +27,10 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.DevicePath = devicePath
 	}
 
+	if maxTemp, ok := cfg.Config["maxTemp"].(float64); ok {
+		svc.MaxTemp = &maxTemp
+	}
+
 	return svc
 }
 
@@ -35,6 +40,12 @@ func (svc Service) ValidateConfig() []error {
 
 	if _, ok := svc.Cfg.Config["devicePath"].(string); !ok {
 		errs = append(errs, fmt.Errorf("temp: devicePath not set in config"))
+	}
+
+	if val, ok := svc.Cfg.Config["maxTemp"]; ok {
+		if _, ok := val.(float64); !ok {
+			errs = append(errs, fmt.Errorf("temp: maxTemp must be a float"))
+		}
 	}
 
 	return errs
@@ -102,6 +113,12 @@ func (svc Service) temp() (Event, error) {
 
 	temp.TempC = float32(tempInt) / 1000
 	temp.TempF = temp.TempC*9/5 + 32.0
+
+	if svc.MaxTemp != nil && float64(temp.TempF) > *svc.MaxTemp {
+		err := fmt.Errorf("temperature %.3f exceeds max %.3f", temp.TempF, *svc.MaxTemp)
+		logger.Error("temp", "error", err)
+		return temp, err
+	}
 
 	logger.Debug("temp", "data", temp)
 
