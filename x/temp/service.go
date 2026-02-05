@@ -10,28 +10,45 @@ import (
 	"strings"
 )
 
-var devicePath string
-
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps       core.Dependencies
+	Cfg        core.ServiceConfig
+	DevicePath string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return &Service{
+	svc := &Service{
 		Deps: deps,
 		Cfg:  cfg,
 	}
+
+	if devicePath, ok := cfg.Config["devicePath"].(string); ok {
+		svc.DevicePath = devicePath
+	}
+
+	return svc
 }
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
+	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics"}, logger)
+
+	if _, ok := svc.Cfg.Config["devicePath"].(string); !ok {
+		errs = append(errs, fmt.Errorf("temp: devicePath not set in config"))
+	}
+
+	return errs
 }
 
 func (svc Service) Initialize() error {
 
-	// todo: check that temp device exists here
+	if svc.DevicePath == "" {
+		return fmt.Errorf("temp: devicePath not set")
+	}
+
+	if _, err := os.Stat(svc.DevicePath); err != nil {
+		return fmt.Errorf("temp: device path %s does not exist: %w", svc.DevicePath, err)
+	}
 
 	return nil
 }
@@ -56,9 +73,9 @@ func (svc Service) temp() (Event, error) {
 
 	temp := Event{}
 
-	contentBytes, err := os.ReadFile(devicePath)
+	contentBytes, err := os.ReadFile(svc.DevicePath)
 	if err != nil {
-		temp.Error = fmt.Sprintf("could not read from %s: %s", devicePath, err.Error())
+		temp.Error = fmt.Sprintf("could not read from %s: %s", svc.DevicePath, err.Error())
 		logger.Error("temp", "data", temp)
 		return temp, err
 	}
@@ -66,7 +83,7 @@ func (svc Service) temp() (Event, error) {
 	content := string(contentBytes)
 
 	if len(content) == 0 {
-		temp.Error = fmt.Sprintf("no content retrieved from temp device %s", devicePath)
+		temp.Error = fmt.Sprintf("no content retrieved from temp device %s", svc.DevicePath)
 		logger.Error("temp", "data", temp)
 		return temp, errors.New(temp.Error)
 	}
@@ -88,7 +105,7 @@ func (svc Service) temp() (Event, error) {
 
 	logger.Debug("temp", "data", temp)
 
-	err = messenger.Send(core.Message{
+	eventErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -96,5 +113,23 @@ func (svc Service) temp() (Event, error) {
 		Metric:      float64(temp.TempF),
 		Data:        temp,
 	})
-	return temp, err
+	if eventErr != nil {
+		return temp, eventErr
+	}
+
+	metricPrefix, _ := svc.Cfg.Config["metricPrefix"].(string)
+	metricName := svc.Cfg.Name
+	if metricPrefix != "" {
+		metricName = metricPrefix + svc.Cfg.Name
+	}
+
+	metricErr := messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		MetricName:  metricName,
+		Text:        fmt.Sprintf("%s metric: %.3fF", svc.Cfg.Name, temp.TempF),
+		Metric:      float64(temp.TempF),
+	})
+	return temp, metricErr
 }
