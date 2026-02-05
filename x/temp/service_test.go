@@ -10,14 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_NewTempCmd(t *testing.T) {
-	deps := testDeps(t)
-	cmd := NewCmd(deps)
-
-	// weak assertion
-	assert.NotNil(t, cmd)
-}
-
 // helper to build dependencies
 func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -56,10 +48,16 @@ func Test_temp_success(t *testing.T) {
 	// Typical w1_slave content includes a line with t=VALUE
 	p := writeTempFile(t, dir, "w1_slave", "aa bb cc YES\nxyz t=23125\n")
 
-	// Point the code to our test file
-	devicePath = p
-
-	svc := Service{Deps: deps, Cfg: core.ServiceConfig{Pubs: map[string]core.ChannelInfo{"events": {Name: "temp"}}}}
+	cfg := core.ServiceConfig{
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "temp"},
+			"metrics": {Name: "metrics"},
+		},
+		Config: map[string]interface{}{
+			"devicePath": p,
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
 	errs := svc.ValidateConfig()
 	assert.Empty(t, errs)
 	err := svc.Initialize()
@@ -78,9 +76,18 @@ func Test_temp_read_error(t *testing.T) {
 	deps := testDeps(t)
 
 	// point to a non-existent file
-	devicePath = filepath.Join(t.TempDir(), "does-not-exist")
+	p := filepath.Join(t.TempDir(), "does-not-exist")
 
-	svc := Service{Deps: deps}
+	cfg := core.ServiceConfig{
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "events"},
+			"metrics": {Name: "metrics"},
+		},
+		Config: map[string]interface{}{
+			"devicePath": p,
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
 	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "could not read from")
@@ -90,9 +97,17 @@ func Test_temp_empty_content(t *testing.T) {
 	deps := testDeps(t)
 	dir := t.TempDir()
 	p := writeTempFile(t, dir, "w1_slave", "")
-	devicePath = p
 
-	svc := Service{Deps: deps}
+	cfg := core.ServiceConfig{
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "events"},
+			"metrics": {Name: "metrics"},
+		},
+		Config: map[string]interface{}{
+			"devicePath": p,
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
 	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "no content retrieved from temp device")
@@ -102,9 +117,17 @@ func Test_temp_bad_integer(t *testing.T) {
 	deps := testDeps(t)
 	dir := t.TempDir()
 	p := writeTempFile(t, dir, "w1_slave", "crc YES\nvalue t=abc\n")
-	devicePath = p
 
-	svc := Service{Deps: deps}
+	cfg := core.ServiceConfig{
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "events"},
+			"metrics": {Name: "metrics"},
+		},
+		Config: map[string]interface{}{
+			"devicePath": p,
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
 	got, err := svc.temp()
 	assert.Error(t, err)
 	assert.Contains(t, got.Error, "unable to convert temp string to int")

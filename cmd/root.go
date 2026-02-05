@@ -5,8 +5,6 @@ import (
 	"keyop/util"
 	"keyop/x/heartbeat"
 	"keyop/x/run"
-	"keyop/x/temp"
-	"keyop/x/thermostat"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -22,9 +20,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.AddCommand(heartbeat.NewCmd(deps))
-	rootCmd.AddCommand(temp.NewCmd(deps))
 	rootCmd.AddCommand(run.NewCmd(deps))
-	rootCmd.AddCommand(thermostat.NewCmd(deps))
 
 	return rootCmd
 }
