@@ -12,14 +12,9 @@ import (
 )
 
 func Test_run_missing_config_returns_error(t *testing.T) {
-	// change to an empty temp directory without config.yaml
-	dir := t.TempDir()
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
+	// directory does not exist
+	dir := filepath.Join(t.TempDir(), "non-existent")
+	t.Setenv("KEYOP_CONF_DIR", dir)
 
 	// load should fail before running
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -27,22 +22,19 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 	deps.SetLogger(logger)
 
 	_, err := loadServiceConfigs(deps)
-	assert.Error(t, err, "expected error when config is missing")
+	assert.Error(t, err, "expected error when config directory is missing")
+	assert.Contains(t, err.Error(), "config directory does not exist")
 }
 
 func Test_loadServices_success(t *testing.T) {
 	// setup: temp dir with a valid config.yaml containing two svcs
 	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
 	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n" +
 		"- name: office-temp\n  freq: 2s\n  x: temp\n"
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "10-services.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -65,18 +57,39 @@ func Test_loadServices_success(t *testing.T) {
 	}
 }
 
+func Test_loadServices_multiple_files_order(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg2 := "- name: service2\n  x: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "20-service.yaml"), []byte(cfg2), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg1 := "- name: service1\n  x: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "10-service.yaml"), []byte(cfg1), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 2) {
+		assert.Equal(t, "service1", svcs[0].Name)
+		assert.Equal(t, "service2", svcs[1].Name)
+	}
+}
+
 func Test_loadServices_bad_duration(t *testing.T) {
 	// setup: temp dir with an invalid duration string
 	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
 	cfg := "- name: heartbeat\n  freq: not-a-duration\n  x: heartbeat\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -90,6 +103,8 @@ func Test_loadServices_bad_duration(t *testing.T) {
 func Test_loadServices_pubs_loaded(t *testing.T) {
 	// setup config with pubs structure similar to sample
 	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
 	cfg := "- name: heartbeat\n" +
 		"  freq: 1s\n" +
 		"  x: heartbeat\n" +
@@ -99,12 +114,6 @@ func Test_loadServices_pubs_loaded(t *testing.T) {
 		"      description: Publish Heartbeat Events every 1 second\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -122,6 +131,8 @@ func Test_loadServices_pubs_loaded(t *testing.T) {
 func Test_loadServices_subs_loaded(t *testing.T) {
 	// setup config with subs structure similar to sample
 	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
 	cfg := "- name: foo\n" +
 		"  x: heartbeat\n" +
 		"  subs:\n" +
@@ -130,12 +141,6 @@ func Test_loadServices_subs_loaded(t *testing.T) {
 		"      description: Read Heartbeat Events\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -152,15 +157,11 @@ func Test_loadServices_subs_loaded(t *testing.T) {
 
 func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
 	cfg := "[]\n" // empty YAML array, valid but no services
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
-	}
-	oldWD, _ := os.Getwd()
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.Chdir(oldWD)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

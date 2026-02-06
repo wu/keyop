@@ -25,28 +25,58 @@ type eventChannelYaml struct {
 	Description string `yaml:"description"`
 }
 
-func configFilePath() string {
-	// read config.yaml from the current working directory
-	return filepath.Join(".", "config.yaml")
+func configDirPath() string {
+	if dir := os.Getenv("KEYOP_CONF_DIR"); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", ".keyop", "conf")
+	}
+	return filepath.Join(home, ".keyop", "conf")
 }
 
-// loadServiceConfigs reads config.yaml and creates ServiceConfig objects
+// loadServiceConfigs reads all yaml files in ~/.keyop/conf and creates ServiceConfig objects
 func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
-	p := configFilePath()
+	dir := configDirPath()
 	logger := deps.MustGetLogger()
-	logger.Info("Loading service config", "path", p)
-	b, err := os.ReadFile(p)
+	logger.Info("Loading service configs from directory", "path", dir)
+
+	files, err := os.ReadDir(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("config directory does not exist: %s", dir)
+		}
 		return nil, err
 	}
 
-	var serviceConfigsSource []serviceConfigYaml
-	if err := yaml.Unmarshal(b, &serviceConfigsSource); err != nil {
-		return nil, err
+	var allServiceConfigsSource []serviceConfigYaml
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(file.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		p := filepath.Join(dir, file.Name())
+		logger.Info("Loading service config file", "path", p)
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+
+		var serviceConfigsSource []serviceConfigYaml
+		if err := yaml.Unmarshal(b, &serviceConfigsSource); err != nil {
+			return nil, fmt.Errorf("error unmarshaling %s: %w", p, err)
+		}
+		allServiceConfigsSource = append(allServiceConfigsSource, serviceConfigsSource...)
 	}
 
 	var serviceConfigs []core.ServiceConfig
-	for _, serviceConfigSource := range serviceConfigsSource {
+	for _, serviceConfigSource := range allServiceConfigsSource {
 
 		pubs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Pubs {
