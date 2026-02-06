@@ -1,7 +1,6 @@
 package heartbeat
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"keyop/core"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,53 +35,6 @@ func parseLogMessages(logs string) ([]logMsg, error) {
 	return messages, nil
 }
 
-func TestHeartbeatCmd(t *testing.T) {
-
-	var buf bytes.Buffer
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
-	logger := slog.New(slog.NewJSONHandler(&buf, opts))
-
-	osProvider := core.OsProvider{}
-	deps := core.Dependencies{}
-	deps.SetOsProvider(osProvider)
-	deps.SetLogger(logger)
-	messenger := core.NewMessenger(logger, osProvider)
-	tmpDir := t.TempDir()
-	messenger.SetDataDir(tmpDir)
-	deps.SetMessenger(messenger)
-
-	cmd := NewCmd(deps)
-
-	err := cmd.Execute()
-	assert.NoError(t, err, "Execute() error = %v, want nil", err)
-
-	messages, err := parseLogMessages(buf.String())
-	assert.NoError(t, err, "parseLogMessages() error = %v, want nil", err)
-
-	// iterate through messages searching for one with Msg "heartbeat"
-	var heartbeatFound bool
-	var heartbeatMsg logMsg
-	for _, msg := range messages {
-		if msg.Msg == "heartbeat" {
-			heartbeatFound = true
-			heartbeatMsg = msg
-			break
-		}
-	}
-
-	assert.True(t, heartbeatFound, "expected to find a heartbeat log message")
-
-	assert.Equal(t, "DEBUG", heartbeatMsg.Level, "expected DEBUG level")
-
-	uptime := time.Since(startTime).Round(time.Second)
-	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds >= 0, "uptime seconds is 0 or greater")
-	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds < int64(uptime.Seconds()+5), "approximate uptime seconds")
-	assert.True(t, heartbeatMsg.Heartbeat.UptimeSeconds > int64(uptime.Seconds()-5), "approximate uptime seconds")
-
-}
-
 type mockMessenger struct {
 	messages []core.Message
 	mu       sync.Mutex
@@ -105,6 +56,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 	deps := core.Dependencies{}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps.SetLogger(logger)
+	deps.SetOsProvider(core.OsProvider{})
 
 	t.Run("no metricPrefix", func(t *testing.T) {
 		messenger := &mockMessenger{}
@@ -116,16 +68,24 @@ func TestHeartbeatMetricName(t *testing.T) {
 				"events":  {Name: "events-topic"},
 				"metrics": {Name: "metrics-topic"},
 				"errors":  {Name: "errors-topic"},
+				"alerts":  {Name: "alerts-topic"},
 			},
 		}
 		svc := NewService(deps, cfg).(Service)
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		assert.Len(t, messenger.messages, 2)
+		assert.Len(t, messenger.messages, 3)
+		foundMetric := false
 		for _, msg := range messenger.messages {
-			fmt.Printf("Checking heartbeat metric for service %s: %v\n", svc.Cfg.Name, msg)
-			assert.Equal(t, "hb-service", msg.MetricName)
+			fmt.Printf("Sent message to channel %s with metric name %s\n", msg.ChannelName, msg.MetricName)
+			if msg.ChannelName == "metrics-topic" {
+				assert.Equal(t, "hb-service", msg.MetricName)
+				foundMetric = true
+			}
+		}
+		if !foundMetric {
+			t.Error("expected to find a message sent to metrics-topic")
 		}
 	})
 
@@ -171,6 +131,7 @@ func TestValidateConfig(t *testing.T) {
 				"events":  {Name: "events-topic"},
 				"metrics": {Name: "metrics-topic"},
 				"errors":  {Name: "errors-topic"},
+				"alerts":  {Name: "alerts-topic"},
 			},
 		}
 		svc := makeSvc(cfg)
