@@ -17,6 +17,7 @@ func testDeps(t *testing.T) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "speak_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
+		//goland:noinspection GoUnhandledErrorResult
 		os.RemoveAll(tmpDir)
 	})
 

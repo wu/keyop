@@ -9,11 +9,7 @@ import (
 	"github.com/marpaia/graphite-golang"
 )
 
-var startTime time.Time
-
 func init() {
-	// capture the service start time for reporting uptime
-	startTime = time.Now()
 }
 
 type Service struct {

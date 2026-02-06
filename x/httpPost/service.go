@@ -145,6 +145,7 @@ func (svc Service) messageHandler(msg core.Message) error {
 		logger.Error("failed to post message to HTTP endpoint", "url", url, "error", err)
 		return err
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer resp.Body.Close()
 
 	logger.Debug("successfully posted message to HTTP endpoint", "url", url, "status", resp.Status)

@@ -157,6 +157,7 @@ func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	oldWD, _ := os.Getwd()
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Chdir(oldWD)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)

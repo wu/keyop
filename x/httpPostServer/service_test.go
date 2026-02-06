@@ -84,6 +84,7 @@ func TestService_ValidateConfig(t *testing.T) {
 				assert.Empty(t, errs)
 			}
 
+			//goland:noinspection GoUnhandledErrorResult
 			os.Remove(filename)
 		})
 	}
@@ -130,6 +131,7 @@ func TestService_Initialize_StartsServerAndLogs(t *testing.T) {
 	// Clean up
 	today := time.Now().Format("20060102")
 	filename := fmt.Sprintf("httpPostServer_TestSvc_%s.jsonl", today)
+	//goland:noinspection GoUnhandledErrorResult
 	os.Remove(filename)
 }
 
@@ -164,6 +166,7 @@ func TestService_MethodNotAllowed(t *testing.T) {
 
 type errorReader struct{}
 
+//goland:noinspection GoUnusedParameter
 func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, fmt.Errorf("simulated read error")
 }

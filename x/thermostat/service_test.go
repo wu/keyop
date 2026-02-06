@@ -21,6 +21,7 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		//goland:noinspection GoUnhandledErrorResult
 		os.RemoveAll(tmpDir)
 	})
 

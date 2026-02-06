@@ -107,6 +107,7 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading body", http.StatusInternalServerError)
 		return
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer r.Body.Close()
 
 	var msg core.Message
