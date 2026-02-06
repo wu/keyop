@@ -1,4 +1,4 @@
-package github
+package githubNotification
 
 import (
 	"encoding/json"
@@ -35,7 +35,7 @@ func (svc *Service) ValidateConfig() []error {
 
 	token, _ := svc.Cfg.Config["token"].(string)
 	if token == "" {
-		err := fmt.Errorf("github token is required in config")
+		err := fmt.Errorf("githubNotification token is required in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
@@ -48,7 +48,7 @@ func (svc *Service) Initialize() error {
 	var lastCheck time.Time
 	err := stateStore.Load(svc.Cfg.Name, &lastCheck)
 	if err != nil {
-		svc.Deps.MustGetLogger().Error("Failed to load github service state", "error", err)
+		svc.Deps.MustGetLogger().Error("Failed to load githubNotification service state", "error", err)
 	}
 	if !lastCheck.IsZero() {
 		svc.lastCheck = lastCheck
@@ -86,7 +86,7 @@ func (svc *Service) Check() error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Accept", "application/vnd.githubNotification+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -98,7 +98,7 @@ func (svc *Service) Check() error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("github api returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("githubNotification api returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var notifications []Notification
@@ -119,7 +119,7 @@ func (svc *Service) Check() error {
 				Data:        n,
 			})
 			if err != nil {
-				logger.Error("Failed to send github notification alert", "error", err)
+				logger.Error("Failed to send githubNotification notification alert", "error", err)
 			}
 
 			if n.UpdatedAt.After(newLastCheck) {
@@ -132,7 +132,7 @@ func (svc *Service) Check() error {
 		svc.lastCheck = newLastCheck
 		stateStore := svc.Deps.MustGetStateStore()
 		if err := stateStore.Save(svc.Cfg.Name, svc.lastCheck); err != nil {
-			logger.Error("Failed to save github service state", "error", err)
+			logger.Error("Failed to save githubNotification service state", "error", err)
 		}
 	}
 

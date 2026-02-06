@@ -2,7 +2,7 @@ package run
 
 import (
 	"keyop/core"
-	"keyop/x/github"
+	"keyop/x/githubNotification"
 	"keyop/x/graphite"
 	"keyop/x/heartbeat"
 	"keyop/x/httpPost"
@@ -18,8 +18,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"graphite": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return graphite.NewService(deps, cfg)
 	},
-	"github": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return github.NewService(deps, cfg)
+	"githubNotification": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return githubNotification.NewService(deps, cfg)
 	},
 	"heartbeat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return heartbeat.NewService(deps, cfg)
