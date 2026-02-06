@@ -8,6 +8,7 @@ import (
 )
 
 var startTime time.Time
+var restartNotified bool
 
 func init() {
 	// capture the service start time for reporting uptime
@@ -28,7 +29,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors"}, logger)
+	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors", "alerts"}, logger)
 }
 
 func (svc Service) Initialize() error {
@@ -53,12 +54,25 @@ func (svc Service) Check() error {
 		metricName = metricPrefix + svc.Cfg.Name
 	}
 
+	now := time.Now()
 	heartbeat := Event{
-		Now:           time.Now(),
+		Now:           now,
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
+
+	if !restartNotified {
+		// send an alert on service startup
+		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
+		messenger.Send(core.Message{
+			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Text:        fmt.Sprintf("%s restarted", hostname),
+		})
+		restartNotified = true
+	}
 
 	eventErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Pubs["events"].Name,
