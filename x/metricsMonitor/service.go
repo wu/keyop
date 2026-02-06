@@ -7,25 +7,26 @@ import (
 )
 
 type Threshold struct {
-	MetricName string  `json:"metricName"`
-	Value      float64 `json:"value"`
-	Condition  string  `json:"condition"` // "above" or "below"
-	Status     string  `json:"status"`
-	AlertText  string  `json:"alertText"`
+	MetricName        string   `json:"metricName"`
+	Value             float64  `json:"value"`
+	RecoveryThreshold *float64 `json:"recoveryThreshold,omitempty"`
+	Condition         string   `json:"condition"` // "above" or "below"
+	Status            string   `json:"status"`
+	AlertText         string   `json:"alertText"`
 }
 
 type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig
 	Thresholds []Threshold
-	lastStatus map[string]bool
+	lastStatus map[string]string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps:       deps,
 		Cfg:        cfg,
-		lastStatus: make(map[string]bool),
+		lastStatus: make(map[string]string),
 	}
 
 	if thresholdsRaw, ok := cfg.Config["thresholds"].([]interface{}); ok {
@@ -37,6 +38,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 				}
 				if v, ok := tMap["value"].(float64); ok {
 					t.Value = v
+				}
+				if v, ok := tMap["recoveryThreshold"].(float64); ok {
+					t.RecoveryThreshold = &v
 				}
 				if v, ok := tMap["condition"].(string); ok {
 					t.Condition = v
@@ -80,8 +84,19 @@ func (svc *Service) Initialize() error {
 func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 
-	anyTriggered := false
-	for i, t := range svc.Thresholds {
+	logger.Error("metricsMonitor: received message", "metricName", msg.MetricName, "metricValue", msg.Metric)
+
+	lastStatus := svc.lastStatus[msg.MetricName]
+	if lastStatus == "" {
+		lastStatus = "ok"
+	}
+
+	currentStatus := "ok"
+	var triggeredThreshold *Threshold
+
+	// Find the "highest" status triggered.
+	// Order of severity: critical > warning > ok
+	for _, t := range svc.Thresholds {
 		if t.MetricName != "" && msg.MetricName != t.MetricName {
 			continue
 		}
@@ -90,43 +105,67 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		if t.Condition == "above" {
 			if msg.Metric > t.Value {
 				triggered = true
+			} else if t.RecoveryThreshold != nil && lastStatus != "ok" && msg.Metric > *t.RecoveryThreshold {
+				// We haven't recovered yet
+				triggered = true
 			}
 		} else if t.Condition == "below" {
 			if msg.Metric < t.Value {
 				triggered = true
+			} else if t.RecoveryThreshold != nil && lastStatus != "ok" && msg.Metric < *t.RecoveryThreshold {
+				// We haven't recovered yet
+				triggered = true
 			}
 		}
 
-		stateKey := fmt.Sprintf("%s_%d", msg.MetricName, i)
-		lastTriggered := svc.lastStatus[stateKey]
-
-		if triggered != lastTriggered {
-			svc.lastStatus[stateKey] = triggered
-
-			if triggered && !anyTriggered {
-				logger.Info("Threshold triggered", "metric", msg.MetricName, "value", msg.Metric, "condition", t.Condition, "threshold", t.Value)
-
-				messenger := svc.Deps.MustGetMessenger()
-				alertMsg := core.Message{
-					ChannelName: svc.Cfg.Pubs["alerts"].Name,
-					ServiceName: svc.Cfg.Name,
-					ServiceType: svc.Cfg.Type,
-					Text:        fmt.Sprintf("ALERT: %s (%.2f) is %s %.2f: %s", msg.MetricName, msg.Metric, t.Condition, t.Value, t.AlertText),
-					MetricName:  msg.MetricName,
-					Metric:      msg.Metric,
-					Status:      t.Status,
-					Data: map[string]interface{}{
-						"originalMessage": msg,
-						"threshold":       t,
-					},
-				}
-				if err := messenger.Send(alertMsg); err != nil {
-					return err
-				}
-			}
-		}
 		if triggered {
-			anyTriggered = true
+			if t.Status == "critical" {
+				currentStatus = "critical"
+				triggeredThreshold = &t
+				break // Highest found
+			} else if t.Status == "warning" && currentStatus != "critical" {
+				currentStatus = "warning"
+				triggeredThreshold = &t
+			}
+		}
+	}
+
+	if currentStatus != lastStatus {
+		svc.lastStatus[msg.MetricName] = currentStatus
+
+		// Only alert if we are NOT at "ok" initially, or if we are recovering to "ok"
+		// Wait, if it's the very first message and it's OK, we don't alert.
+		// If it's the very first message and it's Critical, we alert.
+		// If it was Critical and now it's OK, we alert (recovery).
+		// If it was Warning and now it's Critical, we alert.
+
+		// Should we alert on first "ok"? Probably not, only on changes.
+		// But NewService initializes lastStatus as empty, so first "ok" will match lastStatus="ok".
+
+		logger.Info("Status changed", "metric", msg.MetricName, "old", lastStatus, "new", currentStatus)
+
+		messenger := svc.Deps.MustGetMessenger()
+		alertMsg := core.Message{
+			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			MetricName:  msg.MetricName,
+			Metric:      msg.Metric,
+			Status:      currentStatus,
+		}
+
+		if currentStatus == "ok" {
+			alertMsg.Text = fmt.Sprintf("RECOVERY: %s", msg.MetricName)
+		} else if triggeredThreshold != nil {
+			alertMsg.Text = fmt.Sprintf("ALERT: %s: %0.2f", triggeredThreshold.AlertText, msg.Metric)
+			alertMsg.Data = map[string]interface{}{
+				"originalMessage": msg,
+				"threshold":       *triggeredThreshold,
+			}
+		}
+
+		if err := messenger.Send(alertMsg); err != nil {
+			return err
 		}
 	}
 
