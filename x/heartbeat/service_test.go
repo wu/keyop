@@ -2,7 +2,6 @@ package heartbeat
 
 import (
 	"encoding/json"
-	"fmt"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -78,7 +77,6 @@ func TestHeartbeatMetricName(t *testing.T) {
 		assert.Len(t, messenger.messages, 3)
 		foundMetric := false
 		for _, msg := range messenger.messages {
-			fmt.Printf("Sent message to channel %s with metric name %s\n", msg.ChannelName, msg.MetricName)
 			if msg.ChannelName == "metrics-topic" {
 				assert.Equal(t, "hb-service", msg.MetricName)
 				foundMetric = true

@@ -1,15 +1,12 @@
-package speak
+package notify
 
 import (
+	"fmt"
 	"keyop/core"
 	"keyop/util"
 )
 
-// At this time, this service only works on MacOS, as it relies on the 'say' command to speak text.
-//
-// NOTE: To use a different siri voice, choose the voice in System Preferences > Accessibility.
-//       The exact location varies by MacOS version.  Try to search in Preferences for 'voice',
-//       update the preference for Spoken Content.
+// At this time, this service only works on MacOS, as it relies on the 'osascript' command to display notifications.
 
 type Service struct {
 	Deps core.Dependencies
@@ -39,12 +36,16 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return nil
 	}
 
-	logger.Info("Speaking text", "text", msg.Text)
+	logger.Info("Sending notification", "text", msg.Text)
+	// osascript -e 'display notification "message" with title "KeyOp"'
+	title := fmt.Sprintf(":keyop: %s - %s", svc.Cfg.Type, svc.Cfg.Name)
+	script := fmt.Sprintf("display notification %q with title %q", msg.Text, title)
+	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
-	cmd := osProvider.Command("say", msg.Text)
+	cmd := osProvider.Command("osascript", "-e", script)
 	err := cmd.Run()
 	if err != nil {
-		logger.Error("Failed to execute say command", "error", err)
+		logger.Error("Failed to execute osascript command", "error", err)
 		return err
 	}
 
