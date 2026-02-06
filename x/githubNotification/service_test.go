@@ -1,4 +1,4 @@
-package github
+package githubNotification
 
 import (
 	"encoding/json"
@@ -123,8 +123,8 @@ func TestService_Check(t *testing.T) {
 	defer ts.Close()
 
 	cfg := core.ServiceConfig{
-		Name: "github-test",
-		Type: "github",
+		Name: "githubNotification-test",
+		Type: "githubNotification",
 		Pubs: map[string]core.ChannelInfo{
 			"alerts": {Name: "alerts-channel"},
 		},
@@ -152,8 +152,8 @@ func TestService_Persistence(t *testing.T) {
 	stateStore := deps.MustGetStateStore()
 
 	cfg := core.ServiceConfig{
-		Name: "github-persistence-test",
-		Type: "github",
+		Name: "githubNotification-persistence-test",
+		Type: "githubNotification",
 		Pubs: map[string]core.ChannelInfo{
 			"alerts": {Name: "alerts-channel"},
 		},
