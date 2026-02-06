@@ -87,28 +87,31 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	value := fmt.Sprintf("%2.2f", msg.Metric)
 
-	unixTime := time.Now().Unix()
-	logger.Info("Sending to Graphite:",
-		"time", time.Unix(unixTime, 0).Format("2006-01-02 15:04:05"),
-		"service", msg.ServiceName,
-		"plugin", msg.ServiceType,
-		"value", value,
-	)
 	metricName := msg.MetricName
 	if metricName == "" {
 		metricName = msg.ServiceName
 	}
 
+	unixTime := time.Now().Unix()
+	logger.Info("Sending to Graphite:",
+		"time", time.Unix(unixTime, 0).Format("2006-01-02 15:04:05"),
+		"service", msg.ServiceName,
+		"plugin", msg.ServiceType,
+		"metric", metricName,
+		"value", value,
+	)
+
 	metric := graphite.NewMetric(metricName, fmt.Sprintf("%v", value), unixTime)
 
 	if svc.Graphite == nil {
-		logger.Warn("Graphite connection is nil, attempting to connect to Graphite", "host", svc.Host, "port", svc.Port)
+		logger.Info("Graphite connection is nil, attempting to connect to Graphite", "host", svc.Host, "port", svc.Port)
 		var err error
 		svc.Graphite, err = graphite.NewGraphite(svc.Host, svc.Port)
 		if err != nil {
 			logger.Error("ERROR: failed to connect to Graphite", "err", err.Error())
 			return err
 		}
+		logger.Info("Graphite connection established", "host", svc.Host, "port", svc.Port)
 	}
 
 	err := svc.Graphite.SendMetric(metric)
