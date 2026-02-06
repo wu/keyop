@@ -10,6 +10,11 @@ type Service interface {
 	Initialize() error
 }
 
+type StateStore interface {
+	Save(key string, value interface{}) error
+	Load(key string, value interface{}) error
+}
+
 type ServiceConfig struct {
 	Name   string
 	Freq   time.Duration

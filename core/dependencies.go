@@ -8,8 +8,20 @@ type Dependencies struct {
 	logger    Logger
 	os        OsProviderApi
 	messenger MessengerApi
+	state     StateStore
 	context   context.Context
 	cancel    context.CancelFunc
+}
+
+func (d *Dependencies) SetStateStore(state StateStore) {
+	d.state = state
+}
+
+func (d *Dependencies) MustGetStateStore() StateStore {
+	if d.state == nil {
+		panic("ERROR: State store is not initialized")
+	}
+	return d.state
 }
 
 func (d *Dependencies) SetLogger(logger Logger) {

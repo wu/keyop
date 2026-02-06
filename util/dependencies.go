@@ -32,6 +32,8 @@ func InitializeDependencies() core.Dependencies {
 
 	deps.SetOsProvider(core.OsProvider{})
 
+	deps.SetStateStore(core.NewFileStateStore("data", deps.MustGetOsProvider()))
+
 	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
 
 	return deps
