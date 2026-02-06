@@ -23,6 +23,7 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (m *mockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
 	return nil
 }
@@ -36,6 +37,7 @@ func TestProcessService(t *testing.T) {
 	deps.SetMessenger(messenger)
 
 	pidFile := "test.pid"
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.Remove(pidFile)
 
 	cfg := core.ServiceConfig{
@@ -83,6 +85,7 @@ func TestProcessService(t *testing.T) {
 		err := svc.cmd.Process.Kill()
 		assert.NoError(t, err)
 		// Wait for it to be actually gone (on some systems it might take a moment to be reflected in Signal(0))
+		//goland:noinspection GoUnhandledErrorResult
 		svc.cmd.Process.Wait()
 
 		messenger.messages = nil
@@ -100,6 +103,7 @@ func TestProcessService(t *testing.T) {
 
 	// Cleanup
 	if svc.cmd != nil && svc.cmd.Process != nil {
+		//goland:noinspection GoUnhandledErrorResult
 		svc.cmd.Process.Kill()
 	}
 }

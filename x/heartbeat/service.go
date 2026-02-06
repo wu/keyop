@@ -65,12 +65,15 @@ func (svc Service) Check() error {
 	if !restartNotified {
 		// send an alert on service startup
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
-		messenger.Send(core.Message{
+		err := messenger.Send(core.Message{
 			ChannelName: svc.Cfg.Pubs["alerts"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("%s restarted", hostname),
 		})
+		if err != nil {
+			logger.Error("Failed to send restart alert", "error", err)
+		}
 		restartNotified = true
 	}
 

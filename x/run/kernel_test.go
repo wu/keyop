@@ -135,6 +135,7 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (m *mockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
 	return nil
 }

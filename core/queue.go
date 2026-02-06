@@ -66,6 +66,7 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 	if err != nil {
 		return err
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer f.Close()
 
 	if _, err := f.WriteString(entry + "\n"); err != nil {
@@ -179,6 +180,7 @@ func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 		}
 		return state, err
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer f.Close()
 
 	if err := json.NewDecoder(f).Decode(&state); err != nil {
@@ -197,6 +199,7 @@ func (pq *PersistentQueue) saveState(readerName string, state readerState) error
 	if err != nil {
 		return err
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer f.Close()
 
 	return json.NewEncoder(f).Encode(state)
@@ -225,6 +228,7 @@ func (pq *PersistentQueue) readEntry(fileName string, offset int64) (string, int
 	if err != nil {
 		return "", offset, err
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer f.Close()
 
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {

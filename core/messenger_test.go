@@ -398,6 +398,7 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	fl := &FakeLogger{}
@@ -428,6 +429,7 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer os.RemoveAll(tmpDir)
 
 	fl := &FakeLogger{}

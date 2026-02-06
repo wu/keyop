@@ -20,6 +20,7 @@ func testDeps(t *testing.T) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "graphite_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
+		//goland:noinspection GoUnhandledErrorResult
 		os.RemoveAll(tmpDir)
 	})
 
@@ -139,6 +140,7 @@ func TestService_MessageHandler(t *testing.T) {
 	// Start a local TCP server to mock Graphite
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer ln.Close()
 
 	addr := ln.Addr().(*net.TCPAddr)
@@ -151,6 +153,7 @@ func TestService_MessageHandler(t *testing.T) {
 		if err != nil {
 			return
 		}
+		//goland:noinspection GoUnhandledErrorResult
 		defer conn.Close()
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -217,6 +220,7 @@ func TestService_MessageHandler_ConnectError(t *testing.T) {
 
 	err := s.messageHandler(msg)
 	assert.Error(t, err)
+	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "connection refused")
 }
 
@@ -224,6 +228,7 @@ func TestService_MessageHandler_SendError(t *testing.T) {
 	// Start a local TCP server that closes the connection immediately
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
 	defer ln.Close()
 
 	addr := ln.Addr().(*net.TCPAddr)
@@ -237,6 +242,7 @@ func TestService_MessageHandler_SendError(t *testing.T) {
 				return
 			}
 			// Close the connection immediately to cause a send error
+			//goland:noinspection GoUnhandledErrorResult
 			conn.Close()
 		}
 	}()

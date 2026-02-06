@@ -26,6 +26,7 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		//goland:noinspection GoUnhandledErrorResult
 		os.RemoveAll(tmpDir)
 	})
 
@@ -130,6 +131,7 @@ func TestService_Initialize(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+//goland:noinspection GoUnhandledErrorResult
 func TestService_MessageHandler_Success(t *testing.T) {
 	deps := testDeps(t)
 
@@ -228,6 +230,7 @@ func TestService_MessageHandler_MarshalError(t *testing.T) {
 	}
 	err := svc.messageHandler(testMsg)
 	assert.Error(t, err)
+	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "json: unsupported value")
 }
 
@@ -252,9 +255,11 @@ func TestService_MessageHandler_CreateRequestError(t *testing.T) {
 
 	err := svc.messageHandler(testMsg)
 	assert.Error(t, err)
+	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "invalid control character in URL")
 }
 
+//goland:noinspection GoUnhandledErrorResult
 func TestService_MessageHandler_Timeout(t *testing.T) {
 	deps := testDeps(t)
 
@@ -292,6 +297,7 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 
 	err := svc.messageHandler(testMsg)
 	assert.Error(t, err)
+	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
