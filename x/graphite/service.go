@@ -72,9 +72,8 @@ func (svc *Service) ValidateConfig() []error {
 }
 
 func (svc *Service) Initialize() error {
-
 	messenger := svc.Deps.MustGetMessenger()
-	return messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["graphite"].Name, svc.messageHandler)
+	return messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["graphite"].Name, svc.Cfg.Subs["graphite"].MaxAge, svc.messageHandler)
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {

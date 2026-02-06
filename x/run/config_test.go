@@ -155,6 +155,32 @@ func Test_loadServices_subs_loaded(t *testing.T) {
 	}
 }
 
+func Test_loadServices_maxAge_loaded(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "- name: foo\n" +
+		"  x: heartbeat\n" +
+		"  subs:\n" +
+		"    events:\n" +
+		"      name: heartbeat\n" +
+		"      max_age: 1h\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "heartbeat", svcs[0].Subs["events"].Name)
+		assert.Equal(t, 1*time.Hour, svcs[0].Subs["events"].MaxAge)
+	}
+}
+
 func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)

@@ -27,4 +27,5 @@ type ServiceConfig struct {
 type ChannelInfo struct {
 	Name        string
 	Description string
+	MaxAge      time.Duration
 }

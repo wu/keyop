@@ -26,7 +26,7 @@ type Message struct {
 
 type MessengerApi interface {
 	Send(msg Message) error
-	Subscribe(sourceName string, channelName string, messageHandler func(Message) error) error
+	Subscribe(sourceName string, channelName string, maxAge time.Duration, messageHandler func(Message) error) error
 }
 
 func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
@@ -119,7 +119,7 @@ func (m *Messenger) Send(msg Message) error {
 }
 
 //goland:noinspection GoVetCopyLock
-func (m *Messenger) Subscribe(source string, channelName string, messageHandler func(Message) error) error {
+func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Duration, messageHandler func(Message) error) error {
 
 	err := m.initializePersistentQueue(channelName)
 	if err != nil {
@@ -130,7 +130,7 @@ func (m *Messenger) Subscribe(source string, channelName string, messageHandler 
 	queue := m.queues[channelName]
 	m.mutex.RUnlock()
 
-	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source)
+	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source, "maxAge", maxAge)
 
 	go func() {
 		const (
@@ -150,6 +150,14 @@ func (m *Messenger) Subscribe(source string, channelName string, messageHandler 
 			var msg Message
 			if err := json.Unmarshal([]byte(msgStr), &msg); err != nil {
 				m.logger.Error("Failed to unmarshal dequeued message", "error", err, "message", msgStr)
+				continue
+			}
+
+			if maxAge > 0 && !msg.Timestamp.IsZero() && time.Since(msg.Timestamp) > maxAge {
+				m.logger.Debug("Skipping old message", "channel", channelName, "source", source, "timestamp", msg.Timestamp, "maxAge", maxAge)
+				if err := queue.Ack(source); err != nil {
+					m.logger.Error("Failed to ack skipped message", "error", err, "channel", channelName)
+				}
 				continue
 			}
 

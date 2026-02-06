@@ -23,6 +23,7 @@ type serviceConfigYaml struct {
 type eventChannelYaml struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+	MaxAge      string `yaml:"max_age"`
 }
 
 func configDirPath() string {
@@ -80,17 +81,35 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 		pubs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Pubs {
+			var maxAge time.Duration
+			if value.MaxAge != "" {
+				var err error
+				maxAge, err = time.ParseDuration(value.MaxAge)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing max_age for pub %s: %w", key, err)
+				}
+			}
 			pubs[key] = core.ChannelInfo{
 				Name:        value.Name,
 				Description: value.Description,
+				MaxAge:      maxAge,
 			}
 		}
 
 		subs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Subs {
+			var maxAge time.Duration
+			if value.MaxAge != "" {
+				var err error
+				maxAge, err = time.ParseDuration(value.MaxAge)
+				if err != nil {
+					return nil, fmt.Errorf("error parsing max_age for sub %s: %w", key, err)
+				}
+			}
 			subs[key] = core.ChannelInfo{
 				Name:        value.Name,
 				Description: value.Description,
+				MaxAge:      maxAge,
 			}
 		}
 
