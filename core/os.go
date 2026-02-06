@@ -3,6 +3,7 @@ package core
 import (
 	"io"
 	"os"
+	"os/exec"
 )
 
 // OsProviderApi is a minimal interface to retrieve the current hostname.
@@ -14,6 +15,13 @@ type OsProviderApi interface {
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	Stat(name string) (os.FileInfo, error)
 	Remove(name string) error
+	Command(name string, arg ...string) CommandApi
+}
+
+type CommandApi interface {
+	Run() error
+	CombinedOutput() ([]byte, error)
+	Output() ([]byte, error)
 }
 
 type FileApi interface {
@@ -63,6 +71,9 @@ func (OsProvider) Stat(name string) (os.FileInfo, error) {
 func (OsProvider) Remove(name string) error {
 	return os.Remove(name)
 }
+func (OsProvider) Command(name string, arg ...string) CommandApi {
+	return exec.Command(name, arg...)
+}
 
 // FakeOsProvider is provided for testing
 type FakeOsProvider struct {
@@ -74,6 +85,7 @@ type FakeOsProvider struct {
 	ReadDirFunc  func(dirname string) ([]os.DirEntry, error)
 	StatFunc     func(name string) (os.FileInfo, error)
 	RemoveFunc   func(name string) error
+	CommandFunc  func(name string, arg ...string) CommandApi
 
 	File FileApi
 }
@@ -112,4 +124,35 @@ func (f FakeOsProvider) Remove(name string) error {
 		return f.RemoveFunc(name)
 	}
 	return nil
+}
+func (f FakeOsProvider) Command(name string, arg ...string) CommandApi {
+	if f.CommandFunc != nil {
+		return f.CommandFunc(name, arg...)
+	}
+	return &FakeCommand{}
+}
+
+type FakeCommand struct {
+	RunFunc            func() error
+	CombinedOutputFunc func() ([]byte, error)
+	OutputFunc         func() ([]byte, error)
+}
+
+func (f *FakeCommand) Run() error {
+	if f.RunFunc != nil {
+		return f.RunFunc()
+	}
+	return nil
+}
+func (f *FakeCommand) CombinedOutput() ([]byte, error) {
+	if f.CombinedOutputFunc != nil {
+		return f.CombinedOutputFunc()
+	}
+	return nil, nil
+}
+func (f *FakeCommand) Output() ([]byte, error) {
+	if f.OutputFunc != nil {
+		return f.OutputFunc()
+	}
+	return nil, nil
 }
