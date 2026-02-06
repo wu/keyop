@@ -18,6 +18,7 @@ type Message struct {
 	Text        string      `json:"text,omitempty"`
 	Metric      float64     `json:"metric,omitempty"`
 	MetricName  string      `json:"metricName,omitempty"`
+	Status      string      `json:"status,omitempty"`
 	State       string      `json:"state,omitempty"`
 	Data        interface{} `json:"data,omitempty"`
 	Route       []string    `json:"route,omitempty"`
