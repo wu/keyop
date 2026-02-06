@@ -7,6 +7,7 @@ import (
 	"keyop/x/httpPost"
 	"keyop/x/httpPostServer"
 	"keyop/x/process"
+	"keyop/x/speak"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
 )
@@ -26,6 +27,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"process": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return process.NewService(deps, cfg)
+	},
+	"speak": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return speak.NewService(deps, cfg)
 	},
 
 	"temp": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service { return temp.NewService(deps, cfg) },
