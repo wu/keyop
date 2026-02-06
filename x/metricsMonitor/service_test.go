@@ -85,6 +85,14 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.Equal(t, "alerts-chan", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 		assert.Contains(t, messenger.SentMessages[0].Text, "CPU load is too high")
+
+		// Transition back to OK
+		msg.Metric = 0.5
+		err = svc.messageHandler(msg)
+		assert.NoError(t, err)
+		require.Len(t, messenger.SentMessages, 2)
+		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
+		assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERED")
 	})
 
 	t.Run("trigger below threshold", func(t *testing.T) {
@@ -131,12 +139,14 @@ func TestService_MessageHandler(t *testing.T) {
 						"metricName": "cpu_load",
 						"value":      0.5,
 						"condition":  "above",
+						"status":     "warning",
 						"alertText":  "First threshold",
 					},
 					map[string]interface{}{
 						"metricName": "cpu_load",
 						"value":      0.8,
 						"condition":  "above",
+						"status":     "critical",
 						"alertText":  "Second threshold",
 					},
 				},
@@ -156,7 +166,57 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Contains(t, messenger.SentMessages[0].Text, "First threshold")
+		// critical should take precedence
+		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+	})
+
+	t.Run("recovery threshold", func(t *testing.T) {
+		recoveryCfg := core.ServiceConfig{
+			Name: "monitor",
+			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-chan"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName":        "temp",
+						"value":             40.0,
+						"recoveryThreshold": 39.0,
+						"condition":         "above",
+						"status":            "critical",
+						"alertText":         "Too hot",
+					},
+				},
+			},
+		}
+
+		messenger := &MockMessenger{}
+		deps := testDeps(t, messenger)
+		svc := NewService(deps, recoveryCfg).(*Service)
+
+		// 1. Above threshold (40.0) -> ALERT
+		msg := core.Message{MetricName: "temp", Metric: 41.0}
+		err := svc.messageHandler(msg)
+		assert.NoError(t, err)
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+
+		// 2. Below threshold but above recovery threshold (39.5) -> NO CHANGE (STAY ALERT)
+		msg.Metric = 39.5
+		err = svc.messageHandler(msg)
+		assert.NoError(t, err)
+		assert.Len(t, messenger.SentMessages, 1) // Still 1
+
+		// 3. Below recovery threshold (38.5) -> RECOVERED
+		msg.Metric = 38.5
+		err = svc.messageHandler(msg)
+		assert.NoError(t, err)
+		require.Len(t, messenger.SentMessages, 2)
+		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
+
+		// 4. Back to 39.5 (above recovery, below threshold) -> NO CHANGE (STAY OK)
+		msg.Metric = 39.5
+		err = svc.messageHandler(msg)
+		assert.NoError(t, err)
+		assert.Len(t, messenger.SentMessages, 2) // Still 2
 	})
 
 	t.Run("match all metrics (empty MetricName)", func(t *testing.T) {
@@ -169,6 +229,7 @@ func TestService_MessageHandler(t *testing.T) {
 						"metricName": "",
 						"value":      100.0,
 						"condition":  "above",
+						"status":     "critical",
 						"alertText":  "Any metric above 100",
 					},
 				},
@@ -211,21 +272,18 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 1)
 
-		// Change status back to normal (below threshold) - should not send notification from this threshold
-		// but if we had a "normal" status we might want to send it.
-		// The issue says "Only send a notification when the status changes".
-		// Currently, it only sends if `triggered` is true.
-
+		// Change status back to ok - should send notification
 		msg.Metric = 0.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 1) // Still 1
+		assert.Len(t, messenger.SentMessages, 2)
+		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
 
-		// Trigger again - should send notification because it changed from not-triggered to triggered
+		// Trigger again - should send notification because it changed from ok to critical
 		msg.Metric = 0.95
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 2)
+		assert.Len(t, messenger.SentMessages, 3)
 	})
 }
 
