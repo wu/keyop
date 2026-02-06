@@ -280,7 +280,7 @@ func TestService_Check(t *testing.T) {
 
 	receivedMessage := make(chan string, 1)
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe("test-subscriber", "alerts-ch", func(msg core.Message) error {
+	messenger.Subscribe("test-subscriber", "alerts-ch", 0, func(msg core.Message) error {
 		receivedMessage <- msg.Text
 		return nil
 	})

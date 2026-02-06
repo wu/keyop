@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -47,7 +48,7 @@ func (m *mockMessenger) Send(msg core.Message) error {
 }
 
 //goland:noinspection GoUnusedParameter
-func (m *mockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
+func (m *mockMessenger) Subscribe(sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
 	return nil
 }
 

@@ -93,9 +93,13 @@ func (svc Service) Initialize() error {
 
 	var errs []error
 
+	logger := svc.Deps.MustGetLogger()
+
+	logger.Error("httpPost: initializing service", "conf", svc.Cfg)
+
 	for name, sub := range svc.Cfg.Subs {
-		svc.Deps.MustGetLogger().Info("httpPost: initializing subscription", "name", name, "topic", sub.Name)
-		err := messenger.Subscribe(svc.Cfg.Name, sub.Name, svc.messageHandler)
+		logger.Error("httpPost: initializing subscription", "name", name, "topic", sub.Name, "maxAge", sub.MaxAge)
+		err := messenger.Subscribe(svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -115,7 +119,7 @@ func (svc Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 
 	// process incoming message
-	logger.Info("httpPost: forwarding message", "message", msg)
+	logger.Info("httpPost: forwarding message", "channel", msg.ChannelName, "message", msg)
 
 	// send message to HTTP endpoint
 	url := fmt.Sprintf("http://%s:%d", svc.Hostname, svc.Port)

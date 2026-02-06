@@ -95,7 +95,7 @@ func TestService_Check(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	var capturedMessages []core.Message
-	err := messenger.Subscribe("test", "alerts-channel", func(msg core.Message) error {
+	err := messenger.Subscribe("test", "alerts-channel", 0, func(msg core.Message) error {
 		capturedMessages = append(capturedMessages, msg)
 		return nil
 	})

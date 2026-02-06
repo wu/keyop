@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func (m *MockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (m *MockMessenger) Subscribe(sourceName string, channelName string, messageHandler func(core.Message) error) error {
+func (m *MockMessenger) Subscribe(sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
 	return nil
 }
 
