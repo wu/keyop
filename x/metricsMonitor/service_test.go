@@ -92,7 +92,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 		require.Len(t, messenger.SentMessages, 2)
 		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
-		assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERED")
+		assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERY")
 	})
 
 	t.Run("trigger below threshold", func(t *testing.T) {
@@ -285,6 +285,119 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 3)
 	})
+}
+
+func TestService_StateTransitions(t *testing.T) {
+	thresholds := []interface{}{
+		map[string]interface{}{
+			"metricName":        "test_metric",
+			"value":             70.0,
+			"recoveryThreshold": 69.0,
+			"condition":         "above",
+			"status":            "warning",
+			"alertText":         "Warning level reached",
+		},
+		map[string]interface{}{
+			"metricName":        "test_metric",
+			"value":             90.0,
+			"recoveryThreshold": 89.0,
+			"condition":         "above",
+			"status":            "critical",
+			"alertText":         "Critical level reached",
+		},
+	}
+
+	cfg := core.ServiceConfig{
+		Name: "monitor",
+		Type: "monitor-type",
+		Subs: map[string]core.ChannelInfo{
+			"metrics": {Name: "metrics-chan"},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"alerts": {Name: "alerts-chan"},
+		},
+		Config: map[string]interface{}{
+			"thresholds": thresholds,
+		},
+	}
+
+	messenger := &MockMessenger{}
+	deps := testDeps(t, messenger)
+	svc := NewService(deps, cfg).(*Service)
+
+	// 1. Start in OK state
+	msg := core.Message{
+		MetricName: "test_metric",
+		Metric:     50.0,
+	}
+	err := svc.messageHandler(msg)
+	assert.NoError(t, err)
+	assert.Len(t, messenger.SentMessages, 0, "No alert should be sent for initial OK state")
+
+	// 2. Move to Warning state
+	msg.Metric = 75.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 1)
+	assert.Equal(t, "warning", messenger.SentMessages[0].Status)
+	assert.Contains(t, messenger.SentMessages[0].Text, "Warning level reached")
+
+	// 3. Recover from Warning
+	msg.Metric = 50.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 2)
+	assert.Equal(t, "ok", messenger.SentMessages[1].Status)
+	assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERY")
+
+	// 4. Move to Critical state
+	msg.Metric = 95.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 3)
+	assert.Equal(t, "critical", messenger.SentMessages[2].Status)
+	assert.Contains(t, messenger.SentMessages[2].Text, "Critical level reached")
+
+	// 5. Recover from Critical
+	msg.Metric = 50.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 4)
+	assert.Equal(t, "ok", messenger.SentMessages[3].Status)
+	assert.Contains(t, messenger.SentMessages[3].Text, "RECOVERY")
+
+	// 6. Move to Warning state
+	msg.Metric = 75.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 5)
+	assert.Equal(t, "warning", messenger.SentMessages[4].Status)
+	assert.Contains(t, messenger.SentMessages[4].Text, "Warning level reached")
+
+	// 7. Move back to Critical state
+	msg.Metric = 95.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 6)
+	assert.Equal(t, "critical", messenger.SentMessages[5].Status)
+	assert.Contains(t, messenger.SentMessages[5].Text, "Critical level reached")
+
+	// 8. Move back to Warning state
+	msg.Metric = 75.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 7)
+	assert.Equal(t, "warning", messenger.SentMessages[6].Status)
+	assert.Contains(t, messenger.SentMessages[6].Text, "Warning level reached")
+
+	// 9. Recover from Warning
+	msg.Metric = 50.0
+	err = svc.messageHandler(msg)
+	assert.NoError(t, err)
+	require.Len(t, messenger.SentMessages, 8)
+	assert.Equal(t, "ok", messenger.SentMessages[7].Status)
+	assert.Contains(t, messenger.SentMessages[7].Text, "RECOVERY")
+
 }
 
 func TestService_ValidateConfig(t *testing.T) {
