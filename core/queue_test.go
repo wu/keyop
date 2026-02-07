@@ -352,6 +352,65 @@ func TestPersistentQueue_MultipleQueues(t *testing.T) {
 	assert.True(t, foundQ2, "q2 file not found")
 }
 
+func TestPersistentQueue_MissingFileInState(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "queue_test_missing")
+	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
+	defer os.RemoveAll(tmpDir)
+
+	osProvider := OsProvider{}
+	logger := &FakeLogger{}
+
+	pq, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
+	require.NoError(t, err)
+
+	// 1. Enqueue an item
+	err = pq.Enqueue("item1")
+	require.NoError(t, err)
+
+	// 2. Dequeue it to establish state, but don't Ack it yet.
+	// Actually, Dequeue sets pq.pending.
+	item, err := pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item1", item)
+
+	// 3. Ack it to save state
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
+
+	// 4. Enqueue another item
+	// We want this to go into the same file so we can delete it and test the "file missing" case.
+	err = pq.Enqueue("item2")
+	require.NoError(t, err)
+
+	// Now state points to after item1 (and include item2 in that file).
+	files, err := filepath.Glob(filepath.Join(tmpDir, "test_queue_queue_*.log"))
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+
+	// 5. Dequeue reader1 to set pending to item2, then Ack it to save state pointing to end of file.
+	item, err = pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item2", item)
+	err = pq.Ack("reader1")
+	require.NoError(t, err)
+
+	// Now we simulate the file being deleted.
+	err = os.Remove(files[0])
+	require.NoError(t, err)
+
+	// 6. Enqueue item3. We'll manually create a file with a NEWER date to ensure it's a different file.
+	newDate := time.Now().Add(24 * time.Hour).Format("20060102")
+	newFile := filepath.Join(tmpDir, "test_queue_queue_"+newDate+".log")
+	err = os.WriteFile(newFile, []byte("item3\n"), 0644)
+	require.NoError(t, err)
+
+	// 7. Dequeue should handle the missing file error, log it, and find item3.
+	item, err = pq.Dequeue("reader1")
+	require.NoError(t, err)
+	assert.Equal(t, "item3", item)
+}
+
 func TestPersistentQueue_Errors(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_errors")
 	require.NoError(t, err)

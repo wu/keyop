@@ -81,8 +81,6 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
-	pq.logger.Debug("Dequeue called", "reader", readerName)
-
 	for {
 		state, err := pq.loadState(readerName)
 		if err != nil {
@@ -104,7 +102,6 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 		if state.FileName != "" {
 			entry, nextOffset, err := pq.readEntry(state.FileName, state.Offset)
 			if err == nil {
-				pq.logger.Debug("Dequeue: read entry successfully", "reader", readerName, "entry", entry)
 				pq.pending[readerName] = readerState{
 					FileName: state.FileName,
 					Offset:   nextOffset,
@@ -140,6 +137,14 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 						continue // Try reading from the next file
 					}
 				}
+			} else if os.IsNotExist(err) {
+				pq.logger.Error("Queue file not found", "file", state.FileName, "reader", readerName)
+				state.FileName = ""
+				state.Offset = 0
+				if err := pq.saveState(readerName, state); err != nil {
+					return "", err
+				}
+				continue // Try finding available files again
 			} else {
 				return "", err
 			}
