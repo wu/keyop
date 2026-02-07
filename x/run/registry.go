@@ -9,6 +9,7 @@ import (
 	"keyop/x/httpPostServer"
 	"keyop/x/metricsMonitor"
 	"keyop/x/notify"
+	"keyop/x/owntracks"
 	"keyop/x/process"
 	"keyop/x/slack"
 	"keyop/x/speak"
@@ -37,6 +38,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"notify": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return notify.NewService(deps, cfg)
+	},
+	"owntracks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return owntracks.NewService(deps, cfg)
 	},
 	"slack": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return slack.NewService(deps, cfg)
