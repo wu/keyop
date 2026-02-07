@@ -38,7 +38,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	logger.Info("Sending notification", "text", msg.Text)
 	// osascript -e 'display notification "message" with title "KeyOp"'
-	title := fmt.Sprintf(":keyop: %s - %s", msg.ServiceType, msg.ServiceName)
+	title := fmt.Sprintf(":keyop: %s - %s", msg.ServiceName, msg.ServiceType)
 	script := fmt.Sprintf("display notification %q with title %q", msg.Text, title)
 	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
