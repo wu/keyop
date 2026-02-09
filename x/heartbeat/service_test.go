@@ -1,7 +1,6 @@
 package heartbeat
 
 import (
-	"encoding/json"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -18,21 +17,6 @@ type logMsg struct {
 	Level     string `json:"level"`
 	Msg       string `json:"msg"`
 	Heartbeat Event  `json:"data"`
-}
-
-func parseLogMessages(logs string) ([]logMsg, error) {
-	var messages []logMsg
-	lines := strings.Split(strings.TrimSpace(logs), "\n")
-
-	for _, line := range lines {
-		var msg logMsg
-		if err := json.Unmarshal([]byte(line), &msg); err != nil {
-			return nil, err
-		}
-		messages = append(messages, msg)
-	}
-
-	return messages, nil
 }
 
 type mockMessenger struct {
