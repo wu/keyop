@@ -58,7 +58,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 	deps.SetLogger(logger)
 	deps.SetOsProvider(core.OsProvider{})
 
-	t.Run("no metricPrefix", func(t *testing.T) {
+	t.Run("no metricName", func(t *testing.T) {
 		messenger := &mockMessenger{}
 		deps.SetMessenger(messenger)
 		cfg := core.ServiceConfig{
@@ -88,7 +88,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 		}
 	})
 
-	t.Run("with metricPrefix", func(t *testing.T) {
+	t.Run("with metricName", func(t *testing.T) {
 		messenger := &mockMessenger{}
 		deps.SetMessenger(messenger)
 		cfg := core.ServiceConfig{
@@ -100,7 +100,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 				"errors":  {Name: "errors-topic"},
 			},
 			Config: map[string]interface{}{
-				"metricPrefix": "env.prod.",
+				"metricName": "custom.heartbeat.name",
 			},
 		}
 		svc := NewService(deps, cfg).(Service)
@@ -109,7 +109,7 @@ func TestHeartbeatMetricName(t *testing.T) {
 
 		assert.Len(t, messenger.messages, 2)
 		for _, msg := range messenger.messages {
-			assert.Equal(t, "env.prod.hb-service", msg.MetricName)
+			assert.Equal(t, "custom.heartbeat.name", msg.MetricName)
 		}
 	})
 }
