@@ -230,3 +230,27 @@ func Test_loadServiceConfigs_template_hostname(t *testing.T) {
 		assert.Equal(t, "myhost-service", svcs[0].Name)
 	}
 }
+
+func Test_loadServiceConfigs_template_userhome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "- name: home-service\n  x: heartbeat\n  config:\n    home: {{.HomeDir}}\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(core.FakeOsProvider{Host: "myhost.example.com"})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+
+	userHome, _ := os.UserHomeDir()
+
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, userHome, svcs[0].Config["home"])
+	}
+}

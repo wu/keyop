@@ -60,10 +60,19 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 		return nil, fmt.Errorf("error getting short hostname: %w", err)
 	}
 
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to a sensible default or just empty string if we can't get it
+		// In configDirPath it uses filepath.Join(".", ".keyop", "conf") if it fails.
+		userHome = ""
+	}
+
 	templateData := struct {
 		ShortHostname string
+		HomeDir       string
 	}{
 		ShortHostname: shortHostname,
+		HomeDir:       userHome,
 	}
 
 	var allServiceConfigsSource []serviceConfigYaml
