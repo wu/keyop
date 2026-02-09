@@ -66,4 +66,59 @@ func TestFileStateStore(t *testing.T) {
 		_, err = os.Stat(nestedDir)
 		assert.NoError(t, err)
 	})
+
+	t.Run("Save error - MkdirAll", func(t *testing.T) {
+		mockOs := FakeOsProvider{
+			MkdirAllFunc: func(path string, perm os.FileMode) error {
+				return os.ErrPermission
+			},
+		}
+		s := NewFileStateStore("/tmp", mockOs)
+		err := s.Save("test", "data")
+		assert.Error(t, err)
+		assert.Equal(t, os.ErrPermission, err)
+	})
+
+	t.Run("Save error - OpenFile", func(t *testing.T) {
+		mockOs := FakeOsProvider{
+			OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
+				return nil, os.ErrPermission
+			},
+		}
+		s := NewFileStateStore("/tmp", mockOs)
+		err := s.Save("test", "data")
+		assert.Error(t, err)
+		assert.Equal(t, os.ErrPermission, err)
+	})
+
+	t.Run("Save error - Marshal", func(t *testing.T) {
+		// Use a type that can't be marshaled to JSON (like a function)
+		err := store.Save("test_marshal", func() {})
+		assert.Error(t, err)
+	})
+
+	t.Run("Load error - OpenFile", func(t *testing.T) {
+		mockOs := FakeOsProvider{
+			OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
+				return nil, os.ErrPermission
+			},
+		}
+		s := NewFileStateStore("/tmp", mockOs)
+		var val string
+		err := s.Load("test", &val)
+		assert.Error(t, err)
+		assert.Equal(t, os.ErrPermission, err)
+	})
+
+	t.Run("Load error - Decode", func(t *testing.T) {
+		key := "malformed"
+		// Write malformed JSON manually
+		path := filepath.Join(tmpDir, "state_"+key+".json")
+		err := os.WriteFile(path, []byte("{invalid json}"), 0644)
+		require.NoError(t, err)
+
+		var val map[string]string
+		err = store.Load(key, &val)
+		assert.Error(t, err)
+	})
 }
