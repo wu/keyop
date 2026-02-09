@@ -99,7 +99,6 @@ func (m *Messenger) Send(msg Message) error {
 
 	// Populate required fields
 	if msg.Timestamp.IsZero() {
-		logger.Warn("Timestamp is zero, setting timestamp to now", "message", msg)
 		msg.Timestamp = time.Now()
 	}
 	if msg.Hostname == "" {
