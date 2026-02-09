@@ -70,11 +70,12 @@ type Messenger struct {
 
 //goland:noinspection GoVetCopyLock
 func (m *Messenger) Send(msg Message) error {
+	logger := m.logger
 	if msg.ChannelName == "" {
 		return fmt.Errorf("message must have a ChannelName")
 	}
 	channelName := msg.ChannelName
-	m.logger.Debug("Send message called", "channel", channelName, "message", msg)
+	logger.Debug("Send message called", "channel", channelName, "message", msg)
 
 	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
 
@@ -98,20 +99,21 @@ func (m *Messenger) Send(msg Message) error {
 
 	// Populate required fields
 	if msg.Timestamp.IsZero() {
+		logger.Warn("Timestamp is zero, setting timestamp to now", "message", msg)
 		msg.Timestamp = time.Now()
 	}
 	if msg.Hostname == "" {
 		msg.Hostname = m.hostname
 	}
 
-	m.logger.Info("SEND", "channel", channelName, "message", msg)
+	logger.Info("SEND", "channel", channelName, "message", msg)
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 	err = m.queues[channelName].Enqueue(string(msgBytes))
 	if err != nil {
-		m.logger.Error("Failed to enqueue message", "error", err)
+		logger.Error("Failed to enqueue message", "error", err)
 		return err
 	}
 
@@ -120,6 +122,7 @@ func (m *Messenger) Send(msg Message) error {
 
 //goland:noinspection GoVetCopyLock
 func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Duration, messageHandler func(Message) error) error {
+	logger := m.logger
 
 	err := m.initializePersistentQueue(channelName)
 	if err != nil {
@@ -130,7 +133,7 @@ func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Dur
 	queue := m.queues[channelName]
 	m.mutex.RUnlock()
 
-	m.logger.Info("Subscribing to channel", "channel", channelName, "source", source, "maxAge", maxAge)
+	logger.Info("Subscribing to channel", "channel", channelName, "source", source, "maxAge", maxAge)
 
 	go func() {
 		const (
@@ -142,21 +145,21 @@ func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Dur
 		for {
 			msgStr, err := queue.Dequeue(source)
 			if err != nil {
-				m.logger.Error("Failed to dequeue message", "error", err, "channel", channelName)
+				logger.Error("Failed to dequeue message", "error", err, "channel", channelName)
 				time.Sleep(1 * time.Second)
 				continue
 			}
 
 			var msg Message
 			if err := json.Unmarshal([]byte(msgStr), &msg); err != nil {
-				m.logger.Error("Failed to unmarshal dequeued message", "error", err, "message", msgStr)
+				logger.Error("Failed to unmarshal dequeued message", "error", err, "message", msgStr)
 				continue
 			}
 
 			if maxAge > 0 && !msg.Timestamp.IsZero() && time.Since(msg.Timestamp) > maxAge {
-				m.logger.Debug("Skipping old message", "channel", channelName, "source", source, "timestamp", msg.Timestamp, "maxAge", maxAge)
+				logger.Debug("Skipping old message", "channel", channelName, "source", source, "timestamp", msg.Timestamp, "maxAge", maxAge)
 				if err := queue.Ack(source); err != nil {
-					m.logger.Error("Failed to ack skipped message", "error", err, "channel", channelName)
+					logger.Error("Failed to ack skipped message", "error", err, "channel", channelName)
 				}
 				continue
 			}
@@ -164,7 +167,7 @@ func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Dur
 			for {
 				if err := messageHandler(msg); err != nil {
 					retryCount++
-					m.logger.Error("Message handler returned error, retrying", "error", err, "message", msg, "retryCount", retryCount)
+					logger.Error("Message handler returned error, retrying", "error", err, "message", msg, "retryCount", retryCount)
 
 					// Truncated exponential backoff with jitter
 					backoff := minBackoff * time.Duration(1<<uint(retryCount-1))
@@ -179,14 +182,14 @@ func (m *Messenger) Subscribe(source string, channelName string, maxAge time.Dur
 						sleepTime = maxBackoff
 					}
 
-					m.logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "source", source, "sleep", sleepTime)
+					logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "source", source, "sleep", sleepTime)
 					time.Sleep(sleepTime)
 					continue
 				}
 
 				retryCount = 0
 				if err := queue.Ack(source); err != nil {
-					m.logger.Error("Failed to ack message", "error", err, "channel", channelName)
+					logger.Error("Failed to ack message", "error", err, "channel", channelName)
 				}
 				break
 			}
