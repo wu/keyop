@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // OsProviderApi is a minimal interface to retrieve the current hostname.
@@ -14,6 +15,7 @@ type OsProviderApi interface {
 	MkdirAll(path string, perm os.FileMode) error
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	Stat(name string) (os.FileInfo, error)
+	Chtimes(name string, atime time.Time, mtime time.Time) error
 	Remove(name string) error
 	Command(name string, arg ...string) CommandApi
 }
@@ -68,6 +70,9 @@ func (OsProvider) ReadDir(dirname string) ([]os.DirEntry, error) {
 func (OsProvider) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
+func (OsProvider) Chtimes(name string, atime time.Time, mtime time.Time) error {
+	return os.Chtimes(name, atime, mtime)
+}
 func (OsProvider) Remove(name string) error {
 	return os.Remove(name)
 }
@@ -84,6 +89,7 @@ type FakeOsProvider struct {
 	MkdirAllFunc func(path string, perm os.FileMode) error
 	ReadDirFunc  func(dirname string) ([]os.DirEntry, error)
 	StatFunc     func(name string) (os.FileInfo, error)
+	ChtimesFunc  func(name string, atime time.Time, mtime time.Time) error
 	RemoveFunc   func(name string) error
 	CommandFunc  func(name string, arg ...string) CommandApi
 
@@ -118,6 +124,12 @@ func (f FakeOsProvider) Stat(name string) (os.FileInfo, error) {
 		return f.StatFunc(name)
 	}
 	return nil, os.ErrNotExist
+}
+func (f FakeOsProvider) Chtimes(name string, atime time.Time, mtime time.Time) error {
+	if f.ChtimesFunc != nil {
+		return f.ChtimesFunc(name, atime, mtime)
+	}
+	return nil
 }
 func (f FakeOsProvider) Remove(name string) error {
 	if f.RemoveFunc != nil {
