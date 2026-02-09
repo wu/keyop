@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -138,6 +139,13 @@ func TestFakeOsProvider_OpenFile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, mockFile, file)
 	})
+
+	t.Run("error if file not set", func(t *testing.T) {
+		f := FakeOsProvider{}
+		file, err := f.OpenFile("nonexistent", os.O_RDONLY, 0)
+		assert.ErrorIs(t, err, os.ErrNotExist)
+		assert.Nil(t, file)
+	})
 }
 
 func TestFakeOsProvider_ReadDir(t *testing.T) {
@@ -264,5 +272,103 @@ func TestFakeOsProvider_MkdirAll(t *testing.T) {
 		}
 		err := f.MkdirAll("testdir", 0)
 		assert.ErrorIs(t, err, testErr)
+	})
+}
+
+func TestOsProvider_Chtimes(t *testing.T) {
+	provider := OsProvider{}
+	tmpFile := t.TempDir() + "/testfile"
+	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
+
+	now := time.Now()
+	err := provider.Chtimes(tmpFile, now, now)
+	assert.NoError(t, err)
+}
+
+func TestOsProvider_Command(t *testing.T) {
+	provider := OsProvider{}
+	cmd := provider.Command("echo", "hello")
+	assert.NotNil(t, cmd)
+
+	out, err := cmd.Output()
+	assert.NoError(t, err)
+	assert.Contains(t, string(out), "hello")
+}
+
+func TestFakeOsProvider_Chtimes(t *testing.T) {
+	t.Run("default behavior", func(t *testing.T) {
+		f := FakeOsProvider{}
+		err := f.Chtimes("any", time.Now(), time.Now())
+		assert.NoError(t, err)
+	})
+
+	t.Run("custom behavior", func(t *testing.T) {
+		testErr := assert.AnError
+		f := FakeOsProvider{
+			ChtimesFunc: func(name string, atime time.Time, mtime time.Time) error {
+				assert.Equal(t, "testfile", name)
+				return testErr
+			},
+		}
+		err := f.Chtimes("testfile", time.Now(), time.Now())
+		assert.ErrorIs(t, err, testErr)
+	})
+}
+
+func TestFakeOsProvider_Command(t *testing.T) {
+	t.Run("default behavior", func(t *testing.T) {
+		f := FakeOsProvider{}
+		cmd := f.Command("any")
+		assert.NotNil(t, cmd)
+		assert.IsType(t, &FakeCommand{}, cmd)
+	})
+
+	t.Run("custom behavior", func(t *testing.T) {
+		f := FakeOsProvider{
+			CommandFunc: func(name string, arg ...string) CommandApi {
+				return &FakeCommand{
+					RunFunc: func() error {
+						return assert.AnError
+					},
+				}
+			},
+		}
+		cmd := f.Command("test")
+		err := cmd.Run()
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+}
+
+func TestFakeCommand(t *testing.T) {
+	t.Run("Run", func(t *testing.T) {
+		f := &FakeCommand{}
+		assert.NoError(t, f.Run())
+
+		f.RunFunc = func() error { return assert.AnError }
+		assert.ErrorIs(t, f.Run(), assert.AnError)
+	})
+
+	t.Run("CombinedOutput", func(t *testing.T) {
+		f := &FakeCommand{}
+		out, err := f.CombinedOutput()
+		assert.NoError(t, err)
+		assert.Nil(t, out)
+
+		f.CombinedOutputFunc = func() ([]byte, error) { return []byte("hello"), nil }
+		out, err = f.CombinedOutput()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("hello"), out)
+	})
+
+	t.Run("Output", func(t *testing.T) {
+		f := &FakeCommand{}
+		out, err := f.Output()
+		assert.NoError(t, err)
+		assert.Nil(t, out)
+
+		f.OutputFunc = func() ([]byte, error) { return []byte("world"), nil }
+		out, err = f.Output()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("world"), out)
 	})
 }
