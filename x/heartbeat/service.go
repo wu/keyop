@@ -48,10 +48,9 @@ func (svc Service) Check() error {
 
 	uptime := time.Since(startTime)
 
-	metricPrefix, _ := svc.Cfg.Config["metricPrefix"].(string)
-	metricName := svc.Cfg.Name
-	if metricPrefix != "" {
-		metricName = metricPrefix + svc.Cfg.Name
+	metricName, _ := svc.Cfg.Config["metricName"].(string)
+	if metricName == "" {
+		metricName = svc.Cfg.Name
 	}
 
 	now := time.Now()
