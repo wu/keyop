@@ -55,11 +55,7 @@ type OsProvider struct{}
 
 func (OsProvider) Hostname() (string, error) { return os.Hostname() }
 func (OsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, error) {
-	f, err := os.OpenFile(name, flag, perm)
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
+	return os.OpenFile(name, flag, perm)
 }
 func (OsProvider) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
