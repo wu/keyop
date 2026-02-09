@@ -1,6 +1,7 @@
 package graphite
 
 import (
+	"fmt"
 	"keyop/core"
 	"log/slog"
 	"net"
@@ -192,6 +193,69 @@ func TestService_MessageHandler(t *testing.T) {
 		expectedValue := "123.46"
 		assert.Contains(t, data, "test-service")
 		assert.Contains(t, data, expectedValue)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for graphite metric")
+	}
+}
+
+func TestService_MessageHandler_UsesMessageTimestamp(t *testing.T) {
+	// Start a local TCP server to mock Graphite
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	//goland:noinspection GoUnhandledErrorResult
+	defer ln.Close()
+
+	addr := ln.Addr().(*net.TCPAddr)
+	host := addr.IP.String()
+	port := addr.Port
+
+	received := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		//goland:noinspection GoUnhandledErrorResult
+		defer conn.Close()
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err == nil {
+			received <- string(buf[:n])
+		}
+	}()
+
+	deps := testDeps(t)
+	cfg := core.ServiceConfig{
+		Config: map[string]interface{}{
+			"hostname": host,
+			"port":     port,
+		},
+		Subs: map[string]core.ChannelInfo{
+			"graphite": {Name: "graphite-topic"},
+		},
+	}
+	s := NewService(deps, cfg).(*Service)
+	s.Host = host
+	s.Port = port
+
+	// Use a specific timestamp in the past
+	testTimestamp := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	msg := core.Message{
+		ServiceName: "timestamp-test",
+		Metric:      42.0,
+		Timestamp:   testTimestamp,
+	}
+
+	err = s.messageHandler(msg)
+	assert.NoError(t, err)
+
+	select {
+	case data := <-received:
+		// Graphite format: <metric_path> <metric_value> <metric_timestamp>\n
+		expectedTimestamp := fmt.Sprintf("%d", testTimestamp.Unix())
+		assert.Contains(t, data, "timestamp-test")
+		assert.Contains(t, data, "42.00")
+		assert.True(t, strings.HasSuffix(strings.TrimSpace(data), expectedTimestamp), "Metric should end with the correct timestamp, got: %s", data)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for graphite metric")
 	}
