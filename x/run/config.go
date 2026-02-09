@@ -3,9 +3,13 @@ package run
 import (
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"os"
 	"path/filepath"
+	"text/template"
 	"time"
+
+	"bytes"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,6 +55,17 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 		return nil, err
 	}
 
+	shortHostname, err := util.GetShortHostname(deps.MustGetOsProvider())
+	if err != nil {
+		return nil, fmt.Errorf("error getting short hostname: %w", err)
+	}
+
+	templateData := struct {
+		ShortHostname string
+	}{
+		ShortHostname: shortHostname,
+	}
+
 	var allServiceConfigsSource []serviceConfigYaml
 
 	for _, file := range files {
@@ -69,8 +84,19 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			return nil, err
 		}
 
+		// Process template
+		tmpl, err := template.New(file.Name()).Parse(string(b))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing template %s: %w", p, err)
+		}
+
+		var processed bytes.Buffer
+		if err := tmpl.Execute(&processed, templateData); err != nil {
+			return nil, fmt.Errorf("error executing template %s: %w", p, err)
+		}
+
 		var serviceConfigsSource []serviceConfigYaml
-		if err := yaml.Unmarshal(b, &serviceConfigsSource); err != nil {
+		if err := yaml.Unmarshal(processed.Bytes(), &serviceConfigsSource); err != nil {
 			return nil, fmt.Errorf("error unmarshaling %s: %w", p, err)
 		}
 		allServiceConfigsSource = append(allServiceConfigsSource, serviceConfigsSource...)
