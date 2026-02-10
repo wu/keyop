@@ -9,8 +9,9 @@ import (
 )
 
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps          core.Dependencies
+	Cfg           core.ServiceConfig
+	SkipNextCheck bool
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -37,11 +38,18 @@ func (svc *Service) ValidateConfig() []error {
 }
 
 func (svc *Service) Initialize() error {
+	// skip the first check of the service since it comes back slow on startup
+	svc.SkipNextCheck = true
 	return nil
 }
 
 func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
+	if svc.SkipNextCheck {
+		logger.Warn("Skipping this check of CPU")
+		svc.SkipNextCheck = false
+		return nil
+	}
 	messenger := svc.Deps.MustGetMessenger()
 	osProvider := svc.Deps.MustGetOsProvider()
 
@@ -60,6 +68,7 @@ func (svc *Service) Check() error {
 			ChannelName: svc.Cfg.Pubs["alerts"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Status:      "critical",
 			Text:        fmt.Sprintf("host %s is unreachable", host),
 		})
 		if alertErr != nil {
@@ -75,6 +84,7 @@ func (svc *Service) Check() error {
 			ChannelName: svc.Cfg.Pubs["events"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Status:      "ok",
 			Text:        fmt.Sprintf("Ping to %s was successful. Time: %s", host, pingTime),
 		})
 		if eventErr != nil {
@@ -94,6 +104,7 @@ func (svc *Service) Check() error {
 					ServiceType: svc.Cfg.Type,
 					MetricName:  metricName,
 					Metric:      floatTime,
+					Status:      "ok",
 					Text:        fmt.Sprintf("Ping time to %s: %s ms", host, pingTime),
 				})
 				if metricErr != nil {
