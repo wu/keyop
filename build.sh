@@ -2,8 +2,11 @@
 
 set -o nounset -o errexit -o pipefail -o errtrace
 
-echo "Building keyop for macos"
-go build -o output/keyop
+echo "Building keyop for macos arm"
+env GOOS=darwin GOARCH=arm64 go build -o output/keyop-darwin-arm64
+
+echo "Building keyop for macos intel"
+env GOOS=darwin GOARCH=amd64 go build -o output/keyop-darwin-amd64
 
 echo "Building keyop for linux amd64"
 env GOOS=linux GOARCH=amd64 go build -o output/keyop-linux-amd64
