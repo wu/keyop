@@ -11,6 +11,7 @@ import (
 	"keyop/x/metricsMonitor"
 	"keyop/x/notify"
 	"keyop/x/owntracks"
+	"keyop/x/pingMonitor"
 	"keyop/x/process"
 	"keyop/x/slack"
 	"keyop/x/speak"
@@ -39,6 +40,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"metricsMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return metricsMonitor.NewService(deps, cfg)
+	},
+	"pingMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return pingMonitor.NewService(deps, cfg)
 	},
 	"notify": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return notify.NewService(deps, cfg)
