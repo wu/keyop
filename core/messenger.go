@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -37,12 +39,17 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 		panic("osProvider not properly initialized")
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("Failed to get user home directory, using current directory as fallback", "error", err)
+		home = "."
+	}
 	m := &Messenger{
 		subscriptions: make(map[string][]func(Message) error),
 		queues:        make(map[string]*PersistentQueue),
 		logger:        logger,
 		osProvider:    osProvider,
-		dataDir:       "data",
+		dataDir:       path.Join(home, ".keyop", "data"),
 	}
 
 	if host, err := osProvider.Hostname(); err == nil {
