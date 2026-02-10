@@ -12,13 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type logMsg struct {
-	Time      string `json:"time"`
-	Level     string `json:"level"`
-	Msg       string `json:"msg"`
-	Heartbeat Event  `json:"data"`
-}
-
 type mockMessenger struct {
 	messages []core.Message
 	mu       sync.Mutex
