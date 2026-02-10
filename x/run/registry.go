@@ -2,6 +2,7 @@ package run
 
 import (
 	"keyop/core"
+	"keyop/x/cpuMonitor"
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
 	"keyop/x/heartbeat"
@@ -9,6 +10,7 @@ import (
 	"keyop/x/httpPostServer"
 	"keyop/x/kodi"
 	"keyop/x/logManager"
+	"keyop/x/memoryMonitor"
 	"keyop/x/metricsMonitor"
 	"keyop/x/notify"
 	"keyop/x/owntracks"
@@ -27,6 +29,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"githubNotification": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return githubNotification.NewService(deps, cfg)
 	},
+	"cpuMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return cpuMonitor.NewService(deps, cfg)
+	},
 	"heartbeat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return heartbeat.NewService(deps, cfg)
 	},
@@ -41,6 +46,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"logManager": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return logManager.NewService(deps, cfg)
+	},
+	"memoryMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return memoryMonitor.NewService(deps, cfg)
 	},
 	"metricsMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return metricsMonitor.NewService(deps, cfg)
