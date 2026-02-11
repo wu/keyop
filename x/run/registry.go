@@ -10,9 +10,10 @@ import (
 	"keyop/x/httpPostServer"
 	"keyop/x/kodi"
 	"keyop/x/logManager"
+	"keyop/x/macosMessages"
+	"keyop/x/macosNotification"
 	"keyop/x/memoryMonitor"
 	"keyop/x/metricsMonitor"
-	"keyop/x/notify"
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
 	"keyop/x/process"
@@ -57,8 +58,11 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"pingMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return pingMonitor.NewService(deps, cfg)
 	},
-	"notify": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return notify.NewService(deps, cfg)
+	"macosNotifications": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return macosNotification.NewService(deps, cfg)
+	},
+	"macosMessages": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return macosMessages.NewService(deps, cfg)
 	},
 	"owntracks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return owntracks.NewService(deps, cfg)
