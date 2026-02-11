@@ -196,6 +196,153 @@ func TestService_Workflow(t *testing.T) {
 	}
 }
 
+func TestService_NotificationDelay(t *testing.T) {
+	deps := testDeps(t)
+	cfg := core.ServiceConfig{
+		Name: "monitor",
+		Type: "statusMonitor",
+		Subs: map[string]core.ChannelInfo{
+			"status": {Name: "status-chan", MaxAge: 0},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"alerts": {Name: "alerts-chan"},
+		},
+		Config: map[string]interface{}{
+			"notificationDelay": "1s",
+		},
+	}
+
+	svc := NewService(deps, cfg)
+	err := svc.Initialize()
+	require.NoError(t, err)
+
+	messenger := deps.MustGetMessenger()
+
+	alertMsgs := make(chan core.Message, 10)
+	err = messenger.Subscribe("test-listener", "alerts-chan", 0, func(msg core.Message) error {
+		alertMsgs <- msg
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 1. Send WARNING status - should NOT alert immediately
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "warning",
+		Text:        "Getting hot",
+	})
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond)
+	assert.Empty(t, alertMsgs, "Should not alert before delay")
+
+	// 2. Send another WARNING status after some time but still before delay - should still NOT alert
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "warning",
+		Text:        "Still getting hot",
+	})
+	require.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Empty(t, alertMsgs, "Should still not alert before delay")
+
+	// 3. Send another WARNING status after delay - should alert
+	time.Sleep(500 * time.Millisecond) // Total time since first warning > 1s
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "warning",
+		Text:        "Very hot now",
+	})
+	require.NoError(t, err)
+
+	select {
+	case msg := <-alertMsgs:
+		assert.Equal(t, "warning", msg.Status)
+		assert.Contains(t, msg.Text, "ALERT")
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for alert after delay")
+	}
+
+	// 4. Send OK status - should recovery alert
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "ok",
+		Text:        "Phew",
+	})
+	require.NoError(t, err)
+
+	select {
+	case msg := <-alertMsgs:
+		assert.Equal(t, "ok", msg.Status)
+		assert.Contains(t, msg.Text, "RECOVERY")
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for recovery")
+	}
+}
+
+func TestService_NotificationDelayRecovery(t *testing.T) {
+	deps := testDeps(t)
+	cfg := core.ServiceConfig{
+		Name: "monitor",
+		Type: "statusMonitor",
+		Subs: map[string]core.ChannelInfo{
+			"status": {Name: "status-chan", MaxAge: 0},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"alerts": {Name: "alerts-chan"},
+		},
+		Config: map[string]interface{}{
+			"notificationDelay": "1s",
+		},
+	}
+
+	svc := NewService(deps, cfg)
+	err := svc.Initialize()
+	require.NoError(t, err)
+
+	messenger := deps.MustGetMessenger()
+
+	alertMsgs := make(chan core.Message, 10)
+	err = messenger.Subscribe("test-listener", "alerts-chan", 0, func(msg core.Message) error {
+		alertMsgs <- msg
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 1. Send WARNING status
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "warning",
+	})
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond)
+	assert.Empty(t, alertMsgs)
+
+	// 2. Send OK status before delay - should NOT send any alert OR recovery
+	err = messenger.Send(core.Message{
+		ChannelName: "status-chan",
+		ServiceName: "svc1",
+		ServiceType: "type1",
+		Status:      "ok",
+	})
+	require.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Empty(t, alertMsgs, "Should not send recovery if alert was never sent")
+}
+
 func TestService_Persistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "statusMonitor_persist_test")
 	require.NoError(t, err)
@@ -256,6 +403,6 @@ func TestService_Persistence(t *testing.T) {
 		require.NoError(t, err)
 
 		svcImpl := svc.(*Service)
-		assert.Equal(t, "warning", svcImpl.states["type1:svc1"])
+		assert.Equal(t, "warning", svcImpl.states["type1:svc1"].Status)
 	}
 }

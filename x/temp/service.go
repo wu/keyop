@@ -116,7 +116,7 @@ func (svc Service) temp() (Event, error) {
 
 	if svc.MaxTemp != nil && float64(temp.TempF) > *svc.MaxTemp {
 		err := fmt.Errorf("temperature %.3f exceeds max %.3f", temp.TempF, *svc.MaxTemp)
-		logger.Error("temp", "error", err)
+		logger.Debug("temp", "error", err)
 		return temp, err
 	}
 
