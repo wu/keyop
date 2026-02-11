@@ -11,6 +11,8 @@ import (
 // It allows dependency injection for testing or alternative OS implementations.
 type OsProviderApi interface {
 	Hostname() (string, error)
+	UserHomeDir() (string, error)
+	ReadFile(name string) ([]byte, error)
 	OpenFile(name string, flag int, perm os.FileMode) (FileApi, error)
 	MkdirAll(path string, perm os.FileMode) error
 	ReadDir(dirname string) ([]os.DirEntry, error)
@@ -53,7 +55,11 @@ func (f *FakeFile) WriteString(s string) (n int, err error) {
 // OsProvider is the production implementation of OsProviderApi using the standard library.
 type OsProvider struct{}
 
-func (OsProvider) Hostname() (string, error) { return os.Hostname() }
+func (OsProvider) Hostname() (string, error)    { return os.Hostname() }
+func (OsProvider) UserHomeDir() (string, error) { return os.UserHomeDir() }
+func (OsProvider) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
 func (OsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, error) {
 	return os.OpenFile(name, flag, perm)
 }
@@ -78,9 +84,12 @@ func (OsProvider) Command(name string, arg ...string) CommandApi {
 
 // FakeOsProvider is provided for testing
 type FakeOsProvider struct {
-	Host string
-	Err  error
+	Host    string
+	Home    string
+	Err     error
+	HomeErr error
 
+	ReadFileFunc func(name string) ([]byte, error)
 	OpenFileFunc func(name string, flag int, perm os.FileMode) (FileApi, error)
 	MkdirAllFunc func(path string, perm os.FileMode) error
 	ReadDirFunc  func(dirname string) ([]os.DirEntry, error)
@@ -92,7 +101,14 @@ type FakeOsProvider struct {
 	File FileApi
 }
 
-func (f FakeOsProvider) Hostname() (string, error) { return f.Host, f.Err }
+func (f FakeOsProvider) Hostname() (string, error)    { return f.Host, f.Err }
+func (f FakeOsProvider) UserHomeDir() (string, error) { return f.Home, f.HomeErr }
+func (f FakeOsProvider) ReadFile(name string) ([]byte, error) {
+	if f.ReadFileFunc != nil {
+		return f.ReadFileFunc(name)
+	}
+	return nil, os.ErrNotExist
+}
 func (f FakeOsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, error) {
 	if f.OpenFileFunc != nil {
 		return f.OpenFileFunc(name, flag, perm)
@@ -100,7 +116,6 @@ func (f FakeOsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileA
 	if f.File != nil {
 		return f.File, nil
 	}
-	// Default behavior: create a memory-backed file if CREATE flag is set, otherwise return not exist
 	return nil, os.ErrNotExist
 }
 func (f FakeOsProvider) MkdirAll(path string, perm os.FileMode) error {

@@ -1,12 +1,16 @@
 package httpPostServer
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"keyop/core"
 	"keyop/util"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 )
 
@@ -63,6 +67,35 @@ func (svc Service) ValidateConfig() []error {
 		errs = append(errs, err)
 	}
 
+	// check for TLS certificates
+	osProvider := svc.Deps.MustGetOsProvider()
+	home, err := osProvider.UserHomeDir()
+	if err != nil {
+		err := fmt.Errorf("httpPostServer: failed to get user home directory: %w", err)
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	} else {
+		certPath := filepath.Join(home, ".keyop", "certs", "keyop-server.crt")
+		keyPath := filepath.Join(home, ".keyop", "certs", "keyop-server.key")
+		caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
+
+		if _, err := osProvider.Stat(certPath); os.IsNotExist(err) {
+			err := fmt.Errorf("httpPostServer: server certificate not found: %s", certPath)
+			logger.Error(err.Error())
+			errs = append(errs, err)
+		}
+		if _, err := osProvider.Stat(keyPath); os.IsNotExist(err) {
+			err := fmt.Errorf("httpPostServer: server key not found: %s", keyPath)
+			logger.Error(err.Error())
+			errs = append(errs, err)
+		}
+		if _, err := osProvider.Stat(caPath); os.IsNotExist(err) {
+			err := fmt.Errorf("httpPostServer: CA certificate not found: %s", caPath)
+			logger.Error(err.Error())
+			errs = append(errs, err)
+		}
+	}
+
 	return errs
 }
 
@@ -81,11 +114,58 @@ func (svc Service) Initialize() error {
 	mux.HandleFunc("/", svc.ServeHTTP)
 
 	addr := fmt.Sprintf(":%d", svc.Port)
-	logger.Info("starting http server", "addr", addr)
+
+	// Load TLS certificates
+	home, err := osProvider.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	certPath := filepath.Join(home, ".keyop", "certs", "keyop-server.crt")
+	keyPath := filepath.Join(home, ".keyop", "certs", "keyop-server.key")
+	caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
+
+	logger.Info("loading server certificate", "cert", certPath, "key", keyPath, "ca", caPath)
+	certPEM, err := osProvider.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("failed to read server certificate: %w", err)
+	}
+	keyPEM, err := osProvider.ReadFile(keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read server key: %w", err)
+	}
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return fmt.Errorf("failed to create server key pair: %w", err)
+	}
+
+	caCertPEM, err := osProvider.ReadFile(caPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCertPEM) {
+		return fmt.Errorf("failed to append CA certificate to pool")
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	server := &http.Server{
+		Addr:      addr,
+		Handler:   mux,
+		TLSConfig: tlsConfig,
+	}
+
+	logger.Info("starting https server with mutual authentication", "addr", addr)
 
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			logger.Error("http server failed", "error", err)
+		if err := server.ListenAndServeTLS("", ""); err != nil {
+			logger.Error("https server failed", "error", err)
 		}
 	}()
 

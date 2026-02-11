@@ -1,15 +1,20 @@
 package httpPost
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"keyop/core"
+	"keyop/util"
 	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +35,27 @@ func testDeps(t *testing.T) core.Dependencies {
 		os.RemoveAll(tmpDir)
 	})
 
-	deps.SetOsProvider(core.OsProvider{})
+	// Setup .keyop/certs
+	certsDir := filepath.Join(tmpDir, ".keyop", "certs")
+	err = util.GenerateTestCerts(certsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fakeOs := core.FakeOsProvider{
+		Host:         "test-host",
+		Home:         tmpDir,
+		ReadFileFunc: os.ReadFile,
+		StatFunc:     os.Stat,
+		OpenFileFunc: func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+			return os.OpenFile(name, flag, perm)
+		},
+		MkdirAllFunc: os.MkdirAll,
+		ReadDirFunc:  os.ReadDir,
+		RemoveFunc:   os.Remove,
+		ChtimesFunc:  os.Chtimes,
+	}
+	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(logger)
 	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
 	messenger.SetDataDir(tmpDir)
@@ -111,6 +136,38 @@ func TestService_ValidateConfig(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("missing ca.crt", func(t *testing.T) {
+		deps := testDeps(t)
+		osProvider := deps.MustGetOsProvider()
+		home, _ := osProvider.UserHomeDir()
+		caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
+		_ = os.Remove(caPath)
+
+		cfg := core.ServiceConfig{
+			Config: map[string]interface{}{
+				"port":     8080,
+				"hostname": "localhost",
+			},
+			Subs: map[string]core.ChannelInfo{
+				"temp": {Name: "temp-channel"},
+			},
+			Pubs: map[string]core.ChannelInfo{
+				"errors": {Name: "errors-channel"},
+			},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "CA certificate not found") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Expected error containing 'CA certificate not found', but got: %v", errs)
+	})
 }
 
 func TestService_Initialize(t *testing.T) {
@@ -135,9 +192,20 @@ func TestService_Initialize(t *testing.T) {
 func TestService_MessageHandler_Success(t *testing.T) {
 	deps := testDeps(t)
 
+	// Load certs for the mock server
+	osProvider := deps.MustGetOsProvider()
+	home, _ := osProvider.UserHomeDir()
+	certsDir := filepath.Join(home, ".keyop", "certs")
+	serverCertPEM, _ := osProvider.ReadFile(filepath.Join(certsDir, "keyop-server.crt"))
+	serverKeyPEM, _ := osProvider.ReadFile(filepath.Join(certsDir, "keyop-server.key"))
+	serverCert, _ := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+	caCertPEM, _ := osProvider.ReadFile(filepath.Join(certsDir, "ca.crt"))
+	caCAPool := x509.NewCertPool()
+	caCAPool.AppendCertsFromPEM(caCertPEM)
+
 	done := make(chan bool)
-	// Create a mock HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create a mock HTTPS server with mutual TLS
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
@@ -151,12 +219,18 @@ func TestService_MessageHandler_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		done <- true
 	}))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caCAPool,
+	}
+	server.StartTLS()
 	defer server.Close()
 
 	// Parse the server URL to get hostname and port
 	var hostname string
 	var port int
-	fmt.Sscanf(server.URL, "http://%s", &hostname)
+	fmt.Sscanf(server.URL, "https://%s", &hostname)
 	addr := server.Listener.Addr().String()
 	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
 	if port == 0 {
@@ -211,24 +285,33 @@ func TestService_MessageHandler_PostError(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
 
 	// Directly call messageHandler to test its error return
 	testMsg := core.Message{
 		ServiceName: "test-service",
 		Data:        "test-data",
 	}
-	err := svc.messageHandler(testMsg)
+	err = svc.messageHandler(testMsg)
 	assert.Error(t, err)
 }
 
 func TestService_MessageHandler_MarshalError(t *testing.T) {
 	deps := testDeps(t)
-	svc := NewService(deps, core.ServiceConfig{}).(*Service)
+	svc := NewService(deps, core.ServiceConfig{
+		Config: map[string]interface{}{
+			"port":     8080,
+			"hostname": "localhost",
+		},
+	}).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
 
 	testMsg := core.Message{
 		Metric: math.NaN(),
 	}
-	err := svc.messageHandler(testMsg)
+	err = svc.messageHandler(testMsg)
 	assert.Error(t, err)
 	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "json: unsupported value")
@@ -247,13 +330,15 @@ func TestService_MessageHandler_CreateRequestError(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
 
 	testMsg := core.Message{
 		ServiceName: "test-service",
 		Data:        "test-data",
 	}
 
-	err := svc.messageHandler(testMsg)
+	err = svc.messageHandler(testMsg)
 	assert.Error(t, err)
 	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "invalid control character in URL")
@@ -263,17 +348,28 @@ func TestService_MessageHandler_CreateRequestError(t *testing.T) {
 func TestService_MessageHandler_Timeout(t *testing.T) {
 	deps := testDeps(t)
 
-	// Create a mock HTTP server that sleeps longer than the timeout
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create a mock HTTPS server that sleeps longer than the timeout
+	osProvider := deps.MustGetOsProvider()
+	home, _ := osProvider.UserHomeDir()
+	certsDir := filepath.Join(home, ".keyop", "certs")
+	serverCertPEM, _ := osProvider.ReadFile(filepath.Join(certsDir, "keyop-server.crt"))
+	serverKeyPEM, _ := osProvider.ReadFile(filepath.Join(certsDir, "keyop-server.key"))
+	serverCert, _ := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+	}
+	server.StartTLS()
 	defer server.Close()
 
 	// Parse the server URL to get hostname and port
 	var hostname string
 	var port int
-	fmt.Sscanf(server.URL, "http://%s", &hostname)
+	fmt.Sscanf(server.URL, "https://%s", &hostname)
 	addr := server.Listener.Addr().String()
 	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
 	if port == 0 {
@@ -289,16 +385,69 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
 
 	testMsg := core.Message{
 		ServiceName: "test-service",
 		Data:        "test-data",
 	}
 
-	err := svc.messageHandler(testMsg)
+	err = svc.messageHandler(testMsg)
 	assert.Error(t, err)
 	//goland:noinspection GoMaybeNil
 	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
+	deps := testDeps(t)
+
+	// Create a different CA and a server certificate signed by it
+	tmpDir, _ := os.MkdirTemp("", "untrusted_server")
+	defer os.RemoveAll(tmpDir)
+	_ = util.GenerateTestCerts(tmpDir)
+
+	serverCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.crt"))
+	serverKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.key"))
+	serverCert, _ := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	var hostname string
+	var port int
+	fmt.Sscanf(server.URL, "https://%s", &hostname)
+	addr := server.Listener.Addr().String()
+	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
+	if port == 0 {
+		fmt.Sscanf(addr, "[::]:%d", &port)
+	}
+
+	cfg := core.ServiceConfig{
+		Name: "test-httpPost",
+		Config: map[string]interface{}{
+			"port":     port,
+			"hostname": "127.0.0.1",
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
+
+	testMsg := core.Message{
+		ServiceName: "test-service",
+		Data:        "test-data",
+	}
+
+	err = svc.messageHandler(testMsg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "x509: certificate signed by unknown authority")
 }
 
 func TestService_Check(t *testing.T) {
