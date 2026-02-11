@@ -194,7 +194,7 @@ func (svc *Service) Initialize() error {
 	}
 
 	for name, sub := range svc.Cfg.Subs {
-		logger.Error("httpPost: initializing subscription", "name", name, "topic", sub.Name, "maxAge", sub.MaxAge)
+		logger.Warn("httpPost: initializing subscription", "name", name, "topic", sub.Name, "maxAge", sub.MaxAge)
 		err := messenger.Subscribe(svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
 		if err != nil {
 			errs = append(errs, err)
