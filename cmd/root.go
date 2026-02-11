@@ -3,6 +3,7 @@ package cmd
 import (
 	"keyop/core"
 	"keyop/util"
+	"keyop/x/install"
 	"keyop/x/run"
 	"os"
 
@@ -20,6 +21,8 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.PersistentFlags().BoolP("stdout", "o", false, "display the logs in colorized output to stdout")
 
 	rootCmd.AddCommand(run.NewCmd(deps))
+	rootCmd.AddCommand(install.NewCmd(deps))
+	rootCmd.AddCommand(install.NewUninstallCmd(deps))
 
 	return rootCmd
 }
