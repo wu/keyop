@@ -53,8 +53,7 @@ func TestCheck(t *testing.T) {
 			Name: "net-mon",
 			Type: "pingMonitor",
 			Pubs: map[string]core.ChannelInfo{
-				"alerts":  {Name: "alerts-topic"},
-				"events":  {Name: "events-topic"},
+				"status":  {Name: "status-topic"},
 				"metrics": {Name: "metrics-topic"},
 			},
 			Config: map[string]interface{}{
@@ -70,7 +69,7 @@ func TestCheck(t *testing.T) {
 		foundEvent := false
 		foundMetric := false
 		for _, msg := range messenger.messages {
-			if msg.ChannelName == "events-topic" {
+			if msg.ChannelName == "status-topic" {
 				foundEvent = true
 				assert.Contains(t, msg.Text, "successful")
 				assert.Contains(t, msg.Text, "12.3")
@@ -81,7 +80,7 @@ func TestCheck(t *testing.T) {
 				assert.Equal(t, "net-mon.ping_time", msg.MetricName)
 			}
 		}
-		assert.True(t, foundEvent, "Expected events message")
+		assert.True(t, foundEvent, "Expected status message")
 		assert.True(t, foundMetric, "Expected metrics message")
 	})
 
@@ -106,8 +105,7 @@ func TestCheck(t *testing.T) {
 			Name: "net-mon",
 			Type: "pingMonitor",
 			Pubs: map[string]core.ChannelInfo{
-				"alerts":  {Name: "alerts-topic"},
-				"events":  {Name: "events-topic"},
+				"status":  {Name: "status-topic"},
 				"metrics": {Name: "metrics-topic"},
 			},
 			Config: map[string]interface{}{
@@ -130,7 +128,7 @@ func TestCheck(t *testing.T) {
 		assert.True(t, foundMetric, "Expected metrics message with custom name")
 	})
 
-	t.Run("failed ping sends alert", func(t *testing.T) {
+	t.Run("failed ping sets status", func(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		messenger := &mockMessenger{}
@@ -151,8 +149,7 @@ func TestCheck(t *testing.T) {
 			Name: "net-mon",
 			Type: "pingMonitor",
 			Pubs: map[string]core.ChannelInfo{
-				"alerts":  {Name: "alerts-topic"},
-				"events":  {Name: "events-topic"},
+				"status":  {Name: "status-topic"},
 				"metrics": {Name: "metrics-topic"},
 			},
 			Config: map[string]interface{}{
@@ -163,7 +160,7 @@ func TestCheck(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 		assert.Len(t, messenger.messages, 1)
-		assert.Equal(t, "alerts-topic", messenger.messages[0].ChannelName)
+		assert.Equal(t, "status-topic", messenger.messages[0].ChannelName)
 		assert.Contains(t, messenger.messages[0].Text, "unreachable.host")
 	})
 }
@@ -177,8 +174,7 @@ func TestValidateConfig(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Name: "net-mon",
 			Pubs: map[string]core.ChannelInfo{
-				"alerts":  {Name: "alerts-topic"},
-				"events":  {Name: "events-topic"},
+				"status":  {Name: "status-topic"},
 				"metrics": {Name: "metrics-topic"},
 			},
 			Config: map[string]interface{}{
@@ -196,8 +192,7 @@ func TestValidateConfig(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Name: "net-mon",
 			Pubs: map[string]core.ChannelInfo{
-				"alerts":  {Name: "alerts-topic"},
-				"events":  {Name: "events-topic"},
+				"status":  {Name: "status-topic"},
 				"metrics": {Name: "metrics-topic"},
 			},
 			Config: map[string]interface{}{},
@@ -213,7 +208,7 @@ func TestValidateConfig(t *testing.T) {
 		assert.True(t, found, "expected host required error")
 	})
 
-	t.Run("missing alerts channel", func(t *testing.T) {
+	t.Run("missing status channel", func(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		cfg := core.ServiceConfig{
@@ -228,36 +223,13 @@ func TestValidateConfig(t *testing.T) {
 		assert.NotEmpty(t, errs)
 		found := false
 		for _, e := range errs {
-			if contains(e.Error(), "required pubs channel 'alerts' is missing") {
+			if contains(e.Error(), "required pubs channel 'status' is missing") {
 				found = true
 			}
 		}
 		assert.True(t, found)
 	})
 
-	t.Run("missing events channel", func(t *testing.T) {
-		deps := core.Dependencies{}
-		deps.SetLogger(logger)
-		cfg := core.ServiceConfig{
-			Name: "net-mon",
-			Pubs: map[string]core.ChannelInfo{
-				"alerts": {Name: "alerts"},
-			},
-			Config: map[string]interface{}{
-				"host": "google.com",
-			},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.NotEmpty(t, errs)
-		found := false
-		for _, e := range errs {
-			if contains(e.Error(), "required pubs channel 'events' is missing") {
-				found = true
-			}
-		}
-		assert.True(t, found)
-	})
 }
 
 func contains(s, substr string) bool {

@@ -25,7 +25,7 @@ func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
 
-	errs = append(errs, util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"alerts", "events", "metrics"}, logger)...)
+	errs = append(errs, util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"status", "metrics"}, logger)...)
 
 	host, _ := svc.Cfg.Config["host"].(string)
 	if host == "" {
@@ -65,7 +65,7 @@ func (svc *Service) Check() error {
 		logger.Warn("Network outage detected", "host", host, "error", err, "output", string(output))
 
 		alertErr := messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Pubs["status"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Status:      "critical",
@@ -81,7 +81,7 @@ func (svc *Service) Check() error {
 		pingTime := extractPingTime(string(output))
 
 		eventErr := messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["events"].Name,
+			ChannelName: svc.Cfg.Pubs["status"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Status:      "ok",
