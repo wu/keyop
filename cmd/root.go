@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"keyop/cmd/systemd"
 	"keyop/core"
 	"keyop/util"
-	"keyop/x/install"
 	"keyop/x/run"
 	"os"
 
@@ -21,8 +21,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.PersistentFlags().BoolP("stdout", "o", false, "display the logs in colorized output to stdout")
 
 	rootCmd.AddCommand(run.NewCmd(deps))
-	rootCmd.AddCommand(install.NewCmd(deps))
-	rootCmd.AddCommand(install.NewUninstallCmd(deps))
+	rootCmd.AddCommand(systemd.NewCmd(deps))
 
 	return rootCmd
 }
@@ -33,6 +32,11 @@ func Execute() {
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 	fs.BoolVarP(&console, "stdout", "o", false, "display the logs in colorized output to stdout")
 	_ = fs.Parse(os.Args[1:])
+
+	// always enable stdout if running with "systemd" as the first argument
+	if os.Args[1] == "systemd" {
+		console = true
+	}
 
 	deps := util.InitializeDependencies(console)
 	defer deps.MustGetCancel()()
