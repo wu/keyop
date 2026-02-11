@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"keyop/core"
 	"log/slog"
 	"testing"
 
@@ -30,4 +31,12 @@ func Test_InitializeDependencies_ReturnsInitializedDependencies(t *testing.T) {
 	// Check messenger is set and not nil
 	messenger := deps.MustGetMessenger()
 	assert.NotNil(t, messenger)
+
+	// Check state store is set and has correct data directory
+	stateStore := deps.MustGetStateStore()
+	assert.NotNil(t, stateStore)
+	fileStateStore, ok := stateStore.(*core.FileStateStore)
+	assert.True(t, ok)
+
+	assert.Contains(t, fileStateStore.DataDir, ".keyop/data")
 }
