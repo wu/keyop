@@ -43,14 +43,12 @@ func TestService_MessageHandler(t *testing.T) {
 			"value":      0.8,
 			"condition":  "above",
 			"status":     "critical",
-			"alertText":  "CPU load is too high",
 		},
 		map[string]interface{}{
 			"metricName": "temp",
 			"value":      20.0,
 			"condition":  "below",
 			"status":     "warning",
-			"alertText":  "Temperature is too low",
 		},
 	}
 
@@ -61,7 +59,7 @@ func TestService_MessageHandler(t *testing.T) {
 			"metrics": {Name: "metrics-chan"},
 		},
 		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
+			"status": {Name: "status-chan"},
 		},
 		Config: map[string]interface{}{
 			"thresholds": thresholds,
@@ -82,17 +80,17 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "alerts-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
-		assert.Contains(t, messenger.SentMessages[0].Text, "CPU load is too high")
+		assert.Contains(t, messenger.SentMessages[0].Text, "cpu_load")
 
 		// Transition back to OK
 		msg.Metric = 0.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 		require.Len(t, messenger.SentMessages, 2)
+		assert.Equal(t, "status-chan", messenger.SentMessages[1].ChannelName)
 		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
-		assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERY")
 	})
 
 	t.Run("trigger below threshold", func(t *testing.T) {
@@ -109,8 +107,9 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "warning", messenger.SentMessages[0].Status)
-		assert.Contains(t, messenger.SentMessages[0].Text, "Temperature is too low")
+		assert.Contains(t, messenger.SentMessages[0].Text, "temp")
 	})
 
 	t.Run("no trigger", func(t *testing.T) {
@@ -125,14 +124,16 @@ func TestService_MessageHandler(t *testing.T) {
 
 		err := svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 0)
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "ok", messenger.SentMessages[0].Status)
 	})
 
 	t.Run("first matching threshold", func(t *testing.T) {
 		// New config with overlapping thresholds
 		overlappingCfg := core.ServiceConfig{
 			Name: "monitor",
-			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-chan"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "status-chan"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{
 					map[string]interface{}{
@@ -140,14 +141,12 @@ func TestService_MessageHandler(t *testing.T) {
 						"value":      0.5,
 						"condition":  "above",
 						"status":     "warning",
-						"alertText":  "First threshold",
 					},
 					map[string]interface{}{
 						"metricName": "cpu_load",
 						"value":      0.8,
 						"condition":  "above",
 						"status":     "critical",
-						"alertText":  "Second threshold",
 					},
 				},
 			},
@@ -173,7 +172,7 @@ func TestService_MessageHandler(t *testing.T) {
 	t.Run("recovery threshold", func(t *testing.T) {
 		recoveryCfg := core.ServiceConfig{
 			Name: "monitor",
-			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-chan"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "status-chan"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{
 					map[string]interface{}{
@@ -182,7 +181,6 @@ func TestService_MessageHandler(t *testing.T) {
 						"recoveryThreshold": 39.0,
 						"condition":         "above",
 						"status":            "critical",
-						"alertText":         "Too hot",
 					},
 				},
 			},
@@ -199,30 +197,32 @@ func TestService_MessageHandler(t *testing.T) {
 		require.Len(t, messenger.SentMessages, 1)
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 
-		// 2. Below threshold but above recovery threshold (39.5) -> NO CHANGE (STAY ALERT)
+		// 2. Below threshold but above recovery threshold (39.5) -> STAY ALERT
 		msg.Metric = 39.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 1) // Still 1
+		require.Len(t, messenger.SentMessages, 2)
+		assert.Equal(t, "critical", messenger.SentMessages[1].Status)
 
 		// 3. Below recovery threshold (38.5) -> RECOVERED
 		msg.Metric = 38.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		require.Len(t, messenger.SentMessages, 2)
-		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
+		require.Len(t, messenger.SentMessages, 3)
+		assert.Equal(t, "ok", messenger.SentMessages[2].Status)
 
-		// 4. Back to 39.5 (above recovery, below threshold) -> NO CHANGE (STAY OK)
+		// 4. Back to 39.5 (above recovery, below threshold) -> STAY OK
 		msg.Metric = 39.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 2) // Still 2
+		require.Len(t, messenger.SentMessages, 4)
+		assert.Equal(t, "ok", messenger.SentMessages[3].Status)
 	})
 
 	t.Run("match all metrics (empty MetricName)", func(t *testing.T) {
 		cfgAll := core.ServiceConfig{
 			Name: "monitor",
-			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-chan"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "status-chan"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{
 					map[string]interface{}{
@@ -230,7 +230,6 @@ func TestService_MessageHandler(t *testing.T) {
 						"value":      100.0,
 						"condition":  "above",
 						"status":     "critical",
-						"alertText":  "Any metric above 100",
 					},
 				},
 			},
@@ -249,10 +248,10 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Contains(t, messenger.SentMessages[0].Text, "Any metric above 100")
+		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 	})
 
-	t.Run("only send notification when status changes", func(t *testing.T) {
+	t.Run("send notification every time", func(t *testing.T) {
 		messenger := &MockMessenger{}
 		deps := testDeps(t, messenger)
 		svc := NewService(deps, cfg).(*Service)
@@ -267,23 +266,17 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 1)
 
-		// Second trigger with same status - should NOT send notification
+		// Second trigger with same status - should STILL send notification
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 1)
+		assert.Len(t, messenger.SentMessages, 2)
 
 		// Change status back to ok - should send notification
 		msg.Metric = 0.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 2)
-		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
-
-		// Trigger again - should send notification because it changed from ok to critical
-		msg.Metric = 0.95
-		err = svc.messageHandler(msg)
-		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 3)
+		assert.Equal(t, "ok", messenger.SentMessages[2].Status)
 	})
 }
 
@@ -295,7 +288,6 @@ func TestService_StateTransitions(t *testing.T) {
 			"recoveryThreshold": 69.0,
 			"condition":         "above",
 			"status":            "warning",
-			"alertText":         "Warning level reached",
 		},
 		map[string]interface{}{
 			"metricName":        "test_metric",
@@ -303,7 +295,6 @@ func TestService_StateTransitions(t *testing.T) {
 			"recoveryThreshold": 89.0,
 			"condition":         "above",
 			"status":            "critical",
-			"alertText":         "Critical level reached",
 		},
 	}
 
@@ -314,7 +305,7 @@ func TestService_StateTransitions(t *testing.T) {
 			"metrics": {Name: "metrics-chan"},
 		},
 		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
+			"status": {Name: "status-chan"},
 		},
 		Config: map[string]interface{}{
 			"thresholds": thresholds,
@@ -332,72 +323,64 @@ func TestService_StateTransitions(t *testing.T) {
 	}
 	err := svc.messageHandler(msg)
 	assert.NoError(t, err)
-	assert.Len(t, messenger.SentMessages, 0, "No alert should be sent for initial OK state")
+	assert.Len(t, messenger.SentMessages, 1)
+	assert.Equal(t, "ok", messenger.SentMessages[0].Status)
 
 	// 2. Move to Warning state
 	msg.Metric = 75.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 1)
-	assert.Equal(t, "warning", messenger.SentMessages[0].Status)
-	assert.Contains(t, messenger.SentMessages[0].Text, "Warning level reached")
+	require.Len(t, messenger.SentMessages, 2)
+	assert.Equal(t, "warning", messenger.SentMessages[1].Status)
 
 	// 3. Recover from Warning
 	msg.Metric = 50.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 2)
-	assert.Equal(t, "ok", messenger.SentMessages[1].Status)
-	assert.Contains(t, messenger.SentMessages[1].Text, "RECOVERY")
+	require.Len(t, messenger.SentMessages, 3)
+	assert.Equal(t, "ok", messenger.SentMessages[2].Status)
 
 	// 4. Move to Critical state
 	msg.Metric = 95.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 3)
-	assert.Equal(t, "critical", messenger.SentMessages[2].Status)
-	assert.Contains(t, messenger.SentMessages[2].Text, "Critical level reached")
+	require.Len(t, messenger.SentMessages, 4)
+	assert.Equal(t, "critical", messenger.SentMessages[3].Status)
 
 	// 5. Recover from Critical
 	msg.Metric = 50.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 4)
-	assert.Equal(t, "ok", messenger.SentMessages[3].Status)
-	assert.Contains(t, messenger.SentMessages[3].Text, "RECOVERY")
+	require.Len(t, messenger.SentMessages, 5)
+	assert.Equal(t, "ok", messenger.SentMessages[4].Status)
 
 	// 6. Move to Warning state
 	msg.Metric = 75.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 5)
-	assert.Equal(t, "warning", messenger.SentMessages[4].Status)
-	assert.Contains(t, messenger.SentMessages[4].Text, "Warning level reached")
+	require.Len(t, messenger.SentMessages, 6)
+	assert.Equal(t, "warning", messenger.SentMessages[5].Status)
 
 	// 7. Move back to Critical state
 	msg.Metric = 95.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 6)
-	assert.Equal(t, "critical", messenger.SentMessages[5].Status)
-	assert.Contains(t, messenger.SentMessages[5].Text, "Critical level reached")
+	require.Len(t, messenger.SentMessages, 7)
+	assert.Equal(t, "critical", messenger.SentMessages[6].Status)
 
 	// 8. Move back to Warning state
 	msg.Metric = 75.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 7)
-	assert.Equal(t, "warning", messenger.SentMessages[6].Status)
-	assert.Contains(t, messenger.SentMessages[6].Text, "Warning level reached")
+	require.Len(t, messenger.SentMessages, 8)
+	assert.Equal(t, "warning", messenger.SentMessages[7].Status)
 
 	// 9. Recover from Warning
 	msg.Metric = 50.0
 	err = svc.messageHandler(msg)
 	assert.NoError(t, err)
-	require.Len(t, messenger.SentMessages, 8)
-	assert.Equal(t, "ok", messenger.SentMessages[7].Status)
-	assert.Contains(t, messenger.SentMessages[7].Text, "RECOVERY")
-
+	require.Len(t, messenger.SentMessages, 9)
+	assert.Equal(t, "ok", messenger.SentMessages[8].Status)
 }
 
 func TestService_ValidateConfig(t *testing.T) {
@@ -406,7 +389,7 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
-			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{},
 			},
@@ -419,7 +402,7 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("missing sub", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{},
-			Pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
 		}
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()

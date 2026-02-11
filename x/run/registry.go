@@ -18,6 +18,7 @@ import (
 	"keyop/x/process"
 	"keyop/x/slack"
 	"keyop/x/speak"
+	"keyop/x/statusMonitor"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
 )
@@ -70,6 +71,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"speak": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return speak.NewService(deps, cfg)
+	},
+	"statusMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return statusMonitor.NewService(deps, cfg)
 	},
 
 	"temp": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service { return temp.NewService(deps, cfg) },
