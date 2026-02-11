@@ -9,9 +9,11 @@ import (
 )
 
 type serviceState struct {
-	Status       string    `json:"status"`
-	ProblemSince time.Time `json:"problemSince,omitempty"`
-	AlertSent    bool      `json:"alertSent,omitempty"`
+	Status        string    `json:"status"`
+	ProblemSince  time.Time `json:"problemSince,omitempty"`
+	AlertSent     bool      `json:"alertSent,omitempty"`
+	LastAlertTime time.Time `json:"lastAlertTime,omitempty"`
+	AlertCount    int       `json:"alertCount,omitempty"`
 }
 
 type Service struct {
@@ -21,6 +23,9 @@ type Service struct {
 	states            map[string]serviceState
 	statesMutex       sync.RWMutex
 	notificationDelay time.Duration
+	initialInterval   time.Duration
+	multiplier        float64
+	maxInterval       time.Duration
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -33,6 +38,27 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if delayStr, ok := cfg.Config["notificationDelay"].(string); ok {
 		if d, err := time.ParseDuration(delayStr); err == nil {
 			svc.notificationDelay = d
+		}
+	}
+
+	svc.initialInterval = time.Hour
+	if intervalStr, ok := cfg.Config["initialInterval"].(string); ok {
+		if d, err := time.ParseDuration(intervalStr); err == nil {
+			svc.initialInterval = d
+		}
+	}
+
+	svc.multiplier = 2.0
+	if m, ok := cfg.Config["multiplier"].(float64); ok {
+		svc.multiplier = m
+	} else if m, ok := cfg.Config["multiplier"].(int); ok {
+		svc.multiplier = float64(m)
+	}
+
+	svc.maxInterval = 24 * time.Hour
+	if maxStr, ok := cfg.Config["maxInterval"].(string); ok {
+		if d, err := time.ParseDuration(maxStr); err == nil {
+			svc.maxInterval = d
 		}
 	}
 
@@ -77,6 +103,14 @@ func (svc *Service) Initialize() error {
 				if as, ok := m["alertSent"].(bool); ok {
 					st.AlertSent = as
 				}
+				if lat, ok := m["lastAlertTime"].(string); ok {
+					if t, err := time.Parse(time.RFC3339, lat); err == nil {
+						st.LastAlertTime = t
+					}
+				}
+				if ac, ok := m["alertCount"].(float64); ok {
+					st.AlertCount = int(ac)
+				}
 				svc.states[k] = st
 			}
 		}
@@ -110,7 +144,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return s == "ok"
 	}
 
-	if exists && state.Status == msg.Status && (state.AlertSent || !isProblem(msg.Status)) {
+	if exists && state.Status == msg.Status && !isProblem(msg.Status) {
 		return nil
 	}
 
@@ -125,9 +159,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			state.Status = msg.Status
 			state.ProblemSince = now
 			state.AlertSent = false
+			state.AlertCount = 0
 			if svc.notificationDelay == 0 {
 				shouldAlert = true
 				state.AlertSent = true
+				state.AlertCount = 1
+				state.LastAlertTime = now
 				alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state: %s", msg.ServiceName, msg.ServiceType, msg.Status, msg.Text)
 			}
 		} else if isProblem(state.Status) {
@@ -137,17 +174,45 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 			if !state.AlertSent {
 				if now.Sub(state.ProblemSince) >= svc.notificationDelay {
-					logger.Warn("Service %s (%s) has been in %s state for %s, sending alert", msg.ServiceName, msg.ServiceType, msg.Status, svc.notificationDelay)
 					shouldAlert = true
 					state.AlertSent = true
+					state.AlertCount = 1
+					state.LastAlertTime = now
 					alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state (for %s): %s", msg.ServiceName, msg.ServiceType, msg.Status, svc.notificationDelay, msg.Text)
 				} else {
-					logger.Warn("Service %s (%s) entered %s state, waiting for %s before alerting", msg.ServiceName, msg.ServiceType, msg.Status, svc.notificationDelay)
+					timeRemaining := svc.notificationDelay - now.Sub(state.ProblemSince)
+					logger.Warn("Service in problem state, waiting before alerting",
+						"serviceName", msg.ServiceName,
+						"serviceType", msg.ServiceType,
+						"status", msg.Status,
+						"notificationDelay", svc.notificationDelay,
+						"timeRemaining", timeRemaining)
 				}
 			} else if oldStatus != msg.Status {
 				// Alert already sent, but status changed between problem states
 				shouldAlert = true
+				state.AlertCount = 1
+				state.LastAlertTime = now
 				alertText = fmt.Sprintf("ALERT: %s (%s) status changed from %s to %s: %s", msg.ServiceName, msg.ServiceType, oldStatus, msg.Status, msg.Text)
+			} else {
+				// Stayed in the same problem state, check backoff
+				multiplier := 1.0
+				for i := 0; i < state.AlertCount-1; i++ {
+					multiplier *= svc.multiplier
+				}
+
+				interval := time.Duration(float64(svc.initialInterval) * multiplier)
+				if interval > svc.maxInterval {
+					interval = svc.maxInterval
+				}
+
+				if now.Sub(state.LastAlertTime) >= interval {
+					shouldAlert = true
+					state.AlertCount++
+					state.LastAlertTime = now
+					timeSinceFirst := now.Sub(state.ProblemSince).Truncate(time.Minute).String()
+					alertText = fmt.Sprintf("ALERT: %s (%s) in %s state for %s: %s", msg.ServiceName, msg.ServiceType, msg.Status, timeSinceFirst, msg.Text)
+				}
 			}
 		}
 	} else if isOk(msg.Status) {
@@ -161,6 +226,8 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		state.Status = msg.Status
 		state.ProblemSince = time.Time{}
 		state.AlertSent = false
+		state.AlertCount = 0
+		state.LastAlertTime = time.Time{}
 	}
 
 	svc.states[key] = state
