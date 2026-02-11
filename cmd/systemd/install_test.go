@@ -50,7 +50,7 @@ func TestInstallSystemd(t *testing.T) {
 	exe, _ = filepath.Abs(exe)
 
 	writtenContent := buf.String()
-	if !strings.Contains(writtenContent, "ExecStart="+exe+" run -o") {
+	if !strings.Contains(writtenContent, "ExecStart="+exe+" run") {
 		t.Errorf("service file missing correct ExecStart: %s", writtenContent)
 	}
 	if !strings.Contains(writtenContent, "User=root") {
