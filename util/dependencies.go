@@ -5,6 +5,7 @@ import (
 	"keyop/core"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/MatusOllah/slogcolor"
 )
@@ -32,7 +33,13 @@ func InitializeDependencies() core.Dependencies {
 
 	deps.SetOsProvider(core.OsProvider{})
 
-	deps.SetStateStore(core.NewFileStateStore("data", deps.MustGetOsProvider()))
+	home, err := deps.MustGetOsProvider().UserHomeDir()
+	if err != nil {
+		logger.Error("Failed to get user home directory, using current directory as fallback", "error", err)
+		home = "."
+	}
+	dataDir := filepath.Join(home, ".keyop", "data")
+	deps.SetStateStore(core.NewFileStateStore(dataDir, deps.MustGetOsProvider()))
 
 	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
 
