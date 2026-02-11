@@ -10,7 +10,7 @@ import (
 )
 
 func Test_InitializeDependencies_ReturnsInitializedDependencies(t *testing.T) {
-	deps := InitializeDependencies()
+	deps := InitializeDependencies(true)
 
 	// Check context is set and not nil
 	ctx := deps.MustGetContext()

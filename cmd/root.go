@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func NewRootCmd(deps core.Dependencies) *cobra.Command {
@@ -16,7 +17,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 		Long:  `More information coming soon`,
 	}
 
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().BoolP("stdout", "o", false, "display the logs in colorized output to stdout")
 
 	rootCmd.AddCommand(run.NewCmd(deps))
 
@@ -24,7 +25,13 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 }
 func Execute() {
 
-	deps := util.InitializeDependencies()
+	var console bool
+	fs := pflag.NewFlagSet("keyop", pflag.ContinueOnError)
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+	fs.BoolVarP(&console, "stdout", "o", false, "display the logs in colorized output to stdout")
+	_ = fs.Parse(os.Args[1:])
+
+	deps := util.InitializeDependencies(console)
 	defer deps.MustGetCancel()()
 
 	rootCmd := NewRootCmd(deps)
