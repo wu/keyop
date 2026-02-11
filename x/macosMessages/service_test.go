@@ -1,4 +1,4 @@
-package notify
+package macosMessages
 
 import (
 	"keyop/core"
@@ -39,14 +39,26 @@ func TestService_ValidateConfig(t *testing.T) {
 	tests := []struct {
 		name        string
 		subs        map[string]core.ChannelInfo
+		config      map[string]interface{}
 		expectError bool
 	}{
 		{
 			name: "valid config",
 			subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "notify-channel"},
+				"alerts": {Name: "macosNotification-channel"},
+			},
+			config: map[string]interface{}{
+				"address": "test-buddy",
 			},
 			expectError: false,
+		},
+		{
+			name: "missing address",
+			subs: map[string]core.ChannelInfo{
+				"alerts": {Name: "macosNotification-channel"},
+			},
+			config:      map[string]interface{}{},
+			expectError: true,
 		},
 		{
 			name:        "missing notifications subscription",
@@ -58,7 +70,8 @@ func TestService_ValidateConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := core.ServiceConfig{
-				Subs: tt.subs,
+				Subs:   tt.subs,
+				Config: tt.config,
 			}
 			svc := NewService(deps, cfg)
 			errs := svc.ValidateConfig()
@@ -74,9 +87,12 @@ func TestService_ValidateConfig(t *testing.T) {
 func TestService_Initialize(t *testing.T) {
 	deps := testDeps(t, nil)
 	cfg := core.ServiceConfig{
-		Name: "notify-test",
+		Name: "macosNotification-test",
 		Subs: map[string]core.ChannelInfo{
-			"alerts": {Name: "notify-channel"},
+			"alerts": {Name: "macosNotification-channel"},
+		},
+		Config: map[string]interface{}{
+			"address": "test-buddy",
 		},
 	}
 	svc := NewService(deps, cfg)
@@ -88,9 +104,12 @@ func TestService_MessageHandler(t *testing.T) {
 	t.Run("empty text", func(t *testing.T) {
 		deps := testDeps(t, nil)
 		cfg := core.ServiceConfig{
-			Name: "notify-test",
+			Name: "macosNotification-test",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "notify-channel"},
+				"alerts": {Name: "macosNotification-channel"},
+			},
+			Config: map[string]interface{}{
+				"address": "test-buddy",
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
@@ -113,10 +132,13 @@ func TestService_MessageHandler(t *testing.T) {
 
 		deps := testDeps(t, fakeOs)
 		cfg := core.ServiceConfig{
-			Name: "notify-test",
-			Type: "notify-type",
+			Name: "macosNotification-test",
+			Type: "macosNotification-type",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "notify-channel"},
+				"alerts": {Name: "macosNotification-channel"},
+			},
+			Config: map[string]interface{}{
+				"address": "target-buddy",
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
@@ -134,7 +156,8 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.Equal(t, "-e", capturedArgs[0])
 
 		assert.Contains(t, capturedArgs[1], "hello world")
-		assert.Contains(t, capturedArgs[1], "notify-type")
-		assert.Contains(t, capturedArgs[1], "notify-test")
+		assert.Contains(t, capturedArgs[1], "macosNotification-type")
+		assert.Contains(t, capturedArgs[1], "macosNotification-test")
+		assert.Contains(t, capturedArgs[1], `buddy "target-buddy"`)
 	})
 }
