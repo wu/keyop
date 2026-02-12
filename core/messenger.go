@@ -8,18 +8,21 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Message struct {
 	Timestamp   time.Time   `json:"timestamp,omitempty"`
+	Uuid        string      `json:"uuid,omitempty"`
 	Hostname    string      `json:"hostname,omitempty"`
+	ChannelName string      `json:"channelName,omitempty"`
 	ServiceType string      `json:"serviceType,omitempty"`
 	ServiceName string      `json:"serviceName,omitempty"`
-	ChannelName string      `json:"channelName,omitempty"`
+	Status      string      `json:"status,omitempty"`
 	Text        string      `json:"text,omitempty"`
 	Metric      float64     `json:"metric,omitempty"`
 	MetricName  string      `json:"metricName,omitempty"`
-	Status      string      `json:"status,omitempty"`
 	State       string      `json:"state,omitempty"`
 	Data        interface{} `json:"data,omitempty"`
 	Route       []string    `json:"route,omitempty"`
@@ -82,6 +85,10 @@ func (m *Messenger) Send(msg Message) error {
 	}
 	channelName := msg.ChannelName
 	logger.Debug("Send message called", "channel", channelName, "message", msg)
+
+	if msg.Uuid == "" {
+		msg.Uuid = uuid.NewString()
+	}
 
 	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
 
