@@ -11,6 +11,7 @@ import (
 	"keyop/util"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,24 +23,23 @@ type Service struct {
 	Model     string
 	BatchSize int
 	Timeout   time.Duration
+	Context   []int
+	Mu        sync.Mutex
 }
 
 type OllamaRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
+	Model   string `json:"model"`
+	Prompt  string `json:"prompt"`
+	Stream  bool   `json:"stream"`
+	Context []int  `json:"context,omitempty"`
 }
 
 type OllamaResponse struct {
 	Model     string    `json:"model"`
 	CreatedAt time.Time `json:"created_at"`
-	Message   *Message  `json:"message,omitempty"`
+	Response  string    `json:"response"`
 	Done      bool      `json:"done"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Context   []int     `json:"context,omitempty"`
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -127,21 +127,22 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	var ollamaReq OllamaRequest
 	ollamaReq.Model = svc.Model
 
-	// Assume Text is the prompt for simplicity, or try to unmarshal from Data
+	svc.Mu.Lock()
+	ollamaReq.Context = svc.Context
+	svc.Mu.Unlock()
+
 	if msg.Text != "" {
-		ollamaReq.Messages = append(ollamaReq.Messages, Message{
-			Role:    "user",
-			Content: msg.Text,
-		})
+		ollamaReq.Prompt = msg.Text
+		logger.Warn("ollama: received message with text", "text", msg.Text)
 	}
 
-	if len(ollamaReq.Messages) == 0 {
+	if ollamaReq.Prompt == "" {
 		logger.Warn("ollama: empty request received")
 		return nil
 	}
 	ollamaReq.Stream = true
 
-	url := fmt.Sprintf("http://%s:%d/api/chat", svc.Host, svc.Port)
+	url := fmt.Sprintf("http://%s:%d/api/generate", svc.Host, svc.Port)
 	reqBody, err := json.Marshal(ollamaReq)
 	if err != nil {
 		return fmt.Errorf("ollama: failed to marshal request: %w", err)
@@ -168,6 +169,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 
 	reader := bufio.NewReader(resp.Body)
+	var fullResponse strings.Builder
 	var batch strings.Builder
 	charCount := 0
 
@@ -175,6 +177,8 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	if !ok {
 		return fmt.Errorf("ollama: responses publication not found")
 	}
+
+	var finalContext []int
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -191,12 +195,10 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			continue
 		}
 
-		var content string
-		if ollamaResp.Message != nil {
-			content = ollamaResp.Message.Content
-		}
+		content := ollamaResp.Response
 
 		batch.WriteString(content)
+		fullResponse.WriteString(content)
 		charCount += len(content)
 
 		if charCount >= svc.BatchSize {
@@ -206,12 +208,20 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		}
 
 		if ollamaResp.Done {
+			finalContext = ollamaResp.Context
 			break
 		}
 	}
 
 	if batch.Len() > 0 {
 		svc.sendBatch(messenger, pub.Name, batch.String())
+	}
+
+	// Update context
+	svc.Mu.Lock()
+	defer svc.Mu.Unlock()
+	if len(finalContext) > 0 {
+		svc.Context = finalContext
 	}
 
 	return nil
