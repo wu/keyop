@@ -42,6 +42,9 @@ func TestService_ValidateConfig(t *testing.T) {
 			},
 			pubs: map[string]core.ChannelInfo{
 				"owntracks": {Name: "owntracks-topic"},
+				"gps":       {Name: "gps-topic"},
+				"metrics":   {Name: "metrics-topic"},
+				"events":    {Name: "events-topic"},
 			},
 			expectError: false,
 		},
@@ -87,6 +90,12 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 		Config: map[string]interface{}{
 			"port": port,
 		},
+		Pubs: map[string]core.ChannelInfo{
+			"owntracks": {Name: "owntracks"},
+			"gps":       {Name: "gps"},
+			"metrics":   {Name: "metrics"},
+			"events":    {Name: "events"},
+		},
 	}
 
 	svc := NewService(deps, cfg)
@@ -118,7 +127,15 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 func TestService_ServeHTTP(t *testing.T) {
 	deps := testDeps()
 	cfg := core.ServiceConfig{
+		Name:   "test-owntracks",
+		Type:   "owntracks",
 		Config: map[string]interface{}{"port": 8080},
+		Pubs: map[string]core.ChannelInfo{
+			"owntracks": {Name: "owntracks"},
+			"gps":       {Name: "gps"},
+			"metrics":   {Name: "metrics"},
+			"events":    {Name: "events"},
+		},
 	}
 	svc := NewService(deps, cfg)
 
@@ -149,6 +166,168 @@ func TestService_ServeHTTP(t *testing.T) {
 		svc.(*Service).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("Location and Battery and Regions", func(t *testing.T) {
+		messenger := deps.MustGetMessenger().(*core.Messenger)
+		gpsChan := make(chan core.Message, 10)
+		metricsChan := make(chan core.Message, 10)
+		eventsChan := make(chan core.Message, 10)
+		owntracksChan := make(chan core.Message, 10)
+
+		messenger.Subscribe("test", "gps", 0, func(m core.Message) error {
+			gpsChan <- m
+			return nil
+		})
+		messenger.Subscribe("test", "metrics", 0, func(m core.Message) error {
+			metricsChan <- m
+			return nil
+		})
+		messenger.Subscribe("test", "events", 0, func(m core.Message) error {
+			eventsChan <- m
+			return nil
+		})
+		messenger.Subscribe("test", "owntracks", 0, func(m core.Message) error {
+			owntracksChan <- m
+			return nil
+		})
+
+		correlationID := "test-uuid-123"
+		testData := map[string]interface{}{
+			"uuid":      correlationID,
+			"_type":     "location",
+			"lat":       51.5033,
+			"lon":       -0.1195,
+			"batt":      float64(85),
+			"tid":       "ne",
+			"inregions": []interface{}{"home"},
+		}
+		body, _ := json.Marshal(testData)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+		rr := httptest.NewRecorder()
+
+		svc.(*Service).ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		// Check owntracks message
+		select {
+		case msg := <-owntracksChan:
+			// Drain previous messages if any (unlikely but safe)
+			for msg.Uuid != correlationID {
+				select {
+				case msg = <-owntracksChan:
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("timed out waiting for owntracks message with correlationID")
+				}
+			}
+			assert.Equal(t, "owntracks", msg.ChannelName)
+			assert.Equal(t, correlationID, msg.Uuid)
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for owntracks message")
+		}
+
+		// Check gps message
+		select {
+		case msg := <-gpsChan:
+			for msg.Uuid != correlationID {
+				select {
+				case msg = <-gpsChan:
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("timed out waiting for gps message with correlationID")
+				}
+			}
+			assert.Equal(t, "gps", msg.ChannelName)
+			assert.Equal(t, correlationID, msg.Uuid)
+			data := msg.Data.(map[string]interface{})
+			assert.Equal(t, 51.5033, data["lat"])
+			assert.Equal(t, 2, len(data)) // lat, lon
+			assert.Nil(t, data["batt"])
+			assert.Nil(t, data["tid"])
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for gps message")
+		}
+
+		// Check metrics message
+		select {
+		case msg := <-metricsChan:
+			for msg.Uuid != correlationID {
+				select {
+				case msg = <-metricsChan:
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("timed out waiting for metrics message with correlationID")
+				}
+			}
+			assert.Equal(t, "metrics", msg.ChannelName)
+			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, float64(85), msg.Metric)
+			assert.Equal(t, "test-owntracks", msg.ServiceName)
+			assert.Equal(t, "owntracks", msg.ServiceType)
+			data := msg.Data.(map[string]interface{})
+			assert.Equal(t, "ne", data["tid"])
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for metrics message")
+		}
+
+		// Check events message (enter home)
+		select {
+		case msg := <-eventsChan:
+			for msg.Uuid != correlationID {
+				select {
+				case msg = <-eventsChan:
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("timed out waiting for events message with correlationID")
+				}
+			}
+			assert.Equal(t, "events", msg.ChannelName)
+			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, "test-owntracks", msg.ServiceName)
+			assert.Equal(t, "owntracks", msg.ServiceType)
+			data := msg.Data.(map[string]interface{})
+			assert.Equal(t, "enter", data["event"])
+			assert.Equal(t, "home", data["region"])
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for events message")
+		}
+
+		// Second request: exit home, enter work
+		testData2 := map[string]interface{}{
+			"_type":     "location",
+			"lat":       51.5,
+			"lon":       -0.12,
+			"inregions": []interface{}{"work"},
+		}
+		body2, _ := json.Marshal(testData2)
+		req2 := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body2))
+		rr2 := httptest.NewRecorder()
+		svc.(*Service).ServeHTTP(rr2, req2)
+		assert.Equal(t, http.StatusOK, rr2.Code)
+
+		// Should get exit home and enter work
+		var events []core.Message
+		for i := 0; i < 2; i++ {
+			select {
+			case msg := <-eventsChan:
+				events = append(events, msg)
+			case <-time.After(500 * time.Millisecond):
+				t.Fatalf("timed out waiting for event %d", i)
+			}
+		}
+
+		assert.Len(t, events, 2)
+		// One should be exit home, other enter work
+		foundExit := false
+		foundEnter := false
+		for _, e := range events {
+			data := e.Data.(map[string]interface{})
+			if data["event"] == "exit" && data["region"] == "home" {
+				foundExit = true
+			}
+			if data["event"] == "enter" && data["region"] == "work" {
+				foundEnter = true
+			}
+		}
+		assert.True(t, foundExit, "did not find exit home event")
+		assert.True(t, foundEnter, "did not find enter work event")
 	})
 }
 
