@@ -44,7 +44,61 @@ func testDeps(t *testing.T) core.Dependencies {
 
 	deps.SetMessenger(messenger)
 
+	state := core.NewFileStateStore(tmpDir, deps.MustGetOsProvider())
+	deps.SetStateStore(state)
+
 	return deps
+}
+
+func TestService_Persistence(t *testing.T) {
+	deps := testDeps(t)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req OllamaRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		resp := OllamaResponse{
+			Response: "OK",
+			Done:     true,
+			Context:  []int{1, 2, 3},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	var host string
+	var port int
+	fmt.Sscanf(ts.URL, "http://%s", &host)
+	idx := strings.LastIndex(host, ":")
+	if idx != -1 {
+		fmt.Sscanf(host[idx+1:], "%d", &port)
+		host = host[:idx]
+	}
+
+	cfg := core.ServiceConfig{
+		Name: "ollama-persist",
+		Config: map[string]interface{}{
+			"host": host,
+			"port": port,
+		},
+		Subs: map[string]core.ChannelInfo{
+			"requests": {Name: "ollama-req"},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"responses": {Name: "ollama-resp"},
+		},
+	}
+
+	// First initialization and request to save context
+	svc1 := NewService(deps, cfg).(*Service)
+	err := svc1.messageHandler(core.Message{Text: "Save context"})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3}, svc1.Context)
+
+	// Second initialization - should load context
+	svc2 := NewService(deps, cfg).(*Service)
+	err = svc2.Initialize()
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3}, svc2.Context, "Context should be persisted")
 }
 
 func TestService_ValidateConfig(t *testing.T) {

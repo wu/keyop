@@ -101,13 +101,20 @@ func (svc *Service) ValidateConfig() []error {
 func (svc *Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	logger := svc.Deps.MustGetLogger()
+	state := svc.Deps.MustGetStateStore()
+
+	// Load context from state store
+	err := state.Load(fmt.Sprintf("%s_context", svc.Cfg.Name), &svc.Context)
+	if err != nil {
+		logger.Error("ollama: failed to load context", "error", err)
+	}
 
 	sub, ok := svc.Cfg.Subs["requests"]
 	if !ok {
 		return fmt.Errorf("ollama: requests subscription not found")
 	}
 
-	err := messenger.Subscribe(svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
+	err = messenger.Subscribe(svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
 	if err != nil {
 		return fmt.Errorf("ollama: failed to subscribe to %s: %w", sub.Name, err)
 	}
@@ -219,10 +226,15 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	// Update context
 	svc.Mu.Lock()
-	defer svc.Mu.Unlock()
 	if len(finalContext) > 0 {
 		svc.Context = finalContext
+		state := svc.Deps.MustGetStateStore()
+		err := state.Save(fmt.Sprintf("%s_context", svc.Cfg.Name), svc.Context)
+		if err != nil {
+			logger.Error("ollama: failed to save context", "error", err)
+		}
 	}
+	svc.Mu.Unlock()
 
 	return nil
 }
