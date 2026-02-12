@@ -44,10 +44,10 @@ func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"alerts"}, logger)
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
 	errs = append(errs, pubErrs...)
 
-	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"alerts"}, logger)
+	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"events"}, logger)
 	errs = append(errs, subErrs...)
 
 	botToken, _ := svc.Cfg.Config["token"].(string)
@@ -87,7 +87,7 @@ func (svc *Service) Initialize() error {
 	svc.appID, _ = svc.Cfg.Config["appID"].(string)
 
 	messenger := svc.Deps.MustGetMessenger()
-	err := messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["alerts"].Name, svc.Cfg.Subs["alerts"].MaxAge, svc.messageHandler)
+	err := messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["events"].Name, svc.Cfg.Subs["events"].MaxAge, svc.messageHandler)
 	if err != nil {
 		return err
 	}
@@ -405,14 +405,14 @@ func (svc *Service) Check() error {
 				userName := svc.getUserName(m.User)
 
 				err := messenger.Send(core.Message{
-					ChannelName: svc.Cfg.Pubs["alerts"].Name,
+					ChannelName: svc.Cfg.Pubs["events"].Name,
 					ServiceName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
 					Text:        fmt.Sprintf("Slack [#%s] [%s]: %s", channelName, userName, m.Text),
 					Data:        m,
 				})
 				if err != nil {
-					logger.Error("Failed to send slack message to alerts channel", "error", err)
+					logger.Error("Failed to send slack message to events channel", "error", err)
 				}
 			}
 		} else if envelope.Type == "hello" {
