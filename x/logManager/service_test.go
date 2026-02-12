@@ -31,6 +31,8 @@ func TestService_Check(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg)
+	err = svc.Initialize()
+	assert.NoError(t, err)
 
 	// Create a new log file (should NOT be gzipped)
 	newFile := filepath.Join(tmpDir, "new.log")
@@ -82,7 +84,9 @@ func TestService_Check(t *testing.T) {
 }
 
 func TestService_Lifecycle(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	deps := core.Dependencies{}
+	deps.SetLogger(logger)
 	cfg := core.ServiceConfig{}
 	svc := NewService(deps, cfg)
 
@@ -102,6 +106,7 @@ func TestService_Check_Errors(t *testing.T) {
 			},
 		})
 		svc := NewService(deps, core.ServiceConfig{})
+		_ = svc.Initialize()
 		err := svc.Check()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read data directory")
@@ -116,6 +121,7 @@ func TestService_Check_Errors(t *testing.T) {
 			},
 		})
 		svc := NewService(deps, core.ServiceConfig{})
+		_ = svc.Initialize()
 		err := svc.Check()
 		assert.NoError(t, err)
 	})
@@ -140,6 +146,7 @@ func TestService_Check_Filtering(t *testing.T) {
 	svc := NewService(deps, core.ServiceConfig{
 		Config: map[string]interface{}{"dataDir": tmpDir},
 	})
+	_ = svc.Initialize()
 
 	err = svc.Check()
 	assert.NoError(t, err)
@@ -204,6 +211,8 @@ func TestService_Check_CustomMaxAge(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg)
+	err = svc.Initialize()
+	assert.NoError(t, err)
 
 	// Create a log file that is 12 hours old (should BE gzipped because it > 10h)
 	oldFile := filepath.Join(tmpDir, "old_12h.log")
@@ -256,6 +265,8 @@ func TestService_Check_InvalidMaxAge(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg)
+	err = svc.Initialize()
+	assert.NoError(t, err)
 
 	// Create a log file that is 50 hours old (should BE gzipped by default 48h)
 	oldFile := filepath.Join(tmpDir, "old_50h.log")
