@@ -15,6 +15,7 @@ import (
 	"keyop/x/macosNotification"
 	"keyop/x/memoryMonitor"
 	"keyop/x/metricsMonitor"
+	"keyop/x/ollama"
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
 	"keyop/x/process"
@@ -70,6 +71,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"owntracks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return owntracks.NewService(deps, cfg)
+	},
+	"ollama": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return ollama.NewService(deps, cfg)
 	},
 	"slack": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return slack.NewService(deps, cfg)
