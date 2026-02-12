@@ -5,6 +5,8 @@ import (
 	"keyop/core"
 	"keyop/util"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var startTime time.Time
@@ -61,10 +63,13 @@ func (svc Service) Check() error {
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
 
+	// generate correlation id for this check to tie together the events and metrics in the backend
+	msgUuid := uuid.New().String()
 	if !restartNotified {
 		// send an alert on service startup
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 		err := messenger.Send(core.Message{
+			Uuid:        msgUuid,
 			ChannelName: svc.Cfg.Pubs["alerts"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
@@ -77,6 +82,7 @@ func (svc Service) Check() error {
 	}
 
 	eventErr := messenger.Send(core.Message{
+		Uuid:        msgUuid,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -90,6 +96,7 @@ func (svc Service) Check() error {
 	}
 
 	metricErr := messenger.Send(core.Message{
+		Uuid:        msgUuid,
 		ChannelName: svc.Cfg.Pubs["metrics"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -128,7 +130,11 @@ func (svc Service) temp() (Event, error) {
 		metricName = metricPrefix + svc.Cfg.Name
 	}
 
+	// generate correlation id for this check to tie together the events and metrics in the backend
+	msgUuid := uuid.New().String()
+
 	eventErr := messenger.Send(core.Message{
+		Uuid:        msgUuid,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -142,6 +148,7 @@ func (svc Service) temp() (Event, error) {
 	}
 
 	metricErr := messenger.Send(core.Message{
+		Uuid:        msgUuid,
 		ChannelName: svc.Cfg.Pubs["metrics"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
