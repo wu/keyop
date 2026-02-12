@@ -58,8 +58,8 @@ func TestService_ValidateConfig(t *testing.T) {
 	}{
 		{
 			name: "valid config",
-			pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
-			subs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
+			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token":     "xoxb-test",
 				"appToken":  "xapp-test",
@@ -70,8 +70,8 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing appToken",
-			pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
-			subs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
+			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token":     "xoxb-test",
 				"channelID": "C12345",
@@ -80,8 +80,8 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing token",
-			pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
-			subs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
+			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"channelID": "C12345",
 			},
@@ -89,8 +89,8 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing channelID",
-			pubs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
-			subs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
+			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token": "xoxb-test",
 			},
@@ -99,7 +99,7 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "missing pubs",
 			pubs: map[string]core.ChannelInfo{},
-			subs: map[string]core.ChannelInfo{"alerts": {Name: "a"}},
+			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token":     "xoxb-test",
 				"channelID": "C12345",
@@ -146,7 +146,7 @@ func TestService_MessageHandler(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",
-		Subs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-ch"}},
+		Subs: map[string]core.ChannelInfo{"events": {Name: "events-ch"}},
 		Config: map[string]interface{}{
 			"token":     "xoxb-test",
 			"appToken":  "xapp-test",
@@ -266,7 +266,7 @@ func TestService_Check(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",
-		Pubs: map[string]core.ChannelInfo{"alerts": {Name: "alerts-ch"}},
+		Pubs: map[string]core.ChannelInfo{"events": {Name: "events-ch"}},
 		Config: map[string]interface{}{
 			"token":     "xoxb-test",
 			"appToken":  "xapp-test",
@@ -280,7 +280,7 @@ func TestService_Check(t *testing.T) {
 
 	receivedMessage := make(chan string, 1)
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe("test-subscriber", "alerts-ch", 0, func(msg core.Message) error {
+	messenger.Subscribe("test-subscriber", "events-ch", 0, func(msg core.Message) error {
 		receivedMessage <- msg.Text
 		return nil
 	})
@@ -324,12 +324,12 @@ func TestService_Check(t *testing.T) {
 		t.Fatal("Timed out waiting for message ack")
 	}
 
-	// Verify the message was sent to the alerts channel with resolved names
+	// Verify the message was sent to the events channel with resolved names
 	select {
 	case text := <-receivedMessage:
 		assert.Equal(t, "Slack [#general] [John Doe]: hello from socket mode", text)
 	case <-time.After(2 * time.Second):
-		t.Fatal("Timed out waiting for message on alerts channel")
+		t.Fatal("Timed out waiting for message on events channel")
 	}
 
 	// Stop the service
