@@ -6,6 +6,8 @@ import (
 	"keyop/util"
 	"regexp"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -61,10 +63,13 @@ func (svc *Service) Check() error {
 	cmd := osProvider.Command("ping", "-c", "1", "-W", "2", host)
 	output, err := cmd.CombinedOutput()
 
+	// generate correlation id for this check to tie together the events and metrics in the backend
+	msgUuid := uuid.New().String()
 	if err != nil {
 		logger.Warn("Network outage detected", "host", host, "error", err, "output", string(output))
 
 		alertErr := messenger.Send(core.Message{
+			Uuid:        msgUuid,
 			ChannelName: svc.Cfg.Pubs["status"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
@@ -81,6 +86,7 @@ func (svc *Service) Check() error {
 		pingTime := extractPingTime(string(output))
 
 		eventErr := messenger.Send(core.Message{
+			Uuid:        msgUuid,
 			ChannelName: svc.Cfg.Pubs["status"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
@@ -99,6 +105,7 @@ func (svc *Service) Check() error {
 					metricName = fmt.Sprintf("%s.ping_time", svc.Cfg.Name)
 				}
 				metricErr := messenger.Send(core.Message{
+					Uuid:        msgUuid,
 					ChannelName: svc.Cfg.Pubs["metrics"].Name,
 					ServiceName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
