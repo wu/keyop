@@ -12,55 +12,61 @@ import (
 )
 
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps    core.Dependencies
+	Cfg     core.ServiceConfig
+	DataDir string
+	MaxAge  time.Duration
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return Service{
+	return &Service{
 		Deps: deps,
 		Cfg:  cfg,
 	}
 }
 
-func (svc Service) ValidateConfig() []error {
+func (svc *Service) ValidateConfig() []error {
 	return nil
 }
 
-func (svc Service) Initialize() error {
-	return nil
-}
-
-func (svc Service) Check() error {
+func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
-	osProvider := svc.Deps.MustGetOsProvider()
 
 	dataDir, _ := svc.Cfg.Config["dataDir"].(string)
 	if dataDir == "" {
 		dataDir = "data"
 	}
+	svc.DataDir = dataDir
 
-	logger.Info("Checking for old log files", "dir", dataDir)
+	svc.MaxAge = 48 * time.Hour
+	if maxAgeStr, ok := svc.Cfg.Config["maxAge"].(string); ok {
+		if dur, err := time.ParseDuration(maxAgeStr); err == nil {
+			svc.MaxAge = dur
+		} else {
+			logger.Warn("Failed to parse maxAge, using default", "maxAge", maxAgeStr, "error", err, "default", svc.MaxAge)
+		}
+	}
 
-	files, err := osProvider.ReadDir(dataDir)
+	return nil
+}
+
+func (svc *Service) Check() error {
+	logger := svc.Deps.MustGetLogger()
+	osProvider := svc.Deps.MustGetOsProvider()
+
+	logger.Info("Checking for old log files", "dir", svc.DataDir)
+
+	files, err := osProvider.ReadDir(svc.DataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Warn("Data directory does not exist", "dir", dataDir)
+			logger.Warn("Data directory does not exist", "dir", svc.DataDir)
 			return nil
 		}
 		return fmt.Errorf("failed to read data directory: %w", err)
 	}
 
 	now := time.Now()
-	maxAge := 48 * time.Hour
-	if maxAgeStr, ok := svc.Cfg.Config["maxAge"].(string); ok {
-		if dur, err := time.ParseDuration(maxAgeStr); err == nil {
-			maxAge = dur
-		} else {
-			logger.Warn("Failed to parse maxAge, using default", "maxAge", maxAgeStr, "error", err, "default", maxAge)
-		}
-	}
-	threshold := now.Add(-maxAge)
+	threshold := now.Add(-svc.MaxAge)
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -73,7 +79,7 @@ func (svc Service) Check() error {
 			continue
 		}
 
-		filePath := filepath.Join(dataDir, name)
+		filePath := filepath.Join(svc.DataDir, name)
 		info, err := osProvider.Stat(filePath)
 		if err != nil {
 			logger.Error("Failed to stat file", "file", filePath, "error", err)
@@ -81,7 +87,7 @@ func (svc Service) Check() error {
 		}
 
 		if info.ModTime().Before(threshold) {
-			logger.Info("Compressing old log file", "file", name, "modTime", info.ModTime())
+			logger.Warn("Compressing old log file", "file", name, "modTime", info.ModTime())
 			if err := svc.gzipFile(filePath, info.ModTime()); err != nil {
 				logger.Error("Failed to gzip file", "file", filePath, "error", err)
 				continue
@@ -89,13 +95,15 @@ func (svc Service) Check() error {
 			if err := osProvider.Remove(filePath); err != nil {
 				logger.Error("Failed to remove original file after compression", "file", filePath, "error", err)
 			}
+		} else {
+			logger.Debug("File is not old enough to compress", "file", name, "modTime", info.ModTime())
 		}
 	}
 
 	return nil
 }
 
-func (svc Service) gzipFile(srcPath string, modTime time.Time) error {
+func (svc *Service) gzipFile(srcPath string, modTime time.Time) error {
 	osProvider := svc.Deps.MustGetOsProvider()
 	destPath := srcPath + ".gz"
 
