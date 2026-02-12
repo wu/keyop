@@ -2,6 +2,7 @@ package run
 
 import (
 	"keyop/core"
+	"keyop/x/anomalyDetector"
 	"keyop/x/cpuMonitor"
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
@@ -25,6 +26,9 @@ import (
 )
 
 var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceConfig) core.Service{
+	"anomalyDetector": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return anomalyDetector.NewService(deps, cfg)
+	},
 	"graphite": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return graphite.NewService(deps, cfg)
 	},
