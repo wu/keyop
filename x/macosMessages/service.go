@@ -50,7 +50,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	logger.Info("Sending message", "text", msg.Text)
 
 	content := fmt.Sprintf("%s-%s: %s", msg.ServiceName, msg.ServiceType, msg.Text)
-	script := fmt.Sprintf(`tell application "Messages" to send "wubot: %s" to buddy "%s"`, content, svc.Address)
+	script := fmt.Sprintf(`tell application "Messages" to send "keyop: %s" to buddy "%s"`, content, svc.Address)
 	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
 	cmd := osProvider.Command("osascript", "-e", script)

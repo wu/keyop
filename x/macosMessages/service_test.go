@@ -142,13 +142,15 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
+		err := svc.Initialize()
+		assert.NoError(t, err)
 
 		msg := core.Message{
 			ServiceName: cfg.Name,
 			ServiceType: cfg.Type,
 			Text:        "hello world",
 		}
-		err := svc.messageHandler(msg)
+		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 
 		assert.Equal(t, "osascript", capturedName)
