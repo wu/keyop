@@ -122,7 +122,7 @@ func TestService_MessageHandler_Batching(t *testing.T) {
 
 	// Mock Ollama server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/chat", r.URL.Path)
+		assert.Equal(t, "/api/generate", r.URL.Path)
 		w.Header().Set("Content-Type", "application/x-ndjson")
 
 		var req OllamaRequest
@@ -130,9 +130,9 @@ func TestService_MessageHandler_Batching(t *testing.T) {
 		assert.Equal(t, "llama3.3", req.Model)
 
 		responses := []OllamaResponse{
-			{Message: &Message{Content: "Hello ", Role: "assistant"}, Done: false},
-			{Message: &Message{Content: "world", Role: "assistant"}, Done: false},
-			{Message: &Message{Content: "!", Role: "assistant"}, Done: true},
+			{Response: "Hello ", Done: false},
+			{Response: "world", Done: false},
+			{Response: "!", Done: true, Context: []int{1, 2, 3}},
 		}
 
 		for _, resp := range responses {
@@ -199,4 +199,67 @@ func TestService_MessageHandler_Batching(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timeout waiting for second batch")
 	}
+}
+
+func TestService_MessageHandler_Context(t *testing.T) {
+	deps := testDeps(t)
+
+	var capturedContexts [][]int
+	var capturedPrompts []string
+	// Mock Ollama server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+
+		var req OllamaRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		capturedContexts = append(capturedContexts, req.Context)
+		capturedPrompts = append(capturedPrompts, req.Prompt)
+
+		resp := OllamaResponse{
+			Response: "Response to " + req.Prompt,
+			Done:     true,
+			Context:  []int{len(capturedPrompts)}, // Mock context
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	var host string
+	var port int
+	fmt.Sscanf(ts.URL, "http://%s", &host)
+	idx := strings.LastIndex(host, ":")
+	if idx != -1 {
+		fmt.Sscanf(host[idx+1:], "%d", &port)
+		host = host[:idx]
+	}
+
+	cfg := core.ServiceConfig{
+		Name: "ollama-test",
+		Config: map[string]interface{}{
+			"host": host,
+			"port": port,
+		},
+		Subs: map[string]core.ChannelInfo{
+			"requests": {Name: "ollama-req"},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"responses": {Name: "ollama-resp"},
+		},
+	}
+
+	svc := NewService(deps, cfg).(*Service)
+
+	// First request
+	err := svc.messageHandler(core.Message{Text: "First"})
+	assert.NoError(t, err)
+	assert.Len(t, capturedPrompts, 1)
+	assert.Equal(t, "First", capturedPrompts[0])
+	assert.Nil(t, capturedContexts[0])
+
+	// Second request - should include context from first response
+	err = svc.messageHandler(core.Message{Text: "Second"})
+	assert.NoError(t, err)
+	assert.Len(t, capturedPrompts, 2)
+	assert.Equal(t, "Second", capturedPrompts[1])
+	assert.Equal(t, []int{1}, capturedContexts[1])
 }
