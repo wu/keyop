@@ -210,8 +210,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 					shouldAlert = true
 					state.AlertCount++
 					state.LastAlertTime = now
-					timeSinceFirst := now.Sub(state.ProblemSince).Truncate(time.Minute).String()
-					alertText = fmt.Sprintf("ALERT: %s (%s) in %s state for %s: %s", msg.ServiceName, msg.ServiceType, msg.Status, timeSinceFirst, msg.Text)
+					alertText = fmt.Sprintf("ALERT: %s: %s", msg.Status, msg.Text)
 				}
 			}
 		}
@@ -220,7 +219,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			if state.AlertSent {
 				shouldAlert = true
 				alertStatus = "ok"
-				alertText = fmt.Sprintf("RECOVERY: %s (%s) is back to ok state", msg.ServiceName, msg.ServiceType)
+				alertText = fmt.Sprintf("RECOVERY: %s (%s): %s", msg.ServiceName, msg.ServiceType, msg.Text)
 			}
 		}
 		state.Status = msg.Status
