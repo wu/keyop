@@ -24,33 +24,36 @@ type KodiState struct {
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	host, _ := cfg.Config["host"].(string)
-	port, ok := cfg.Config["port"].(float64)
-	if !ok {
-		port = 8080
+	svc := &Service{
+		Deps: deps,
+		Cfg:  cfg,
 	}
 
-	username, ok := cfg.Config["username"].(string)
+	if host, ok := svc.Cfg.Config["host"].(string); ok {
+		svc.Host = host
+	}
+
+	if port, ok := svc.Cfg.Config["port"].(int); ok {
+		svc.Port = port
+	}
+
+	username, ok := svc.Cfg.Config["username"].(string)
 	if !ok {
 		username = "kodi"
 	}
 
-	password, ok := cfg.Config["password"].(string)
+	password, ok := svc.Cfg.Config["password"].(string)
 	if !ok {
 		password = "kodi"
 	}
 
-	return Service{
-		Deps:     deps,
-		Cfg:      cfg,
-		Host:     host,
-		Port:     int(port),
-		Username: username,
-		Password: password,
-	}
+	svc.Username = username
+	svc.Password = password
+
+	return svc
 }
 
-func (svc Service) ValidateConfig() []error {
+func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
 
@@ -60,10 +63,18 @@ func (svc Service) ValidateConfig() []error {
 		errs = append(errs, err)
 	}
 
+	// check port
+	_, portExists := svc.Cfg.Config["port"].(int)
+	if !portExists {
+		err := fmt.Errorf("kodi: port not set in config or not an int")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+	}
+
 	return errs
 }
 
-func (svc Service) Initialize() error {
+func (svc *Service) Initialize() error {
 	return nil
 }
 
@@ -99,7 +110,23 @@ type itemDetails struct {
 	} `json:"item"`
 }
 
-func (svc Service) Check() error {
+type playerProperties struct {
+	Time struct {
+		Hours        int `json:"hours"`
+		Minutes      int `json:"minutes"`
+		Seconds      int `json:"seconds"`
+		Milliseconds int `json:"milliseconds"`
+	} `json:"time"`
+	TotalTime struct {
+		Hours        int `json:"hours"`
+		Minutes      int `json:"minutes"`
+		Seconds      int `json:"seconds"`
+		Milliseconds int `json:"milliseconds"`
+	} `json:"totaltime"`
+	Speed int `json:"speed"`
+}
+
+func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 	stateStore := svc.Deps.MustGetStateStore()
@@ -121,7 +148,24 @@ func (svc Service) Check() error {
 	if err != nil {
 		logger.Warn("Failed to load state", "error", err)
 	}
-	// 3. Compare and send events
+
+	// 3. Get player properties if playing
+	var playbackTime string
+	if currentTitle != "" {
+		var props playerProperties
+		params := map[string]interface{}{
+			"playerid":   1,
+			"properties": []string{"time", "totaltime", "speed"},
+		}
+		err = svc.callKodi(url, "Player.GetProperties", params, &props)
+		if err == nil {
+			playbackTime = fmt.Sprintf("%02d:%02d:%02d", props.Time.Hours, props.Time.Minutes, props.Time.Seconds)
+		} else {
+			logger.Error("Failed to get player properties", "error", err)
+		}
+	}
+
+	// 4. Compare and send events
 	if currentTitle != prevState.CurrentTitle {
 		if currentTitle != "" {
 			// Movie started or changed
@@ -131,7 +175,7 @@ func (svc Service) Check() error {
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Text:        fmt.Sprintf("Movie started: %s", currentTitle),
-				Data:        map[string]string{"title": currentTitle, "status": "playing"},
+				Data:        map[string]string{"title": currentTitle, "status": "playing", "time": playbackTime},
 			})
 		} else {
 			// Movie stopped
@@ -149,18 +193,31 @@ func (svc Service) Check() error {
 			logger.Error("Failed to send event", "error", err)
 		}
 
-		// 4. Save new state
+		// 5. Save new state
 		prevState.CurrentTitle = currentTitle
 		err = stateStore.Save(svc.Cfg.Name, prevState)
 		if err != nil {
 			logger.Error("Failed to save state", "error", err)
+		}
+	} else if currentTitle != "" {
+		// Movie still playing, send update with time
+		logger.Debug("Movie still playing", "title", currentTitle, "time", playbackTime)
+		err = messenger.Send(core.Message{
+			ChannelName: svc.Cfg.Pubs["events"].Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Text:        fmt.Sprintf("Movie playing: %s (%s)", currentTitle, playbackTime),
+			Data:        map[string]string{"title": currentTitle, "status": "playing", "time": playbackTime},
+		})
+		if err != nil {
+			logger.Error("Failed to send playing update", "error", err)
 		}
 	}
 
 	return nil
 }
 
-func (svc Service) callKodi(url string, method string, params interface{}, result interface{}) error {
+func (svc *Service) callKodi(url string, method string, params interface{}, result interface{}) error {
 	logger := svc.Deps.MustGetLogger()
 
 	reqBody := jsonRPCRequest{
@@ -210,7 +267,7 @@ func (svc Service) callKodi(url string, method string, params interface{}, resul
 	return json.Unmarshal(rpcResp.Result, result)
 }
 
-func (svc Service) getPlayingTitle(url string, playerID int) (string, error) {
+func (svc *Service) getPlayingTitle(url string, playerID int) (string, error) {
 
 	var details itemDetails
 	params := map[string]interface{}{
