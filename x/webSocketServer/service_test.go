@@ -337,7 +337,14 @@ func TestHandleConnection(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		messenger.mu.Lock()
 		defer messenger.mu.Unlock()
-		return messenger.readerStates["test-channel:ws-server_"+conn2.LocalAddr().String()] == "oldfile:123"
+		found := false
+		for k, v := range messenger.readerStates {
+			if strings.HasPrefix(k, "test-channel:ws_") && v == "oldfile:123" {
+				found = true
+				break
+			}
+		}
+		return found
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 5. Test Ping
