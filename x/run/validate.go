@@ -23,7 +23,7 @@ func validateServiceConfig(services []ServiceWrapper, logger core.Logger) error 
 			logger.Info("validating service config", "name", serviceWrapper.Config.Name, "type", serviceWrapper.Config.Type)
 			errs := serviceWrapper.Service.ValidateConfig()
 			for _, err := range errs {
-				logger.Error("service config validation error", "name", serviceWrapper.Config.Name, "error", err)
+				logger.Error("service config validation error", "name", serviceWrapper.Config.Name, "type", serviceWrapper.Config.Type, "error", err)
 				errCount++
 			}
 		}
