@@ -35,13 +35,19 @@ func (svc *Service) Initialize() error {
 
 func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
-	if msg.Text == "" {
+
+	var text string
+	if msg.Summary != "" {
+		text = msg.Summary
+	} else if msg.Text != "" {
+		text = msg.Text
+	} else {
 		return nil
 	}
 
-	logger.Info("Speaking text", "text", msg.Text)
+	logger.Info("Speaking text", "text", text)
 	osProvider := svc.Deps.MustGetOsProvider()
-	cmd := osProvider.Command("say", msg.Text)
+	cmd := osProvider.Command("say", text)
 	err := cmd.Run()
 	if err != nil {
 		logger.Error("Failed to execute say command", "error", err)
