@@ -7,6 +7,7 @@ import (
 	"keyop/core"
 	"keyop/util"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -16,10 +17,13 @@ type Service struct {
 	Cfg  core.ServiceConfig
 	Port int
 
+	deviceNames    map[string]string
 	currentRegions []string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+	logger := deps.MustGetLogger()
+
 	svc := &Service{
 		Deps: deps,
 		Cfg:  cfg,
@@ -28,6 +32,18 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	port, portExists := svc.Cfg.Config["port"].(int)
 	if portExists {
 		svc.Port = port
+	}
+
+	svc.deviceNames = make(map[string]string)
+	if devices, ok := svc.Cfg.Config["devices"].(map[string]interface{}); ok {
+		for k, v := range devices {
+			if name, ok := v.(string); ok {
+				svc.deviceNames[k] = name
+				logger.Debug("device name configured", "deviceUUID", k, "deviceName", name)
+			}
+		}
+	} else {
+		logger.Debug("no devices configured, will use UUIDs as device names")
 	}
 
 	return svc
@@ -98,10 +114,36 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	logger.Debug("received owntracks message", "data", data)
 
+	// Parse device UUID from 'topic' field in the data
+	deviceUUID := ""
+	if topic, ok := data["topic"].(string); ok && topic != "" {
+		logger.Debug("topic found in data", "topic", topic)
+		// owntracks/user/device
+		parts := strings.Split(topic, "/")
+		if len(parts) >= 3 {
+			deviceUUID = parts[len(parts)-1]
+		}
+	} else {
+		logger.Debug("no topic found in data, will use generic service name")
+	}
+
+	deviceName := ""
+	if deviceUUID != "" {
+		logger.Debug("device UUID found in topic", "deviceUUID", deviceUUID)
+		deviceName = svc.deviceNames[deviceUUID]
+	}
+
+	serviceName := svc.Cfg.Name
+	if deviceName != "" {
+		serviceName = fmt.Sprintf("%s-%s", svc.Cfg.Name, deviceName)
+	}
+
+	logger.Debug("received owntracks message", "data", data, "deviceUUID", deviceUUID, "deviceName", deviceName)
+
 	msg := core.Message{
 		ChannelName: svc.Cfg.Pubs["owntracks"].Name,
 		ServiceType: svc.Cfg.Type,
-		ServiceName: svc.Cfg.Name,
+		ServiceName: serviceName,
 		Data:        data,
 	}
 
@@ -132,7 +174,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Uuid:        msg.Uuid,
 			ChannelName: svc.Cfg.Pubs["gps"].Name,
 			ServiceType: svc.Cfg.Type,
-			ServiceName: svc.Cfg.Name,
+			ServiceName: serviceName,
 			Data:        gpsData,
 		}
 		if err := messenger.Send(gpsMsg); err != nil {
@@ -150,11 +192,20 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			metricsData["device"] = device
 		}
 
+		metricName := "battery.owntracks"
+		if deviceName != "" {
+			logger.Debug("device name found, using it in metric name", "deviceName", deviceName)
+			metricName = fmt.Sprintf("battery.%s", deviceName)
+		} else {
+			logger.Debug("no device name found, using generic metric name", "deviceUUID", deviceUUID)
+		}
+
 		metricsMsg := core.Message{
 			Uuid:        msg.Uuid,
 			ChannelName: svc.Cfg.Pubs["metrics"].Name,
 			ServiceType: svc.Cfg.Type,
-			ServiceName: svc.Cfg.Name,
+			ServiceName: serviceName,
+			MetricName:  metricName,
 			Metric:      batt,
 			Data:        metricsData,
 		}
@@ -188,7 +239,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Uuid:        msg.Uuid,
 					ChannelName: eventsChannel,
 					ServiceType: svc.Cfg.Type,
-					ServiceName: svc.Cfg.Name,
+					ServiceName: serviceName,
 					Data: map[string]interface{}{
 						"event":  "enter",
 						"region": nr,
@@ -214,7 +265,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Uuid:        msg.Uuid,
 					ChannelName: eventsChannel,
 					ServiceType: svc.Cfg.Type,
-					ServiceName: svc.Cfg.Name,
+					ServiceName: serviceName,
 					Data: map[string]interface{}{
 						"event":  "exit",
 						"region": cr,
@@ -229,7 +280,13 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		svc.currentRegions = newRegions
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if deviceName != "" {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]string{"device": deviceName}
+		json.NewEncoder(w).Encode(resp)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func (svc *Service) Check() error {
