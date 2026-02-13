@@ -24,7 +24,7 @@ import (
 	"keyop/x/statusMonitor"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
-	"keyop/x/webSocket"
+	"keyop/x/webSocketClient"
 	"keyop/x/webSocketServer"
 )
 
@@ -94,8 +94,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"thermostat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return thermostat.NewService(deps, cfg)
 	},
-	"webSocket": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return webSocket.NewService(deps, cfg)
+	"webSocketClient": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return webSocketClient.NewService(deps, cfg)
 	},
 	"webSocketServer": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return webSocketServer.NewService(deps, cfg)

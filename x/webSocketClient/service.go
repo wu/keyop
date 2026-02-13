@@ -1,4 +1,4 @@
-package webSocket
+package webSocketClient
 
 import (
 	"crypto/tls"
@@ -49,10 +49,10 @@ func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
 	if _, ok := svc.Cfg.Config["port"].(int); !ok {
-		errs = append(errs, fmt.Errorf("webSocket: port not set"))
+		errs = append(errs, fmt.Errorf("webSocketClient: port not set"))
 	}
 	if _, ok := svc.Cfg.Config["hostname"].(string); !ok {
-		errs = append(errs, fmt.Errorf("webSocket: hostname not set"))
+		errs = append(errs, fmt.Errorf("webSocketClient: hostname not set"))
 	}
 
 	osProvider := svc.Deps.MustGetOsProvider()
@@ -63,7 +63,7 @@ func (svc *Service) ValidateConfig() []error {
 
 	for _, p := range []string{certPath, keyPath, caPath} {
 		if _, err := osProvider.Stat(p); err != nil {
-			errs = append(errs, fmt.Errorf("webSocket: file not found: %s", p))
+			errs = append(errs, fmt.Errorf("webSocketClient: file not found: %s", p))
 		}
 	}
 
@@ -76,7 +76,7 @@ func (svc *Service) Initialize() error {
 
 	// Load state
 	if err := stateStore.Load(svc.Cfg.Name, &svc.state); err != nil {
-		logger.Error("webSocket: failed to load state", "error", err)
+		logger.Error("webSocketClient: failed to load state", "error", err)
 	}
 
 	go svc.connectLoop()
@@ -107,21 +107,21 @@ func (svc *Service) connectLoop() {
 	}
 
 	u := url.URL{Scheme: "wss", Host: fmt.Sprintf("%s:%d", svc.Hostname, svc.Port), Path: "/ws"}
-	logger.Debug("webSocket: starting connection loop", "url", u.String())
+	logger.Debug("webSocketClient: starting connection loop", "url", u.String())
 
 	for {
 		dialer := websocket.Dialer{
 			TLSClientConfig: tlsConfig,
 		}
 
-		logger.Debug("webSocket: attempting to connect", "url", u.String())
+		logger.Debug("webSocketClient: attempting to connect", "url", u.String())
 		conn, _, err := dialer.Dial(u.String(), nil)
 		if err != nil {
-			logger.Error("webSocket: dial failed", "error", err)
+			logger.Error("webSocketClient: dial failed", "error", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		logger.Debug("webSocket: connected")
+		logger.Debug("webSocketClient: connected")
 
 		svc.handleConnection(conn)
 		conn.Close()
@@ -142,7 +142,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
-	logger.Info("webSocket: handling new connection")
+	logger.Info("webSocketClient: handling new connection")
 
 	// Send Subscribe message with all channels we want
 	var channels []string
@@ -154,9 +154,9 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		Type:     "subscribe",
 		Channels: channels,
 	}
-	logger.Info("webSocket: sending subscribe message", "message", subscribeMsg)
+	logger.Info("webSocketClient: sending subscribe message", "message", subscribeMsg)
 	if err := conn.WriteJSON(subscribeMsg); err != nil {
-		logger.Error("webSocket: failed to send subscribe", "error", err)
+		logger.Error("webSocketClient: failed to send subscribe", "error", err)
 		return
 	}
 
@@ -182,19 +182,19 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			Offset:   s.Offset,
 		}
 		if err := conn.WriteJSON(resumeMsg); err != nil {
-			logger.Error("webSocket: failed to send resume", "error", err)
+			logger.Error("webSocketClient: failed to send resume", "error", err)
 		}
 	}
 	svc.mu.Unlock()
 
 	for {
-		logger.Debug("webSocket: waiting for message")
+		logger.Debug("webSocketClient: waiting for message")
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			logger.Error("webSocket: read error", "error", err)
+			logger.Error("webSocketClient: read error", "error", err)
 			return
 		}
-		logger.Debug("webSocket: received message", "raw", string(message))
+		logger.Debug("webSocketClient: received message", "raw", string(message))
 
 		var msg wsMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
@@ -205,7 +205,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			// At least once processing: process then ACK
 			err := messenger.Send(msg.Payload)
 			if err != nil {
-				logger.Error("webSocket: failed to forward message", "error", err)
+				logger.Error("webSocketClient: failed to forward message", "error", err)
 				// If we can't forward, do we ACK?
 				// "at least once" means we should probably retry processing.
 				// For now, let's not ACK if Send fails.
@@ -220,14 +220,14 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			}
 			stateStore := svc.Deps.MustGetStateStore()
 			if err := stateStore.Save(svc.Cfg.Name, svc.state); err != nil {
-				logger.Error("webSocket: failed to save state", "error", err)
+				logger.Error("webSocketClient: failed to save state", "error", err)
 			}
 			svc.mu.Unlock()
 
 			// Send ACK
 			ack := wsMessage{Type: "ack"}
 			if err := conn.WriteJSON(ack); err != nil {
-				logger.Error("webSocket: failed to send ack", "error", err)
+				logger.Error("webSocketClient: failed to send ack", "error", err)
 				return
 			}
 		}
