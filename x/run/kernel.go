@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -90,7 +91,8 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				}
 
 				// Delay before restart, unless shutting down
-				timer := time.NewTimer(task.Interval)
+				jitter := time.Duration(rand.Int63n(int64(task.Interval) / 20)) // up to 5% jitter
+				timer := time.NewTimer(task.Interval + jitter)
 				select {
 				case <-globalCtx.Done():
 					logger.Error("task: global context done during interval wait, exiting check loop", "service", task.Name)
