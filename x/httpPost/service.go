@@ -129,7 +129,7 @@ func (svc *Service) Initialize() error {
 
 	logger := svc.Deps.MustGetLogger()
 
-	logger.Error("httpPost: initializing service", "conf", svc.Cfg)
+	logger.Info("httpPost: initializing service", "conf", svc.Cfg)
 
 	// Set up TLS client
 	osProvider := svc.Deps.MustGetOsProvider()
