@@ -196,6 +196,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		testData := map[string]interface{}{
 			"uuid":      correlationID,
 			"_type":     "location",
+			"topic":     "owntracks/user/device1",
 			"lat":       51.5033,
 			"lon":       -0.1195,
 			"batt":      float64(85),
@@ -292,6 +293,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		// Second request: exit home, enter work
 		testData2 := map[string]interface{}{
 			"_type":     "location",
+			"topic":     "owntracks/user/device1",
 			"lat":       51.5,
 			"lon":       -0.12,
 			"inregions": []interface{}{"work"},
@@ -328,6 +330,70 @@ func TestService_ServeHTTP(t *testing.T) {
 		}
 		assert.True(t, foundExit, "did not find exit home event")
 		assert.True(t, foundEnter, "did not find enter work event")
+	})
+
+	t.Run("Device Name Mapping", func(t *testing.T) {
+		cfgWithDevices := core.ServiceConfig{
+			Name: "test-owntracks",
+			Type: "owntracks",
+			Config: map[string]interface{}{
+				"port": 8080,
+				"devices": map[string]interface{}{
+					"iphone": "phone",
+				},
+			},
+			Pubs: map[string]core.ChannelInfo{
+				"owntracks": {Name: "owntracks"},
+				"gps":       {Name: "gps"},
+				"metrics":   {Name: "metrics"},
+				"events":    {Name: "events"},
+			},
+		}
+		svcWithDevices := NewService(deps, cfgWithDevices)
+
+		messenger := deps.MustGetMessenger().(*core.Messenger)
+		metricsChan := make(chan core.Message, 10)
+		messenger.Subscribe("test-device", "metrics", 0, func(m core.Message) error {
+			metricsChan <- m
+			return nil
+		})
+
+		correlationID := "device-mapping-uuid"
+		testData := map[string]interface{}{
+			"uuid":  correlationID,
+			"_type": "location",
+			"topic": "owntracks/user/iphone",
+			"batt":  float64(90),
+		}
+		body, _ := json.Marshal(testData)
+		// Use topic that maps to "phone"
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+		rr := httptest.NewRecorder()
+
+		svcWithDevices.(*Service).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		// Check response body
+		var resp map[string]string
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.Equal(t, "phone", resp["device"])
+
+		// Check metrics message
+		select {
+		case msg := <-metricsChan:
+			for msg.Uuid != correlationID {
+				select {
+				case msg = <-metricsChan:
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("timed out waiting for metrics message with correlationID")
+				}
+			}
+			assert.Equal(t, "test-owntracks-phone", msg.ServiceName)
+			assert.Equal(t, "battery.phone", msg.MetricName)
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timed out waiting for metrics message")
+		}
 	})
 }
 
