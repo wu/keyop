@@ -1,6 +1,7 @@
 package httpPost
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -25,6 +26,11 @@ import (
 func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "httpPost_test")
 	if err != nil {

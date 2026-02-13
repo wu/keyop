@@ -22,6 +22,11 @@ func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
+
 	tmpDir, err := os.MkdirTemp("", "slack_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -38,10 +43,6 @@ func testDeps(t *testing.T) core.Dependencies {
 
 	stateStore := core.NewFileStateStore(tmpDir, osProvider)
 	deps.SetStateStore(stateStore)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	deps.SetContext(ctx)
-	deps.SetCancel(cancel)
 
 	return deps
 }
@@ -280,7 +281,7 @@ func TestService_Check(t *testing.T) {
 
 	receivedMessage := make(chan string, 1)
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe("test-subscriber", "events-ch", 0, func(msg core.Message) error {
+	messenger.Subscribe(context.Background(), "test-subscriber", "events-ch", 0, func(msg core.Message) error {
 		receivedMessage <- msg.Text
 		return nil
 	})

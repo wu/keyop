@@ -38,7 +38,7 @@ func (svc *Service) ValidateConfig() []error {
 func (svc *Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	svc.Address = svc.Cfg.Config["address"].(string)
-	return messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["alerts"].Name, svc.Cfg.Subs["alerts"].MaxAge, svc.messageHandler)
+	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["alerts"].Name, svc.Cfg.Subs["alerts"].MaxAge, svc.messageHandler)
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {

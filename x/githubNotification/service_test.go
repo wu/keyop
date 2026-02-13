@@ -1,6 +1,7 @@
 package githubNotification
 
 import (
+	"context"
 	"encoding/json"
 	"keyop/core"
 	"log/slog"
@@ -95,7 +96,7 @@ func TestService_Check(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	var capturedMessages []core.Message
-	err := messenger.Subscribe("test", "alerts-channel", 0, func(msg core.Message) error {
+	err := messenger.Subscribe(context.Background(), "test", "alerts-channel", 0, func(msg core.Message) error {
 		capturedMessages = append(capturedMessages, msg)
 		return nil
 	})

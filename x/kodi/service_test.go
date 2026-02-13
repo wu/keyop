@@ -1,6 +1,7 @@
 package kodi
 
 import (
+	"context"
 	"encoding/json"
 	"keyop/core"
 	"net/http"
@@ -250,6 +251,18 @@ func (f *fakeMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (f *fakeMessenger) Subscribe(sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+	return nil
+}
+
+func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+	return nil
+}
+
+func (f *fakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+	return nil
+}
+
+func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }

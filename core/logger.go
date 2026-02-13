@@ -1,6 +1,8 @@
 package core
 
-import "sync"
+import (
+	"sync"
+)
 
 type Logger interface {
 	Debug(msg string, args ...interface{})

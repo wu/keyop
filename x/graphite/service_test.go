@@ -1,6 +1,7 @@
 package graphite
 
 import (
+	"context"
 	"fmt"
 	"keyop/core"
 	"log/slog"
@@ -17,6 +18,11 @@ import (
 func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "graphite_test")
 	require.NoError(t, err)

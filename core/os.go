@@ -89,20 +89,26 @@ type FakeOsProvider struct {
 	Err     error
 	HomeErr error
 
-	ReadFileFunc func(name string) ([]byte, error)
-	OpenFileFunc func(name string, flag int, perm os.FileMode) (FileApi, error)
-	MkdirAllFunc func(path string, perm os.FileMode) error
-	ReadDirFunc  func(dirname string) ([]os.DirEntry, error)
-	StatFunc     func(name string) (os.FileInfo, error)
-	ChtimesFunc  func(name string, atime time.Time, mtime time.Time) error
-	RemoveFunc   func(name string) error
-	CommandFunc  func(name string, arg ...string) CommandApi
+	ReadFileFunc    func(name string) ([]byte, error)
+	UserHomeDirFunc func() (string, error)
+	OpenFileFunc    func(name string, flag int, perm os.FileMode) (FileApi, error)
+	MkdirAllFunc    func(path string, perm os.FileMode) error
+	ReadDirFunc     func(dirname string) ([]os.DirEntry, error)
+	StatFunc        func(name string) (os.FileInfo, error)
+	ChtimesFunc     func(name string, atime time.Time, mtime time.Time) error
+	RemoveFunc      func(name string) error
+	CommandFunc     func(name string, arg ...string) CommandApi
 
 	File FileApi
 }
 
-func (f FakeOsProvider) Hostname() (string, error)    { return f.Host, f.Err }
-func (f FakeOsProvider) UserHomeDir() (string, error) { return f.Home, f.HomeErr }
+func (f FakeOsProvider) Hostname() (string, error) { return f.Host, f.Err }
+func (f FakeOsProvider) UserHomeDir() (string, error) {
+	if f.UserHomeDirFunc != nil {
+		return f.UserHomeDirFunc()
+	}
+	return f.Home, f.HomeErr
+}
 func (f FakeOsProvider) ReadFile(name string) ([]byte, error) {
 	if f.ReadFileFunc != nil {
 		return f.ReadFileFunc(name)

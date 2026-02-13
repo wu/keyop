@@ -121,7 +121,7 @@ func (svc *Service) Initialize() error {
 	if !ok {
 		return fmt.Errorf("status subscription not configured")
 	}
-	return messenger.Subscribe(svc.Cfg.Name, statusChan.Name, statusChan.MaxAge, svc.messageHandler)
+	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, statusChan.Name, statusChan.MaxAge, svc.messageHandler)
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {

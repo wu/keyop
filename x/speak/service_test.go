@@ -1,6 +1,7 @@
 package speak
 
 import (
+	"context"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -13,6 +14,11 @@ import (
 func testDeps(t *testing.T, osProvider core.OsProviderApi) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "speak_test")
 	require.NoError(t, err)

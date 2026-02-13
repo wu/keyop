@@ -114,7 +114,7 @@ func (svc *Service) Initialize() error {
 		return fmt.Errorf("ollama: requests subscription not found")
 	}
 
-	err = messenger.Subscribe(svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
+	err = messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, sub.Name, sub.MaxAge, svc.messageHandler)
 	if err != nil {
 		return fmt.Errorf("ollama: failed to subscribe to %s: %w", sub.Name, err)
 	}
