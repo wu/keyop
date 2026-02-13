@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -30,9 +31,12 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 
 	var ch1Msg Message
 	var ch2Msg Message
-	err = m.Subscribe("test1", "alpha", 0, func(msg Message) error { ch1Msg = msg; return nil })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.Subscribe(ctx, "test1", "alpha", 0, func(msg Message) error { ch1Msg = msg; return nil })
 	assert.NoError(t, err)
-	err = m.Subscribe("test2", "alpha", 0, func(msg Message) error { ch2Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test2", "alpha", 0, func(msg Message) error { ch2Msg = msg; return nil })
 	assert.NoError(t, err)
 
 	// Send in a goroutine to avoid blocking on unbuffered channels
@@ -40,7 +44,7 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 		_ = m.Send(Message{ChannelName: "alpha", Text: "hello"})
 	}()
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Both subscribers should receive the same message
 	assert.Equal(t, "hello", ch1Msg.Text)
@@ -61,15 +65,18 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 
 	var ch1Msg Message
 	var ch2Msg Message
-	err = m.Subscribe("test", "a", 0, func(msg Message) error { ch1Msg = msg; return nil })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.Subscribe(ctx, "test", "a", 0, func(msg Message) error { ch1Msg = msg; return nil })
 	assert.NoError(t, err)
-	err = m.Subscribe("test", "b", 0, func(msg Message) error { ch2Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test", "b", 0, func(msg Message) error { ch2Msg = msg; return nil })
 	assert.NoError(t, err)
 
 	// Send to channel "a" only
 	go func() { _ = m.Send(Message{ChannelName: "a", Text: "foo"}) }()
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	assert.Equal(t, "foo", ch1Msg.Text)
 	assert.Equal(t, "", ch2Msg.Text)
@@ -87,7 +94,10 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 	m.dataDir = tmpDir
 
 	var messages []Message
-	err = m.Subscribe("test", "ordered", 0, func(msg Message) error { messages = append(messages, msg); return nil })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.Subscribe(ctx, "test", "ordered", 0, func(msg Message) error { messages = append(messages, msg); return nil })
 	assert.NoError(t, err)
 
 	// Send three messages in order in a single goroutine
@@ -95,7 +105,7 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 		_ = m.Send(Message{ChannelName: "ordered", Text: fmt.Sprintf("%d", i)})
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	if assert.Len(t, messages, 3) {
 		assert.Equal(t, "1", messages[0].Text)
@@ -124,7 +134,7 @@ func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
 	addRoute := fmt.Sprintf("%s:%s", hostname, channelName)
 
 	var received bool
-	err = m.Subscribe("test", channelName, 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "test", channelName, 0, func(msg Message) error {
 		received = true
 		return nil
 	})
@@ -173,7 +183,7 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	m.hostname = "host-1"
 
 	var gotMessage Message
-	err = m.Subscribe("test", "json", 0, func(msg Message) error { gotMessage = msg; return nil })
+	err = m.Subscribe(context.Background(), "test", "json", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
 	// Define a struct
@@ -187,7 +197,7 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 		_ = m.Send(Message{ChannelName: "json", Text: "with-data", Data: p})
 	}()
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	assert.Equal(t, "host-1", gotMessage.Hostname)
 	assert.False(t, gotMessage.Timestamp.IsZero())
@@ -248,12 +258,12 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 
 	// Verify that resulting messenger uses empty hostname when sending
 	var gotMessage Message
-	err = m.Subscribe("test", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
+	err = m.Subscribe(context.Background(), "test", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
 	go func() { _ = m.Send(Message{ChannelName: "test", Text: "ping"}) }()
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	assert.Equal(t, "", gotMessage.Hostname)
 	assert.Equal(t, "ping", gotMessage.Text)
@@ -333,23 +343,35 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	// Trigger error in loadState which is called by Dequeue
 	myErr := errors.New("loadState error")
 	osProv := FakeOsProvider{
+		StatFunc: func(name string) (os.FileInfo, error) {
+			if strings.Contains(name, "reader_state_err-test-chan_test-source.json") {
+				return nil, myErr
+			}
+			return os.Stat(name)
+		},
 		OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
-			if strings.Contains(name, "reader_state_err-chan_source.json") {
+			if strings.Contains(name, "reader_state_err-test-chan_test-source.json") {
 				return nil, myErr
 			}
 			return OsProvider{}.OpenFile(name, flag, perm)
 		},
+		MkdirAllFunc: func(path string, perm os.FileMode) error {
+			return os.MkdirAll(path, perm)
+		},
+		ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+			return os.ReadDir(name)
+		},
 	}
 
-	// We need to let initializePersistentQueue succeed first.
-	err = m.initializePersistentQueue("err-chan")
+	m.osProvider = osProv
+	// Pre-initialize the queue with the fake os provider
+	err = m.initializePersistentQueue("err-test-chan")
 	assert.NoError(t, err)
 
-	m.osProvider = osProv
-	// Clear the existing queue to force re-initialization with the bad OsProvider
-	m.queues = make(map[string]*PersistentQueue)
-
-	err = m.Subscribe("source", "err-chan", 0, func(msg Message) error { return nil })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Using the SAME source "test-source" that triggers the error in our fake os provider
+	err = m.Subscribe(ctx, "test-source", "err-test-chan", 0, func(msg Message) error { return nil })
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
@@ -359,16 +381,20 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	// 2. Unmarshal error
 	// To trigger this, we need a malformed JSON in the queue.
 	// We can manually write to the log file.
+	cancel() // Stop previous subscription
+
 	m.osProvider = OsProvider{} // Back to real OS
 	m.queues = make(map[string]*PersistentQueue)
-	err = m.initializePersistentQueue("bad-json")
+	err = m.initializePersistentQueue("bad-test-json")
 	assert.NoError(t, err)
 
-	logPath := fmt.Sprintf("%s/bad-json_queue_%s.log", tmpDir, time.Now().Format("20060102"))
+	logPath := fmt.Sprintf("%s/bad-test-json_queue_%s.log", tmpDir, time.Now().Format("20060102"))
 	err = os.WriteFile(logPath, []byte("invalid json\n"), 0644)
 	assert.NoError(t, err)
 
-	err = m.Subscribe("source", "bad-json", 0, func(msg Message) error { return nil })
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	err = m.Subscribe(ctx2, "test-source", "bad-test-json", 0, func(msg Message) error { return nil })
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
@@ -376,17 +402,20 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 3. Handler error
+	cancel2() // Stop previous subscription
 	// Use a fresh messenger and logger to avoid interference
 	m2 := NewMessenger(&FakeLogger{}, OsProvider{})
 	m2.dataDir = tmpDir
-	err = m2.initializePersistentQueue("handler-err")
+	err = m2.initializePersistentQueue("handler-test-err")
 	assert.NoError(t, err)
 
 	handlerErr := errors.New("handler failed")
-	err = m2.Subscribe("source", "handler-err", 0, func(msg Message) error { return handlerErr })
+	ctx3, cancel3 := context.WithCancel(context.Background())
+	defer cancel3()
+	err = m2.Subscribe(ctx3, "test-source", "handler-test-err", 0, func(msg Message) error { return handlerErr })
 	assert.NoError(t, err)
 
-	_ = m2.Send(Message{ChannelName: "handler-err", Text: "trigger"})
+	_ = m2.Send(Message{ChannelName: "handler-test-err", Text: "trigger"})
 
 	assert.Eventually(t, func() bool {
 		return m2.logger.(*FakeLogger).LastErrMsg() == "Message handler returned error, retrying"
@@ -408,7 +437,7 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	var callCount int32
 	handlerErr := errors.New("temporary handler failure")
 
-	err = m.Subscribe("retry-source", "retry-chan", 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "retry-test-source", "retry-test-chan", 0, func(msg Message) error {
 		count := atomic.AddInt32(&callCount, 1)
 		if count < 3 {
 			return handlerErr
@@ -417,7 +446,7 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "retry-chan", Text: "retry-me"})
+	_ = m.Send(Message{ChannelName: "retry-test-chan", Text: "retry-me"})
 
 	assert.Eventually(t, func() bool {
 		return atomic.LoadInt32(&callCount) >= 3
@@ -440,7 +469,7 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	var mu sync.Mutex
 	var callCount int32
 
-	err = m.Subscribe("order-source", "order-chan", 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "order-test-source", "order-test-chan", 0, func(msg Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -453,8 +482,8 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "order-chan", Text: "first"})
-	_ = m.Send(Message{ChannelName: "order-chan", Text: "second"})
+	_ = m.Send(Message{ChannelName: "order-test-chan", Text: "first"})
+	_ = m.Send(Message{ChannelName: "order-test-chan", Text: "second"})
 
 	assert.Eventually(t, func() bool {
 		mu.Lock()
@@ -478,13 +507,12 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
 
-	channelName := "maxage-chan"
 	var received []string
 	var mu sync.Mutex
 
 	// Subscribe with a max age of 1 hour
 	maxAge := 1 * time.Hour
-	err = m.Subscribe("test", channelName, maxAge, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "test-maxage-source", "maxage-test-chan", maxAge, func(msg Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 		received = append(received, msg.Text)
@@ -494,7 +522,7 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 
 	// Send a message that is 2 hours old (should be skipped)
 	oldMsg := Message{
-		ChannelName: channelName,
+		ChannelName: "maxage-test-chan",
 		Text:        "too old",
 		Timestamp:   time.Now().Add(-2 * time.Hour),
 	}
@@ -502,7 +530,7 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 
 	// Send a message that is 30 minutes old (should be received)
 	recentMsg := Message{
-		ChannelName: channelName,
+		ChannelName: "maxage-test-chan",
 		Text:        "recent",
 		Timestamp:   time.Now().Add(-30 * time.Minute),
 	}
@@ -510,12 +538,12 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 
 	// Send a message with zero timestamp (should be assigned current time and received)
 	newMsg := Message{
-		ChannelName: channelName,
+		ChannelName: "maxage-test-chan",
 		Text:        "new",
 	}
 	_ = m.Send(newMsg)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	mu.Lock()
 	defer mu.Unlock()

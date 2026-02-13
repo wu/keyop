@@ -87,7 +87,7 @@ func (svc *Service) Initialize() error {
 	svc.appID, _ = svc.Cfg.Config["appID"].(string)
 
 	messenger := svc.Deps.MustGetMessenger()
-	err := messenger.Subscribe(svc.Cfg.Name, svc.Cfg.Subs["events"].Name, svc.Cfg.Subs["events"].MaxAge, svc.messageHandler)
+	err := messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["events"].Name, svc.Cfg.Subs["events"].MaxAge, svc.messageHandler)
 	if err != nil {
 		return err
 	}

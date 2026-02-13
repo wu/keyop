@@ -2,6 +2,7 @@ package owntracks
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"keyop/core"
@@ -19,6 +20,11 @@ import (
 func testDeps() core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+
 	deps.SetOsProvider(core.OsProvider{})
 	deps.SetLogger(logger)
 	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
@@ -82,8 +88,9 @@ func TestService_ValidateConfig(t *testing.T) {
 
 func TestService_Initialize_StartsServer(t *testing.T) {
 	deps := testDeps()
+	defer deps.MustGetCancel()()
 
-	port := 8878
+	port := 8879
 	cfg := core.ServiceConfig{
 		Name: "test-owntracks",
 		Type: "owntracks",
@@ -126,10 +133,11 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 
 func TestService_ServeHTTP(t *testing.T) {
 	deps := testDeps()
+	defer deps.MustGetCancel()()
 	cfg := core.ServiceConfig{
 		Name:   "test-owntracks",
 		Type:   "owntracks",
-		Config: map[string]interface{}{"port": 8080},
+		Config: map[string]interface{}{"port": 8081},
 		Pubs: map[string]core.ChannelInfo{
 			"owntracks": {Name: "owntracks"},
 			"gps":       {Name: "gps"},
@@ -175,19 +183,19 @@ func TestService_ServeHTTP(t *testing.T) {
 		eventsChan := make(chan core.Message, 10)
 		owntracksChan := make(chan core.Message, 10)
 
-		messenger.Subscribe("test", "gps", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "gps", 0, func(m core.Message) error {
 			gpsChan <- m
 			return nil
 		})
-		messenger.Subscribe("test", "metrics", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "metrics", 0, func(m core.Message) error {
 			metricsChan <- m
 			return nil
 		})
-		messenger.Subscribe("test", "events", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "events", 0, func(m core.Message) error {
 			eventsChan <- m
 			return nil
 		})
-		messenger.Subscribe("test", "owntracks", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "owntracks", 0, func(m core.Message) error {
 			owntracksChan <- m
 			return nil
 		})
@@ -353,7 +361,7 @@ func TestService_ServeHTTP(t *testing.T) {
 
 		messenger := deps.MustGetMessenger().(*core.Messenger)
 		metricsChan := make(chan core.Message, 10)
-		messenger.Subscribe("test-device", "metrics", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test-device", "metrics", 0, func(m core.Message) error {
 			metricsChan <- m
 			return nil
 		})
@@ -399,6 +407,7 @@ func TestService_ServeHTTP(t *testing.T) {
 
 func TestService_Check(t *testing.T) {
 	deps := testDeps()
+	defer deps.MustGetCancel()()
 	cfg := core.ServiceConfig{}
 	svc := NewService(deps, cfg)
 

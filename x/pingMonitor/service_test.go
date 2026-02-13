@@ -1,6 +1,7 @@
 package pingMonitor
 
 import (
+	"context"
 	"errors"
 	"keyop/core"
 	"log/slog"
@@ -25,7 +26,19 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (m *mockMessenger) Subscribe(sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+	return nil
+}
+
+func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+	return nil
+}
+
+func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+	return nil
+}
+
+func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 

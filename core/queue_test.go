@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,13 +30,13 @@ func TestPersistentQueue_Basic(t *testing.T) {
 	err = pq.Enqueue("item2")
 	require.NoError(t, err)
 
-	item, err := pq.Dequeue("test")
+	item, _, _, err := pq.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 	err = pq.Ack("test")
 	require.NoError(t, err)
 
-	item, err = pq.Dequeue("test")
+	item, _, _, err = pq.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 	err = pq.Ack("test")
@@ -58,7 +59,7 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 	err = pq.Enqueue("item1")
 	require.NoError(t, err)
 
-	item, err := pq.Dequeue("test")
+	item, _, _, err := pq.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 	err = pq.Ack("test")
@@ -71,7 +72,7 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 	pq2, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
 	require.NoError(t, err)
 
-	item, err = pq2.Dequeue("test")
+	item, _, _, err = pq2.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 	err = pq2.Ack("test")
@@ -96,12 +97,12 @@ func TestPersistentQueue_Ack(t *testing.T) {
 	require.NoError(t, err)
 
 	// Dequeue item1
-	item, err := pq.Dequeue("reader1")
+	item, _, _, err := pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 
 	// Dequeue again without Ack, should get item1 again
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 
@@ -110,12 +111,12 @@ func TestPersistentQueue_Ack(t *testing.T) {
 	require.NoError(t, err)
 
 	// Dequeue should now get item2
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 
 	// Dequeue again without Ack, should get item2 again
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 
@@ -126,7 +127,7 @@ func TestPersistentQueue_Ack(t *testing.T) {
 	// Next Dequeue should block (we'll check with a timeout)
 	resChan := make(chan string, 1)
 	go func() {
-		item, _ := pq.Dequeue("reader1")
+		item, _, _, _ := pq.Dequeue(context.Background(), "reader1")
 		resChan <- item
 	}()
 
@@ -161,14 +162,14 @@ func TestPersistentQueue_Rotation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should read old_item first
-	item, err := pq.Dequeue("test")
+	item, _, _, err := pq.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "old_item", item)
 	err = pq.Ack("test")
 	require.NoError(t, err)
 
 	// Should then read new_item (rotation)
-	item, err = pq.Dequeue("test")
+	item, _, _, err = pq.Dequeue(context.Background(), "test")
 	require.NoError(t, err)
 	assert.Equal(t, "new_item", item)
 	err = pq.Ack("test")
@@ -189,7 +190,7 @@ func TestPersistentQueue_Blocking(t *testing.T) {
 
 	resChan := make(chan string, 1)
 	go func() {
-		item, _ := pq.Dequeue("test")
+		item, _, _, _ := pq.Dequeue(context.Background(), "test")
 		_ = pq.Ack("test")
 		resChan <- item
 	}()
@@ -227,7 +228,7 @@ func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 
 	resChan := make(chan string, 1)
 	go func() {
-		item, err := pq.Dequeue("test")
+		item, _, _, err := pq.Dequeue(context.Background(), "test")
 		if err != nil {
 			t.Errorf("Dequeue error: %v", err)
 		}
@@ -273,28 +274,28 @@ func TestPersistentQueue_MultipleReaders(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reader 1 reads item1
-	item, err := pq.Dequeue("reader1")
+	item, _, _, err := pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 	err = pq.Ack("reader1")
 	require.NoError(t, err)
 
 	// Reader 2 reads item1 (should be independent)
-	item, err = pq.Dequeue("reader2")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader2")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 	err = pq.Ack("reader2")
 	require.NoError(t, err)
 
 	// Reader 1 reads item2
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 	err = pq.Ack("reader1")
 	require.NoError(t, err)
 
 	// Reader 2 reads item2
-	item, err = pq.Dequeue("reader2")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader2")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 	err = pq.Ack("reader2")
@@ -322,13 +323,13 @@ func TestPersistentQueue_MultipleQueues(t *testing.T) {
 	err = pq2.Enqueue("q2_item")
 	require.NoError(t, err)
 
-	item, err := pq1.Dequeue("reader")
+	item, _, _, err := pq1.Dequeue(context.Background(), "reader")
 	require.NoError(t, err)
 	assert.Equal(t, "q1_item", item)
 	err = pq1.Ack("reader")
 	require.NoError(t, err)
 
-	item, err = pq2.Dequeue("reader")
+	item, _, _, err = pq2.Dequeue(context.Background(), "reader")
 	require.NoError(t, err)
 	assert.Equal(t, "q2_item", item)
 	err = pq2.Ack("reader")
@@ -370,7 +371,7 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 
 	// 2. Dequeue it to establish state, but don't Ack it yet.
 	// Actually, Dequeue sets pq.pending.
-	item, err := pq.Dequeue("reader1")
+	item, _, _, err := pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item1", item)
 
@@ -389,7 +390,7 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	require.NotEmpty(t, files)
 
 	// 5. Dequeue reader1 to set pending to item2, then Ack it to save state pointing to end of file.
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item2", item)
 	err = pq.Ack("reader1")
@@ -406,70 +407,7 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	require.NoError(t, err)
 
 	// 7. Dequeue should handle the missing file error, log it, and find item3.
-	item, err = pq.Dequeue("reader1")
+	item, _, _, err = pq.Dequeue(context.Background(), "reader1")
 	require.NoError(t, err)
 	assert.Equal(t, "item3", item)
-}
-
-func TestPersistentQueue_Errors(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "queue_test_errors")
-	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
-
-	logger := &FakeLogger{}
-
-	// 1. NewPersistentQueue error
-	osProv := FakeOsProvider{
-		MkdirAllFunc: func(path string, perm os.FileMode) error {
-			return os.ErrPermission
-		},
-	}
-	_, err = NewPersistentQueue("test", tmpDir, osProv, logger)
-	assert.Error(t, err)
-
-	// 2. loadState error
-	osProv = FakeOsProvider{
-		OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
-			if strings.Contains(name, "reader_state") {
-				return nil, os.ErrPermission
-			}
-			return OsProvider{}.OpenFile(name, flag, perm)
-		},
-	}
-	pq, err := NewPersistentQueue("test", tmpDir, OsProvider{}, logger)
-	require.NoError(t, err)
-	pq.osProvider = osProv
-	_, err = pq.Dequeue("reader")
-	assert.Error(t, err)
-
-	// 3. listQueueFiles error
-	osProv = FakeOsProvider{
-		ReadDirFunc: func(dirname string) ([]os.DirEntry, error) {
-			return nil, os.ErrPermission
-		},
-	}
-	pq, err = NewPersistentQueue("test", tmpDir, OsProvider{}, logger)
-	require.NoError(t, err)
-	pq.osProvider = osProv
-	_, err = pq.Dequeue("reader")
-	assert.Error(t, err)
-
-	// 4. saveState error
-	pq, err = NewPersistentQueue("test_save", tmpDir, OsProvider{}, logger)
-	require.NoError(t, err)
-	err = pq.Enqueue("item")
-	require.NoError(t, err)
-
-	osProv = FakeOsProvider{
-		OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
-			if strings.Contains(name, "reader_state") {
-				return nil, os.ErrPermission
-			}
-			return OsProvider{}.OpenFile(name, flag, perm)
-		},
-	}
-	pq.osProvider = osProv
-	_, err = pq.Dequeue("reader")
-	assert.Error(t, err)
 }

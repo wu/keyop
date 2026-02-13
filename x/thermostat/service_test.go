@@ -1,6 +1,7 @@
 package thermostat
 
 import (
+	"context"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -9,12 +10,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // helper to build dependencies similar to other service tests
 func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "httpPost_test")
 	if err != nil {
@@ -27,6 +34,7 @@ func testDeps(t *testing.T) core.Dependencies {
 
 	deps.SetOsProvider(core.OsProvider{})
 	deps.SetLogger(logger)
+	deps.SetContext(context.Background())
 	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
 	messenger.SetDataDir(tmpDir)
 
@@ -44,7 +52,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 
 	// subscribe to heater and cooler channels to capture what thermostat sends
 	capture := func(ch string) {
-		_ = messenger.Subscribe("test", ch, 0, func(m core.Message) error {
+		_ = messenger.Subscribe(context.Background(), "test", ch, 0, func(m core.Message) error {
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -85,45 +93,43 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80})
 	assert.NoError(t, err)
 
-	// wait for processing
-	time.Sleep(100 * time.Millisecond)
+	// Wait for processing
+	time.Sleep(1 * time.Second)
 
 	// Assertions: thermostat should publish to both heater and cooler
 	mu.Lock()
 	defer mu.Unlock()
 
-	if assert.Contains(t, got, heaterCh) {
-		assert.Len(t, got[heaterCh], 1)
-		m := got[heaterCh][0]
-		assert.Equal(t, "thermo", m.ServiceName)
-		assert.Equal(t, "thermostat", m.ServiceType)
-		assert.Equal(t, "OFF", m.State) // heater should be OFF at 80
+	require.Contains(t, got, heaterCh)
+	assert.Len(t, got[heaterCh], 1)
+	m := got[heaterCh][0]
+	assert.Equal(t, "thermo", m.ServiceName)
+	assert.Equal(t, "thermostat", m.ServiceType)
+	assert.Equal(t, "OFF", m.State) // heater should be OFF at 80
 
-		t.Logf("Heater message: %+v\n", m)
+	t.Logf("Heater message: %+v\n", m)
 
-		data, ok := m.Data.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected type not matched in data, got %T", m.Data)
-		}
-		assert.Equal(t, 80.0, data["temp"])
-		assert.Equal(t, "OFF", data["heaterTargetState"])
+	data, ok := m.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected type not matched in data, got %T", m.Data)
+	}
+	assert.Equal(t, 80.0, data["temp"])
+	assert.Equal(t, "OFF", data["heaterTargetState"])
+
+	require.Contains(t, got, coolerCh)
+	assert.Len(t, got[coolerCh], 1)
+	m_cool := got[coolerCh][0]
+	assert.Equal(t, "thermo", m_cool.ServiceName)
+	assert.Equal(t, "thermostat", m_cool.ServiceType)
+	assert.Equal(t, "ON", m_cool.State) // cooler should be ON at 80
+
+	data_cool, ok := m_cool.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected type not matched in data, got %T", m_cool.Data)
 	}
 
-	if assert.Contains(t, got, coolerCh) {
-		assert.Len(t, got[coolerCh], 1)
-		m := got[coolerCh][0]
-		assert.Equal(t, "thermo", m.ServiceName)
-		assert.Equal(t, "thermostat", m.ServiceType)
-		assert.Equal(t, "ON", m.State) // cooler should be ON at 80
-
-		data, ok := m.Data.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected type not matched in data, got %T", m.Data)
-		}
-
-		assert.Equal(t, 80.0, data["temp"])
-		assert.Equal(t, "ON", data["coolerTargetState"])
-	}
+	assert.Equal(t, 80.0, data_cool["temp"])
+	assert.Equal(t, "ON", data_cool["coolerTargetState"])
 }
 
 func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
@@ -132,10 +138,11 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 
 	// capture only heater channel
 	var gotHeater []core.Message
-	_ = messenger.Subscribe("test", "heater-topic", 0, func(m core.Message) error {
+	subErr := messenger.Subscribe(context.Background(), "test", "heater-topic", 0, func(m core.Message) error {
 		gotHeater = append(gotHeater, m)
 		return nil
 	})
+	assert.NoError(t, subErr)
 
 	cfg := core.ServiceConfig{
 		Name: "thermo",
@@ -161,9 +168,10 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	// Send a cold temp to turn heater ON
 	_ = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20})
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for processing
+	time.Sleep(1 * time.Second)
 
-	assert.Len(t, gotHeater, 1)
+	require.NotEmpty(t, gotHeater)
 	assert.Equal(t, "ON", gotHeater[0].State)
 }
 

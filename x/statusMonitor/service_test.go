@@ -1,6 +1,7 @@
 package statusMonitor
 
 import (
+	"context"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -14,6 +15,11 @@ import (
 func testDeps(t *testing.T) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "statusMonitor_test")
 	require.NoError(t, err)
@@ -101,7 +107,7 @@ func TestService_Workflow(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe("test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -219,7 +225,7 @@ func TestService_NotificationDelay(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe("test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -312,7 +318,7 @@ func TestService_NotificationDelayRecovery(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe("test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -373,6 +379,11 @@ func TestService_Persistence(t *testing.T) {
 		stateStore := core.NewFileStateStore(tmpDir, osProvider)
 		deps.SetStateStore(stateStore)
 
+		ctx, cancel := context.WithCancel(context.Background())
+		deps.SetContext(ctx)
+		deps.SetCancel(cancel)
+		defer cancel()
+
 		svc := NewService(deps, cfg)
 		err := svc.Initialize()
 		require.NoError(t, err)
@@ -397,6 +408,11 @@ func TestService_Persistence(t *testing.T) {
 		deps.SetMessenger(messenger)
 		stateStore := core.NewFileStateStore(tmpDir, osProvider)
 		deps.SetStateStore(stateStore)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		deps.SetContext(ctx)
+		deps.SetCancel(cancel)
+		defer cancel()
 
 		svc := NewService(deps, cfg)
 		err := svc.Initialize()

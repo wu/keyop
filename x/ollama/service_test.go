@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"keyop/core"
@@ -17,6 +18,11 @@ import (
 func testDeps(t *testing.T) core.Dependencies {
 	logger := &core.FakeLogger{}
 	deps := core.Dependencies{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	deps.SetContext(ctx)
+	deps.SetCancel(cancel)
+	t.Cleanup(cancel)
 
 	tmpDir, err := os.MkdirTemp("", "ollama_test")
 	if err != nil {
@@ -224,7 +230,7 @@ func TestService_MessageHandler_Batching(t *testing.T) {
 	svc := NewService(deps, cfg).(*Service)
 
 	receivedMessages := make(chan core.Message, 10)
-	messenger.Subscribe("test", "ollama-resp", 0, func(msg core.Message) error {
+	messenger.Subscribe(context.Background(), "test", "ollama-resp", 0, func(msg core.Message) error {
 		receivedMessages <- msg
 		return nil
 	})

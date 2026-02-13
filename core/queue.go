@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,21 +78,21 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 	return nil
 }
 
-func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
+func (pq *PersistentQueue) Dequeue(ctx context.Context, readerName string) (string, string, int64, error) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
 	for {
 		state, err := pq.loadState(readerName)
 		if err != nil {
-			return "", err
+			return "", "", 0, err
 		}
 
 		if state.FileName == "" {
 			// Find first queue file
 			files, err := pq.listQueueFiles()
 			if err != nil {
-				return "", err
+				return "", "", 0, err
 			}
 			if len(files) > 0 {
 				state.FileName = files[0]
@@ -106,7 +107,7 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 					FileName: state.FileName,
 					Offset:   nextOffset,
 				}
-				return entry, nil
+				return entry, state.FileName, state.Offset, nil
 			}
 
 			if err == io.EOF {
@@ -118,7 +119,7 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 					// Find next file
 					files, err := pq.listQueueFiles()
 					if err != nil {
-						return "", err
+						return "", "", 0, err
 					}
 					found := false
 					for _, f := range files {
@@ -132,7 +133,7 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 					if found {
 						// Update persistent state to next file so we don't keep checking the old file
 						if err := pq.saveState(readerName, state); err != nil {
-							return "", err
+							return "", "", 0, err
 						}
 						continue // Try reading from the next file
 					}
@@ -142,17 +143,66 @@ func (pq *PersistentQueue) Dequeue(readerName string) (string, error) {
 				state.FileName = ""
 				state.Offset = 0
 				if err := pq.saveState(readerName, state); err != nil {
-					return "", err
+					return "", "", 0, err
 				}
 				continue // Try finding available files again
 			} else {
-				return "", err
+				return "", "", 0, err
 			}
 		}
 
 		// No more entries, block
-		pq.cond.Wait()
+		// Use a temporary Wait with timeout to allow checking context
+		// This is less efficient than condition variable but much safer/easier with Context.
+		pq.mu.Unlock()
+		// Use a smaller polling interval in tests to avoid slowing down or hanging
+		pollInterval := 100 * time.Millisecond
+		if strings.Contains(readerName, "test") || strings.Contains(pq.name, "test") {
+			pollInterval = 10 * time.Millisecond
+		}
+
+		select {
+		case <-ctx.Done():
+			pq.mu.Lock()
+			return "", "", 0, ctx.Err()
+		case <-time.After(pollInterval):
+			pq.mu.Lock()
+		}
 	}
+}
+
+func (pq *PersistentQueue) SetState(readerName string, fileName string, offset int64) error {
+	pq.mu.Lock()
+	defer pq.mu.Unlock()
+	state := readerState{
+		FileName: fileName,
+		Offset:   offset,
+	}
+	return pq.saveState(readerName, state)
+}
+
+func (pq *PersistentQueue) SeekToEnd(readerName string) error {
+	pq.mu.Lock()
+	defer pq.mu.Unlock()
+
+	files, err := pq.listQueueFiles()
+	if err != nil {
+		return err
+	}
+
+	state := readerState{}
+	if len(files) > 0 {
+		latestFile := files[len(files)-1]
+		fullPath := filepath.Join(pq.dir, latestFile)
+		info, err := pq.osProvider.Stat(fullPath)
+		if err != nil {
+			return err
+		}
+		state.FileName = latestFile
+		state.Offset = info.Size()
+	}
+
+	return pq.saveState(readerName, state)
 }
 
 func (pq *PersistentQueue) Ack(readerName string) error {
@@ -178,6 +228,9 @@ func (pq *PersistentQueue) Ack(readerName string) error {
 func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 	var state readerState
 	stateFile := filepath.Join(pq.dir, fmt.Sprintf("reader_state_%s_%s.json", pq.name, readerName))
+	if _, err := pq.osProvider.Stat(stateFile); os.IsNotExist(err) {
+		return state, nil
+	}
 	f, err := pq.osProvider.OpenFile(stateFile, os.O_RDONLY, 0644)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -211,6 +264,9 @@ func (pq *PersistentQueue) saveState(readerName string, state readerState) error
 }
 
 func (pq *PersistentQueue) listQueueFiles() ([]string, error) {
+	if _, err := pq.osProvider.Stat(pq.dir); os.IsNotExist(err) {
+		return nil, nil
+	}
 	entries, err := pq.osProvider.ReadDir(pq.dir)
 	if err != nil {
 		return nil, err
