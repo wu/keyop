@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -146,12 +147,8 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	var mu sync.Mutex
 	ackChan := make(chan struct{})
 
-	clientID := "default"
-	if cn := conn.RemoteAddr().String(); cn != "" {
-		clientID = cn
-	}
-	readerName := svc.Cfg.Name + "_" + clientID
-	logger.Debug("webSocketServer: starting connection loop", "clientID", clientID)
+	readerName := "ws_" + uuid.New().String()
+	logger.Debug("webSocketServer: starting connection loop", "readerName", readerName)
 
 	// Receiver loop for ACKs, Resume, and Subscribe
 	resumeChan := make(chan wsMessage, 10)
@@ -263,7 +260,7 @@ L:
 					logger.Error("webSocketServer: failed to set reader state", "error", err)
 				}
 			} else {
-				// If no resume state, seek to end
+				// start from the end when no resume is provided:
 				err := messenger.SeekToEnd(sub.Name, readerName)
 				if err != nil {
 					logger.Error("webSocketServer: failed to seek to end", "channel", sub.Name, "error", err)

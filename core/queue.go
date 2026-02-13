@@ -22,6 +22,7 @@ type PersistentQueue struct {
 	mu         sync.Mutex
 	cond       *sync.Cond
 	pending    map[string]readerState // In-memory track of what's been dequeued but not acked
+	wsStates   map[string]readerState // In-memory track of current state for ephemeral readers
 }
 
 type readerState struct {
@@ -49,6 +50,7 @@ func NewPersistentQueue(name string, dir string, osProvider OsProviderApi, logge
 		logger:     logger,
 		mu:         sync.Mutex{},
 		pending:    make(map[string]readerState),
+		wsStates:   make(map[string]readerState),
 	}
 	pq.cond = sync.NewCond(&pq.mu)
 	return pq, nil
@@ -226,6 +228,9 @@ func (pq *PersistentQueue) Ack(readerName string) error {
 }
 
 func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
+	if strings.HasPrefix(readerName, "ws_") {
+		return pq.wsStates[readerName], nil
+	}
 	var state readerState
 	stateFile := filepath.Join(pq.dir, fmt.Sprintf("reader_state_%s_%s.json", pq.name, readerName))
 	if _, err := pq.osProvider.Stat(stateFile); os.IsNotExist(err) {
@@ -251,6 +256,10 @@ func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 }
 
 func (pq *PersistentQueue) saveState(readerName string, state readerState) error {
+	if strings.HasPrefix(readerName, "ws_") {
+		pq.wsStates[readerName] = state
+		return nil
+	}
 	stateFile := filepath.Join(pq.dir, fmt.Sprintf("reader_state_%s_%s.json", pq.name, readerName))
 	// Use a temporary file for atomic write if possible, but here we just overwrite
 	f, err := pq.osProvider.OpenFile(stateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
