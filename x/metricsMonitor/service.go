@@ -135,6 +135,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	msg.Status = currentStatus
 	if triggeredThreshold != nil {
 		msg.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
+		msg.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
 		msg.Data = map[string]interface{}{
 			"threshold": *triggeredThreshold,
 		}

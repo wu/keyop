@@ -22,6 +22,7 @@ type Message struct {
 	ServiceName string      `json:"serviceName,omitempty"`
 	Status      string      `json:"status,omitempty"`
 	Text        string      `json:"text,omitempty"`
+	Summary     string      `json:"summary,omitempty"`
 	Metric      float64     `json:"metric,omitempty"`
 	MetricName  string      `json:"metricName,omitempty"`
 	State       string      `json:"state,omitempty"`

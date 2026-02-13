@@ -139,6 +139,7 @@ func (svc Service) temp() (Event, error) {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Text:        fmt.Sprintf("%s is %.3fF", svc.Cfg.Name, temp.TempF),
+		Summary:     fmt.Sprintf("%s is %.1f degrees", svc.Cfg.Name, temp.TempF),
 		MetricName:  metricName,
 		Metric:      float64(temp.TempF),
 		Data:        temp,
@@ -155,6 +156,7 @@ func (svc Service) temp() (Event, error) {
 		MetricName:  metricName,
 		Metric:      float64(temp.TempF),
 		Text:        fmt.Sprintf("%s metric: %.3fF", svc.Cfg.Name, temp.TempF),
+		Summary:     fmt.Sprintf("%s is %.1f degrees", svc.Cfg.Name, temp.TempF),
 	})
 	return temp, metricErr
 }

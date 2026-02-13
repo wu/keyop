@@ -151,6 +151,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	now := time.Now()
 	shouldAlert := false
 	alertText := ""
+	alertSummary := msg.Summary
 	alertStatus := msg.Status
 
 	if isProblem(msg.Status) {
@@ -166,6 +167,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				state.AlertCount = 1
 				state.LastAlertTime = now
 				alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state: %s", msg.ServiceName, msg.ServiceType, msg.Status, msg.Text)
+				alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 			}
 		} else if isProblem(state.Status) {
 			// Stayed in problem state (possibly changed warning <-> critical)
@@ -179,6 +181,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 					state.AlertCount = 1
 					state.LastAlertTime = now
 					alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state (for %s): %s", msg.ServiceName, msg.ServiceType, msg.Status, svc.notificationDelay, msg.Text)
+					alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 				} else {
 					timeRemaining := svc.notificationDelay - now.Sub(state.ProblemSince)
 					logger.Warn("Service in problem state, waiting before alerting",
@@ -194,6 +197,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				state.AlertCount = 1
 				state.LastAlertTime = now
 				alertText = fmt.Sprintf("ALERT: %s (%s) status changed from %s to %s: %s", msg.ServiceName, msg.ServiceType, oldStatus, msg.Status, msg.Text)
+				alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 			} else {
 				// Stayed in the same problem state, check backoff
 				multiplier := 1.0
@@ -211,6 +215,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 					state.AlertCount++
 					state.LastAlertTime = now
 					alertText = fmt.Sprintf("ALERT: %s: %s", msg.Status, msg.Text)
+					alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 				}
 			}
 		}
@@ -220,6 +225,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				shouldAlert = true
 				alertStatus = "ok"
 				alertText = fmt.Sprintf("RECOVERY: %s (%s): %s", msg.ServiceName, msg.ServiceType, msg.Text)
+				alertSummary = fmt.Sprintf("RECOVERY: %s", alertSummary)
 			}
 		}
 		state.Status = msg.Status
@@ -246,6 +252,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			ServiceType: msg.ServiceType,
 			Status:      alertStatus,
 			Text:        alertText,
+			Summary:     alertSummary,
 		})
 	}
 
