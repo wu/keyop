@@ -157,6 +157,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	resumeChan := make(chan wsMessage, 10)
 	subscribeChan := make(chan wsMessage, 1)
 	go func() {
+		defer cancel() // Cancel context if reader loop exits
 		for {
 			logger.Debug("webSocketServer: waiting for message")
 			_, message, err := conn.ReadMessage()
@@ -168,12 +169,29 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			if err := json.Unmarshal(message, &msg); err != nil {
 				continue
 			}
-			if msg.Type == "ack" {
-				ackChan <- struct{}{}
-			} else if msg.Type == "resume" {
-				resumeChan <- msg
-			} else if msg.Type == "subscribe" {
-				subscribeChan <- msg
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if msg.Type == "ack" {
+					select {
+					case ackChan <- struct{}{}:
+					case <-ctx.Done():
+						return
+					}
+				} else if msg.Type == "resume" {
+					select {
+					case resumeChan <- msg:
+					case <-ctx.Done():
+						return
+					}
+				} else if msg.Type == "subscribe" {
+					select {
+					case subscribeChan <- msg:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
 		}
 	}()
@@ -182,6 +200,8 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	var subMsg wsMessage
 	select {
 	case subMsg = <-subscribeChan:
+	case <-ctx.Done():
+		return
 	case <-time.After(10 * time.Second):
 		logger.Debug("webSocketServer: timeout waiting for subscribe message")
 		return
@@ -251,7 +271,7 @@ L:
 			}
 
 			err := messenger.SubscribeExtended(ctx, readerName, sub.Name, sub.MaxAge, func(msg core.Message, fileName string, offset int64) error {
-				return svc.sendAndWaitAck(conn, &mu, sub.Name, fileName, offset, msg, ackChan)
+				return svc.sendAndWaitAck(ctx, conn, &mu, sub.Name, fileName, offset, msg, ackChan)
 			})
 			if err != nil {
 				logger.Error("webSocketServer: subscribe failed", "error", err)
@@ -260,18 +280,24 @@ L:
 	}
 
 	// Keep connection alive
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 	for {
-		time.Sleep(30 * time.Second)
-		mu.Lock()
-		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-			mu.Unlock()
+		select {
+		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			mu.Lock()
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				mu.Unlock()
+				return
+			}
+			mu.Unlock()
 		}
-		mu.Unlock()
 	}
 }
 
-func (svc *Service) sendAndWaitAck(conn *websocket.Conn, mu *sync.Mutex, queueName string, fileName string, offset int64, msg core.Message, ackChan chan struct{}) error {
+func (svc *Service) sendAndWaitAck(ctx context.Context, conn *websocket.Conn, mu *sync.Mutex, queueName string, fileName string, offset int64, msg core.Message, ackChan chan struct{}) error {
 	wsMsg := wsMessage{
 		Type:     "message",
 		Queue:    queueName,
@@ -292,8 +318,8 @@ func (svc *Service) sendAndWaitAck(conn *websocket.Conn, mu *sync.Mutex, queueNa
 		return nil
 	case <-time.After(60 * time.Second):
 		return fmt.Errorf("ack timeout")
-	case <-svc.Deps.MustGetContext().Done():
-		return svc.Deps.MustGetContext().Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
