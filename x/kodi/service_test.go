@@ -20,6 +20,7 @@ type mockKodiHandler struct {
 	mu           sync.RWMutex
 	activePlayer *activePlayer
 	playingItem  *itemDetails
+	playerProps  *playerProperties
 	lastUsername string
 	lastPassword string
 }
@@ -52,6 +53,8 @@ func (m *mockKodiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case "Player.GetItem":
 		result = m.playingItem
+	case "Player.GetProperties":
+		result = m.playerProps
 	default:
 		http.Error(w, "Method not found", http.StatusNotFound)
 		return
@@ -100,7 +103,7 @@ func TestService_Check(t *testing.T) {
 		},
 		Config: map[string]interface{}{
 			"host": host,
-			"port": float64(port),
+			"port": port,
 		},
 	}
 
@@ -121,7 +124,7 @@ func TestService_Check(t *testing.T) {
 		cfg2 := cfg
 		cfg2.Config = map[string]interface{}{
 			"host":     host,
-			"port":     float64(port),
+			"port":     port,
 			"username": "admin",
 			"password": "password123",
 		}
@@ -141,6 +144,9 @@ func TestService_Check(t *testing.T) {
 		mockKodi.activePlayer = &activePlayer{PlayerID: 1, Type: "video"}
 		mockKodi.playingItem = &itemDetails{}
 		mockKodi.playingItem.Item.Title = "The Matrix"
+		mockKodi.playerProps = &playerProperties{}
+		mockKodi.playerProps.Time.Minutes = 1
+		mockKodi.playerProps.Time.Seconds = 30
 		mockKodi.mu.Unlock()
 
 		err := svc.Check()
@@ -152,21 +158,33 @@ func TestService_Check(t *testing.T) {
 		data := messenger.messages[0].Data.(map[string]string)
 		assert.Equal(t, "The Matrix", data["title"])
 		assert.Equal(t, "playing", data["status"])
+		assert.Equal(t, "00:01:30", data["time"])
 
 		messenger.messages = nil
 	})
 
 	t.Run("Same movie still playing", func(t *testing.T) {
 		messenger.messages = nil
+		mockKodi.mu.Lock()
+		mockKodi.playerProps.Time.Minutes = 2
+		mockKodi.playerProps.Time.Seconds = 0
+		mockKodi.mu.Unlock()
+
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.Empty(t, messenger.messages)
+
+		require.Len(t, messenger.messages, 1)
+		assert.Contains(t, messenger.messages[0].Text, "Movie playing: The Matrix (00:02:00)")
+		data := messenger.messages[0].Data.(map[string]string)
+		assert.Equal(t, "00:02:00", data["time"])
 	})
 
 	t.Run("Movie changes", func(t *testing.T) {
 		messenger.messages = nil
 		mockKodi.mu.Lock()
 		mockKodi.playingItem.Item.Title = "Inception"
+		mockKodi.playerProps.Time.Minutes = 0
+		mockKodi.playerProps.Time.Seconds = 10
 		mockKodi.mu.Unlock()
 
 		err := svc.Check()
@@ -174,6 +192,8 @@ func TestService_Check(t *testing.T) {
 
 		require.Len(t, messenger.messages, 1)
 		assert.Contains(t, messenger.messages[0].Text, "Movie started: Inception")
+		data := messenger.messages[0].Data.(map[string]string)
+		assert.Equal(t, "00:00:10", data["time"])
 	})
 
 	t.Run("Movie stops playing", func(t *testing.T) {
@@ -192,6 +212,32 @@ func TestService_Check(t *testing.T) {
 		data := messenger.messages[0].Data.(map[string]string)
 		assert.Equal(t, "Inception", data["title"])
 		assert.Equal(t, "stopped", data["status"])
+	})
+
+	t.Run("Invalid config - missing port", func(t *testing.T) {
+		cfg3 := cfg
+		cfg3.Config = map[string]interface{}{
+			"host": host,
+		}
+		svc3 := NewService(deps, cfg3)
+		errs := svc3.ValidateConfig()
+		assert.NotEmpty(t, errs)
+	})
+
+	t.Run("Invalid config - port as float64", func(t *testing.T) {
+		cfg4 := cfg
+		cfg4.Config = map[string]interface{}{
+			"host": host,
+			"port": 8080.0,
+		}
+		svc4 := NewService(deps, cfg4)
+		errs := svc4.ValidateConfig()
+		assert.NotEmpty(t, errs)
+	})
+
+	t.Run("Valid config", func(t *testing.T) {
+		errs := svc.(*Service).ValidateConfig()
+		assert.Empty(t, errs)
 	})
 }
 
