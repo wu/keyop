@@ -86,6 +86,10 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			continue
 		}
 
+		if file.Name() == "plugins.yaml" {
+			continue
+		}
+
 		p := filepath.Join(dir, file.Name())
 		logger.Info("Loading service config file", "path", p)
 		b, err := os.ReadFile(p)
