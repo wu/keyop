@@ -20,11 +20,11 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
 	return nil
 }
 
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
 	return nil
 }
 

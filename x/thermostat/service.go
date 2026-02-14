@@ -108,7 +108,7 @@ func (svc Service) ValidateConfig() []error {
 
 func (svc Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
-	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["temp"].Name, svc.Cfg.Subs["temp"].MaxAge, svc.tempHandler)
+	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["temp"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["temp"].MaxAge, svc.tempHandler)
 }
 
 type Event struct {

@@ -158,13 +158,13 @@ func (f *fakeMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return f.SubscribeExtended(ctx, sourceName, channelName, maxAge, func(msg core.Message, fileName string, offset int64) error {
+func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+	return f.SubscribeExtended(ctx, sourceName, channelName, serviceType, serviceName, maxAge, func(msg core.Message, fileName string, offset int64) error {
 		return messageHandler(msg)
 	})
 }
 
-func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
 	f.mu.Lock()
 	f.subscribedChannels[channelName] = true
 	f.mu.Unlock()

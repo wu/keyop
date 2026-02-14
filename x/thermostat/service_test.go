@@ -52,7 +52,7 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 
 	// subscribe to heater and cooler channels to capture what thermostat sends
 	capture := func(ch string) {
-		_ = messenger.Subscribe(context.Background(), "test", ch, 0, func(m core.Message) error {
+		_ = messenger.Subscribe(context.Background(), "test", ch, "thermostat", "test", 0, func(m core.Message) error {
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -138,7 +138,7 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 
 	// capture only heater channel
 	var gotHeater []core.Message
-	subErr := messenger.Subscribe(context.Background(), "test", "heater-topic", 0, func(m core.Message) error {
+	subErr := messenger.Subscribe(context.Background(), "test", "heater-topic", "thermostat", "test", 0, func(m core.Message) error {
 		gotHeater = append(gotHeater, m)
 		return nil
 	})

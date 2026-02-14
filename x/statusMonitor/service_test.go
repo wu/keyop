@@ -107,7 +107,7 @@ func TestService_Workflow(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -225,7 +225,7 @@ func TestService_NotificationDelay(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -318,7 +318,7 @@ func TestService_NotificationDelayRecovery(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})

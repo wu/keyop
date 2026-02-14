@@ -183,19 +183,19 @@ func TestService_ServeHTTP(t *testing.T) {
 		eventsChan := make(chan core.Message, 10)
 		owntracksChan := make(chan core.Message, 10)
 
-		messenger.Subscribe(context.Background(), "test", "gps", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "gps", "owntracks", "test", 0, func(m core.Message) error {
 			gpsChan <- m
 			return nil
 		})
-		messenger.Subscribe(context.Background(), "test", "metrics", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "metrics", "owntracks", "test", 0, func(m core.Message) error {
 			metricsChan <- m
 			return nil
 		})
-		messenger.Subscribe(context.Background(), "test", "events", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "events", "owntracks", "test", 0, func(m core.Message) error {
 			eventsChan <- m
 			return nil
 		})
-		messenger.Subscribe(context.Background(), "test", "owntracks", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test", "owntracks", "owntracks", "test", 0, func(m core.Message) error {
 			owntracksChan <- m
 			return nil
 		})
@@ -361,7 +361,7 @@ func TestService_ServeHTTP(t *testing.T) {
 
 		messenger := deps.MustGetMessenger().(*core.Messenger)
 		metricsChan := make(chan core.Message, 10)
-		messenger.Subscribe(context.Background(), "test-device", "metrics", 0, func(m core.Message) error {
+		messenger.Subscribe(context.Background(), "test-device", "metrics", "owntracks", "test", 0, func(m core.Message) error {
 			metricsChan <- m
 			return nil
 		})

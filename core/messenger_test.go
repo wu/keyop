@@ -34,9 +34,9 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = m.Subscribe(ctx, "test1", "alpha", 0, func(msg Message) error { ch1Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test1", "alpha", "testType", "test1", 0, func(msg Message) error { ch1Msg = msg; return nil })
 	assert.NoError(t, err)
-	err = m.Subscribe(ctx, "test2", "alpha", 0, func(msg Message) error { ch2Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test2", "alpha", "testType", "test2", 0, func(msg Message) error { ch2Msg = msg; return nil })
 	assert.NoError(t, err)
 
 	// Send in a goroutine to avoid blocking on unbuffered channels
@@ -68,9 +68,9 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = m.Subscribe(ctx, "test", "a", 0, func(msg Message) error { ch1Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test", "a", "testType", "test", 0, func(msg Message) error { ch1Msg = msg; return nil })
 	assert.NoError(t, err)
-	err = m.Subscribe(ctx, "test", "b", 0, func(msg Message) error { ch2Msg = msg; return nil })
+	err = m.Subscribe(ctx, "test", "b", "testType", "test", 0, func(msg Message) error { ch2Msg = msg; return nil })
 	assert.NoError(t, err)
 
 	// Send to channel "a" only
@@ -97,7 +97,7 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = m.Subscribe(ctx, "test", "ordered", 0, func(msg Message) error { messages = append(messages, msg); return nil })
+	err = m.Subscribe(ctx, "test", "ordered", "testType", "test", 0, func(msg Message) error { messages = append(messages, msg); return nil })
 	assert.NoError(t, err)
 
 	// Send three messages in order in a single goroutine
@@ -134,7 +134,7 @@ func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
 	addRoute := fmt.Sprintf("%s:%s", hostname, channelName)
 
 	var received bool
-	err = m.Subscribe(context.Background(), "test", channelName, 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "test", channelName, "testType", "test", 0, func(msg Message) error {
 		received = true
 		return nil
 	})
@@ -183,7 +183,7 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	m.hostname = "host-1"
 
 	var gotMessage Message
-	err = m.Subscribe(context.Background(), "test", "json", 0, func(msg Message) error { gotMessage = msg; return nil })
+	err = m.Subscribe(context.Background(), "test", "json", "testType", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
 	// Define a struct
@@ -258,7 +258,7 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 
 	// Verify that resulting messenger uses empty hostname when sending
 	var gotMessage Message
-	err = m.Subscribe(context.Background(), "test", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
+	err = m.Subscribe(context.Background(), "test", "test", "testType", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
 	go func() { _ = m.Send(Message{ChannelName: "test", Text: "ping"}) }()
@@ -371,7 +371,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Using the SAME source "test-source" that triggers the error in our fake os provider
-	err = m.Subscribe(ctx, "test-source", "err-test-chan", 0, func(msg Message) error { return nil })
+	err = m.Subscribe(ctx, "test-source", "err-test-chan", "testType", "test", 0, func(msg Message) error { return nil })
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
@@ -394,7 +394,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	err = m.Subscribe(ctx2, "test-source", "bad-test-json", 0, func(msg Message) error { return nil })
+	err = m.Subscribe(ctx2, "test-source", "bad-test-json", "testType", "test", 0, func(msg Message) error { return nil })
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
@@ -412,7 +412,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	handlerErr := errors.New("handler failed")
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
-	err = m2.Subscribe(ctx3, "test-source", "handler-test-err", 0, func(msg Message) error { return handlerErr })
+	err = m2.Subscribe(ctx3, "test-source", "handler-test-err", "testType", "test", 0, func(msg Message) error { return handlerErr })
 	assert.NoError(t, err)
 
 	_ = m2.Send(Message{ChannelName: "handler-test-err", Text: "trigger"})
@@ -437,7 +437,7 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	var callCount int32
 	handlerErr := errors.New("temporary handler failure")
 
-	err = m.Subscribe(context.Background(), "retry-test-source", "retry-test-chan", 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "retry-test-source", "retry-test-chan", "testType", "test", 0, func(msg Message) error {
 		count := atomic.AddInt32(&callCount, 1)
 		if count < 3 {
 			return handlerErr
@@ -469,7 +469,7 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	var mu sync.Mutex
 	var callCount int32
 
-	err = m.Subscribe(context.Background(), "order-test-source", "order-test-chan", 0, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "order-test-source", "order-test-chan", "testType", "test", 0, func(msg Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -512,7 +512,7 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 
 	// Subscribe with a max age of 1 hour
 	maxAge := 1 * time.Hour
-	err = m.Subscribe(context.Background(), "test-maxage-source", "maxage-test-chan", maxAge, func(msg Message) error {
+	err = m.Subscribe(context.Background(), "test-maxage-source", "maxage-test-chan", "testType", "test", maxAge, func(msg Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 		received = append(received, msg.Text)

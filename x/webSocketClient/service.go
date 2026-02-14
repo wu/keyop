@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"net/url"
 	"path/filepath"
 	"sync"
@@ -187,6 +188,11 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	}
 	svc.mu.Unlock()
 
+	hostname, err := util.GetShortHostname(svc.Deps.MustGetOsProvider())
+	if err != nil {
+		logger.Error("webSocketClient: failed to get hostname", "error", err)
+		hostname = "unknown"
+	}
 	for {
 		logger.Debug("webSocketClient: waiting for message")
 		_, message, err := conn.ReadMessage()
@@ -202,13 +208,16 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		}
 
 		if msg.Type == "message" {
+			// this message was sent between client and server without going through the messenger,
+			// so we manually append the route
+			msg.Payload.Route = append(msg.Payload.Route, fmt.Sprintf("%s:%s:%s", hostname, svc.Cfg.Type, svc.Cfg.Name)) // Add self to route
+
 			// At least once processing: process then ACK
 			err := messenger.Send(msg.Payload)
 			if err != nil {
 				logger.Error("webSocketClient: failed to forward message", "error", err)
-				// If we can't forward, do we ACK?
-				// "at least once" means we should probably retry processing.
-				// For now, let's not ACK if Send fails.
+				// don't ack if send fails, so that the server can retry
+				// should be better handling here
 				continue
 			}
 
