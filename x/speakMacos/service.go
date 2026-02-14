@@ -1,4 +1,4 @@
-package speak
+package speakMacos
 
 import (
 	"keyop/core"

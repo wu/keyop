@@ -1,4 +1,4 @@
-package httpPost
+package httpPostClient
 
 import (
 	"bytes"
@@ -63,7 +63,7 @@ func (svc *Service) ValidateConfig() []error {
 	// check port
 	_, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {
-		err := fmt.Errorf("httpPost: port not set in config")
+		err := fmt.Errorf("httpPostClient: port not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
@@ -71,7 +71,7 @@ func (svc *Service) ValidateConfig() []error {
 	// check hostname
 	_, hostnameExists := svc.Cfg.Config["hostname"].(string)
 	if !hostnameExists {
-		err := fmt.Errorf("httpPost: hostname not set in config")
+		err := fmt.Errorf("httpPostClient: hostname not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
@@ -83,7 +83,7 @@ func (svc *Service) ValidateConfig() []error {
 
 	// validate subscriptions
 	if svc.Cfg.Subs == nil {
-		err := fmt.Errorf("httpPost: no subscriptions defined in config")
+		err := fmt.Errorf("httpPostClient: no subscriptions defined in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 		return errs
@@ -93,7 +93,7 @@ func (svc *Service) ValidateConfig() []error {
 	osProvider := svc.Deps.MustGetOsProvider()
 	home, err := osProvider.UserHomeDir()
 	if err != nil {
-		err := fmt.Errorf("httpPost: failed to get user home directory: %w", err)
+		err := fmt.Errorf("httpPostClient: failed to get user home directory: %w", err)
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	} else {
@@ -102,17 +102,17 @@ func (svc *Service) ValidateConfig() []error {
 		caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
 
 		if _, err := osProvider.Stat(certPath); os.IsNotExist(err) {
-			err := fmt.Errorf("httpPost: client certificate not found: %s", certPath)
+			err := fmt.Errorf("httpPostClient: client certificate not found: %s", certPath)
 			logger.Error(err.Error())
 			errs = append(errs, err)
 		}
 		if _, err := osProvider.Stat(keyPath); os.IsNotExist(err) {
-			err := fmt.Errorf("httpPost: client key not found: %s", keyPath)
+			err := fmt.Errorf("httpPostClient: client key not found: %s", keyPath)
 			logger.Error(err.Error())
 			errs = append(errs, err)
 		}
 		if _, err := osProvider.Stat(caPath); os.IsNotExist(err) {
-			err := fmt.Errorf("httpPost: CA certificate not found: %s", caPath)
+			err := fmt.Errorf("httpPostClient: CA certificate not found: %s", caPath)
 			logger.Error(err.Error())
 			errs = append(errs, err)
 		}
@@ -129,7 +129,7 @@ func (svc *Service) Initialize() error {
 
 	logger := svc.Deps.MustGetLogger()
 
-	logger.Info("httpPost: initializing service", "conf", svc.Cfg)
+	logger.Info("httpPostClient: initializing service", "conf", svc.Cfg)
 
 	// Set up TLS client
 	osProvider := svc.Deps.MustGetOsProvider()
@@ -194,7 +194,7 @@ func (svc *Service) Initialize() error {
 	}
 
 	for name, sub := range svc.Cfg.Subs {
-		logger.Warn("httpPost: initializing subscription", "name", name, "topic", sub.Name, "maxAge", sub.MaxAge)
+		logger.Warn("httpPostClient: initializing subscription", "name", name, "topic", sub.Name, "maxAge", sub.MaxAge)
 		err := messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, sub.Name, svc.Cfg.Type, svc.Cfg.Name, sub.MaxAge, svc.messageHandler)
 		if err != nil {
 			errs = append(errs, err)
@@ -202,7 +202,7 @@ func (svc *Service) Initialize() error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("httpPost: failed to initialize subscriptions: %v", errs)
+		return fmt.Errorf("httpPostClient: failed to initialize subscriptions: %v", errs)
 	}
 	return nil
 }
@@ -215,7 +215,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 
 	// process incoming message
-	logger.Info("httpPost: forwarding message", "channel", msg.ChannelName, "message", msg)
+	logger.Info("httpPostClient: forwarding message", "channel", msg.ChannelName, "message", msg)
 
 	// send message to HTTP endpoint
 	url := fmt.Sprintf("https://%s:%d", svc.Hostname, svc.Port)
