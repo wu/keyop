@@ -21,9 +21,12 @@ type Service struct {
 	Cfg       core.ServiceConfig
 	Port      int
 	targetDir string
+	hostname  string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+	logger := deps.MustGetLogger()
+
 	svc := &Service{
 		Deps: deps,
 		Cfg:  cfg,
@@ -38,6 +41,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if targetDirExists {
 		svc.targetDir = targetDir
 	}
+
+	hostname, err := util.GetShortHostname(svc.Deps.MustGetOsProvider())
+	if err != nil {
+		logger.Error("httpPostServer: failed to get hostname", "error", err)
+	}
+	svc.hostname = hostname
 
 	return svc
 }
@@ -203,6 +212,10 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing or invalid ChannelName", http.StatusBadRequest)
 		return
 	}
+
+	// this message was sent between client and server without going through the messenger,
+	// so we manually append the route
+	msg.Route = append(msg.Route, fmt.Sprintf("%s:%s:%s", svc.hostname, svc.Cfg.Type, svc.Cfg.Name)) // Add self to route
 
 	err = messenger.Send(msg)
 	if err != nil {

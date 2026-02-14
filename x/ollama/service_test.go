@@ -230,7 +230,7 @@ func TestService_MessageHandler_Batching(t *testing.T) {
 	svc := NewService(deps, cfg).(*Service)
 
 	receivedMessages := make(chan core.Message, 10)
-	messenger.Subscribe(context.Background(), "test", "ollama-resp", 0, func(msg core.Message) error {
+	messenger.Subscribe(context.Background(), "test", "ollama-resp", "ollama", "test", 0, func(msg core.Message) error {
 		receivedMessages <- msg
 		return nil
 	})

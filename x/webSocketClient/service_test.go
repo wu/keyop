@@ -91,7 +91,7 @@ func TestWebSocket_ClientServer(t *testing.T) {
 	// We need to wait and check if it was received by "the other end" (which is also us).
 
 	received := make(chan core.Message, 10)
-	err = messenger.Subscribe(ctx, "testReader", "testChannel", 0, func(m core.Message) error {
+	err = messenger.Subscribe(ctx, "testReader", "testChannel", "webSocketClient", "test", 0, func(m core.Message) error {
 		t.Logf("RECV: %s (hostname: %s, route: %v)", m.Text, m.Hostname, m.Route)
 		if m.Text == "hello websocket" {
 			select {
@@ -152,7 +152,7 @@ done:
 
 	// Wait a bit and ensure it's NOT received by the client (which would forward it back)
 	otherReceived := make(chan core.Message, 10)
-	err = messenger.Subscribe(ctx, "otherReader", "otherChannel", 0, func(m core.Message) error {
+	err = messenger.Subscribe(ctx, "otherReader", "otherChannel", "webSocketClient", "test", 0, func(m core.Message) error {
 		if m.Text == "should not be received" {
 			otherReceived <- m
 		}

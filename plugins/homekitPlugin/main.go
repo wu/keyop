@@ -61,7 +61,7 @@ func (p *HomekitPlugin) Initialize() error {
 		return fmt.Errorf("homekit: temp subscription not configured")
 	}
 
-	err = messenger.Subscribe(p.deps.MustGetContext(), p.cfg.Name, sub.Name, sub.MaxAge, p.tempHandler)
+	err = messenger.Subscribe(p.deps.MustGetContext(), p.cfg.Name, sub.Name, p.cfg.Type, p.cfg.Name, sub.MaxAge, p.tempHandler)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to temp channel: %w", err)
 	}

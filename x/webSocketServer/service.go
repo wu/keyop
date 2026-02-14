@@ -267,7 +267,7 @@ L:
 				}
 			}
 
-			err := messenger.SubscribeExtended(ctx, readerName, sub.Name, sub.MaxAge, func(msg core.Message, fileName string, offset int64) error {
+			err := messenger.SubscribeExtended(ctx, readerName, sub.Name, svc.Cfg.Type, svc.Cfg.Name, sub.MaxAge, func(msg core.Message, fileName string, offset int64) error {
 				return svc.sendAndWaitAck(ctx, conn, &mu, sub.Name, fileName, offset, msg, ackChan)
 			})
 			if err != nil {

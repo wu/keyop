@@ -32,8 +32,8 @@ type Message struct {
 
 type MessengerApi interface {
 	Send(msg Message) error
-	Subscribe(ctx context.Context, sourceName string, channelName string, maxAge time.Duration, messageHandler func(Message) error) error
-	SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error
+	Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message) error) error
+	SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error
 	SetReaderState(channelName string, readerName string, fileName string, offset int64) error
 	SeekToEnd(channelName string, readerName string) error
 }
@@ -95,17 +95,15 @@ func (m *Messenger) Send(msg Message) error {
 		msg.Uuid = uuid.NewString()
 	}
 
+	// prevent routing loops
 	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
 	m.logger.Debug("Add route", "route", addRoute)
-
-	// Check if addRoute already exists in the route array
 	for _, route := range msg.Route {
 		if route == addRoute {
 			m.logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
 			return nil
 		}
 	}
-
 	msg.Route = append(msg.Route, addRoute)
 
 	err := m.initializePersistentQueue(channelName)
@@ -139,13 +137,13 @@ func (m *Messenger) Send(msg Message) error {
 }
 
 //goland:noinspection GoVetCopyLock
-func (m *Messenger) Subscribe(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(Message) error) error {
-	return m.SubscribeExtended(ctx, source, channelName, maxAge, func(msg Message, fileName string, offset int64) error {
+func (m *Messenger) Subscribe(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message) error) error {
+	return m.SubscribeExtended(ctx, source, channelName, serviceType, serviceName, maxAge, func(msg Message, fileName string, offset int64) error {
 		return messageHandler(msg)
 	})
 }
 
-func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channelName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error {
+func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error {
 	logger := m.logger
 
 	err := m.initializePersistentQueue(channelName)
@@ -206,6 +204,10 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				continue
 			}
 
+			// Add route
+			addRoute := fmt.Sprintf("%s:%s:%s", m.hostname, serviceType, serviceName)
+			msg.Route = append(msg.Route, addRoute)
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -224,7 +226,6 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 						backoff = maxBackoff
 					}
 
-					// Apply jitter: [0.5 * backoff, 1.5 * backoff]
 					jitter := time.Duration(rand.Float64() * float64(backoff))
 					sleepTime := (backoff / 2) + jitter
 					if sleepTime > maxBackoff {
