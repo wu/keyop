@@ -1,4 +1,4 @@
-package speak
+package notifyMacos
 
 import (
 	"context"
@@ -20,10 +20,9 @@ func testDeps(t *testing.T, osProvider core.OsProviderApi) core.Dependencies {
 	deps.SetCancel(cancel)
 	t.Cleanup(cancel)
 
-	tmpDir, err := os.MkdirTemp("", "speak_test")
+	tmpDir, err := os.MkdirTemp("", "notify_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		//goland:noinspection GoUnhandledErrorResult
 		os.RemoveAll(tmpDir)
 	})
 
@@ -51,12 +50,12 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "speech-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 			expectError: false,
 		},
 		{
-			name:        "missing speech subscription",
+			name:        "missing notifications subscription",
 			subs:        map[string]core.ChannelInfo{},
 			expectError: true,
 		},
@@ -81,9 +80,9 @@ func TestService_ValidateConfig(t *testing.T) {
 func TestService_Initialize(t *testing.T) {
 	deps := testDeps(t, nil)
 	cfg := core.ServiceConfig{
-		Name: "speak-test",
+		Name: "notifyMacos-test",
 		Subs: map[string]core.ChannelInfo{
-			"alerts": {Name: "speech-channel"},
+			"alerts": {Name: "notifyMacos-channel"},
 		},
 	}
 	svc := NewService(deps, cfg)
@@ -95,9 +94,9 @@ func TestService_MessageHandler(t *testing.T) {
 	t.Run("empty text", func(t *testing.T) {
 		deps := testDeps(t, nil)
 		cfg := core.ServiceConfig{
-			Name: "speak-test",
+			Name: "notifyMacos-test",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "speech-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
@@ -106,7 +105,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("speak text", func(t *testing.T) {
+	t.Run("send notification", func(t *testing.T) {
 		var capturedName string
 		var capturedArgs []string
 
@@ -120,18 +119,28 @@ func TestService_MessageHandler(t *testing.T) {
 
 		deps := testDeps(t, fakeOs)
 		cfg := core.ServiceConfig{
-			Name: "speak-test",
+			Name: "notifyMacos-test",
+			Type: "notifyMacos-type",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "speech-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
 
-		msg := core.Message{Text: "hello world"}
+		msg := core.Message{
+			ServiceName: cfg.Name,
+			ServiceType: cfg.Type,
+			Text:        "hello world",
+		}
 		err := svc.messageHandler(msg)
 		assert.NoError(t, err)
 
-		assert.Equal(t, "say", capturedName)
-		assert.Equal(t, []string{"hello world"}, capturedArgs)
+		assert.Equal(t, "osascript", capturedName)
+		assert.Len(t, capturedArgs, 2)
+		assert.Equal(t, "-e", capturedArgs[0])
+
+		assert.Contains(t, capturedArgs[1], "hello world")
+		assert.Contains(t, capturedArgs[1], "notifyMacos-type")
+		assert.Contains(t, capturedArgs[1], "notifyMacos-test")
 	})
 }

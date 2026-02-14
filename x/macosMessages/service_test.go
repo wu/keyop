@@ -51,7 +51,7 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "macosNotification-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 			config: map[string]interface{}{
 				"address": "test-buddy",
@@ -61,7 +61,7 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "missing address",
 			subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "macosNotification-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 			config:      map[string]interface{}{},
 			expectError: true,
@@ -93,9 +93,9 @@ func TestService_ValidateConfig(t *testing.T) {
 func TestService_Initialize(t *testing.T) {
 	deps := testDeps(t, nil)
 	cfg := core.ServiceConfig{
-		Name: "macosNotification-test",
+		Name: "notifyMacos-test",
 		Subs: map[string]core.ChannelInfo{
-			"alerts": {Name: "macosNotification-channel"},
+			"alerts": {Name: "notifyMacos-channel"},
 		},
 		Config: map[string]interface{}{
 			"address": "test-buddy",
@@ -110,9 +110,9 @@ func TestService_MessageHandler(t *testing.T) {
 	t.Run("empty text", func(t *testing.T) {
 		deps := testDeps(t, nil)
 		cfg := core.ServiceConfig{
-			Name: "macosNotification-test",
+			Name: "notifyMacos-test",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "macosNotification-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 			Config: map[string]interface{}{
 				"address": "test-buddy",
@@ -138,10 +138,10 @@ func TestService_MessageHandler(t *testing.T) {
 
 		deps := testDeps(t, fakeOs)
 		cfg := core.ServiceConfig{
-			Name: "macosNotification-test",
-			Type: "macosNotification-type",
+			Name: "notifyMacos-test",
+			Type: "notifyMacos-type",
 			Subs: map[string]core.ChannelInfo{
-				"alerts": {Name: "macosNotification-channel"},
+				"alerts": {Name: "notifyMacos-channel"},
 			},
 			Config: map[string]interface{}{
 				"address": "target-buddy",
@@ -164,8 +164,8 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.Equal(t, "-e", capturedArgs[0])
 
 		assert.Contains(t, capturedArgs[1], "hello world")
-		assert.Contains(t, capturedArgs[1], "macosNotification-type")
-		assert.Contains(t, capturedArgs[1], "macosNotification-test")
+		assert.Contains(t, capturedArgs[1], "notifyMacos-type")
+		assert.Contains(t, capturedArgs[1], "notifyMacos-test")
 		assert.Contains(t, capturedArgs[1], `buddy "target-buddy"`)
 	})
 }

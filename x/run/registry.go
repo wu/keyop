@@ -7,20 +7,20 @@ import (
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
 	"keyop/x/heartbeat"
-	"keyop/x/httpPost"
+	"keyop/x/httpPostClient"
 	"keyop/x/httpPostServer"
 	"keyop/x/kodi"
 	"keyop/x/logManager"
 	"keyop/x/macosMessages"
-	"keyop/x/macosNotification"
 	"keyop/x/memoryMonitor"
 	"keyop/x/metricsMonitor"
+	"keyop/x/notifyMacos"
 	"keyop/x/ollama"
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
 	"keyop/x/process"
 	"keyop/x/slack"
-	"keyop/x/speak"
+	"keyop/x/speakMacos"
 	"keyop/x/statusMonitor"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
@@ -44,8 +44,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"heartbeat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return heartbeat.NewService(deps, cfg)
 	},
-	"httpPost": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return httpPost.NewService(deps, cfg)
+	"httpPostClient": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return httpPostClient.NewService(deps, cfg)
 	},
 	"httpPostServer": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return httpPostServer.NewService(deps, cfg)
@@ -65,8 +65,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"pingMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return pingMonitor.NewService(deps, cfg)
 	},
-	"macosNotifications": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return macosNotification.NewService(deps, cfg)
+	"notifyMacos": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return notifyMacos.NewService(deps, cfg)
 	},
 	"macosMessages": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return macosMessages.NewService(deps, cfg)
@@ -83,8 +83,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"process": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return process.NewService(deps, cfg)
 	},
-	"speak": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return speak.NewService(deps, cfg)
+	"speakMacos": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return speakMacos.NewService(deps, cfg)
 	},
 	"statusMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return statusMonitor.NewService(deps, cfg)

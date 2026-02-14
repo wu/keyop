@@ -1,4 +1,4 @@
-package httpPost
+package httpPostClient
 
 import (
 	"context"
@@ -179,7 +179,7 @@ func TestService_ValidateConfig(t *testing.T) {
 func TestService_Initialize(t *testing.T) {
 	deps := testDeps(t)
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Subs: map[string]core.ChannelInfo{
 			"heartbeat": {Name: "heartbeat-channel"},
 		},
@@ -244,7 +244,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 	}
 
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Subs: map[string]core.ChannelInfo{
 			"heartbeat": {Name: "heartbeat-channel"},
 		},
@@ -281,7 +281,7 @@ func TestService_MessageHandler_PostError(t *testing.T) {
 
 	// Use an invalid port to trigger a post error
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Subs: map[string]core.ChannelInfo{
 			"heartbeat": {Name: "heartbeat-channel"},
 		},
@@ -329,7 +329,7 @@ func TestService_MessageHandler_CreateRequestError(t *testing.T) {
 	// Use an invalid hostname/port combination that will cause http.NewRequestWithContext to fail.
 	// A URL with a control character or other invalid characters should do it.
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Config: map[string]interface{}{
 			"port":     8080,
 			"hostname": "host\x7f", // DEL character is invalid in URL
@@ -383,7 +383,7 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 	}
 
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Config: map[string]interface{}{
 			"port":     port,
 			"hostname": "127.0.0.1",
@@ -436,7 +436,7 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 	}
 
 	cfg := core.ServiceConfig{
-		Name: "test-httpPost",
+		Name: "test-httpPostClient",
 		Config: map[string]interface{}{
 			"port":     port,
 			"hostname": "127.0.0.1",

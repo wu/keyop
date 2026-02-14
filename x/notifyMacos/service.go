@@ -1,4 +1,4 @@
-package macosNotification
+package notifyMacos
 
 import (
 	"fmt"
