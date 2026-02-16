@@ -13,6 +13,14 @@ import (
 
 func InitializeDependencies(console bool) core.Dependencies {
 
+	// Set timezone to Pacific
+	location, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		// Fallback to UTC if Pacific timezone cannot be loaded
+		location = time.UTC
+	}
+	time.Local = location
+
 	deps := core.Dependencies{}
 
 	deps.SetOsProvider(core.OsProvider{})
