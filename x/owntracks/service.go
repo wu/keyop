@@ -241,7 +241,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
 					Text:        fmt.Sprintf("Entered region: %s", nr),
-					Summary:     fmt.Sprintf("Entered: %s", nr),
+					Summary:     fmt.Sprintf("Arriving: %s", nr),
 					Data: map[string]interface{}{
 						"event":  "enter",
 						"region": nr,
@@ -269,7 +269,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
 					Text:        fmt.Sprintf("Exited region: %s", cr),
-					Summary:     fmt.Sprintf("Exited: %s", cr),
+					Summary:     fmt.Sprintf("Departing: %s", cr),
 					Data: map[string]interface{}{
 						"event":  "exit",
 						"region": cr,
