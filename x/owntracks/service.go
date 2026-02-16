@@ -8,6 +8,7 @@ import (
 	"keyop/util"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -19,6 +20,7 @@ type Service struct {
 
 	deviceNames    map[string]string
 	currentRegions []string
+	mu             sync.Mutex
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -71,6 +73,14 @@ func (svc *Service) ValidateConfig() []error {
 
 func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
+	stateStore := svc.Deps.MustGetStateStore()
+
+	// Load current regions from state store
+	svc.mu.Lock()
+	if err := stateStore.Load("owntracks_regions", &svc.currentRegions); err != nil {
+		logger.Error("failed to load current regions from state store", "error", err)
+	}
+	svc.mu.Unlock()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", svc.ServeHTTP)
@@ -225,6 +235,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		eventsChannel := svc.Cfg.Pubs["events"].Name
 
+		svc.mu.Lock()
 		// check for entered regions
 		for _, nr := range newRegions {
 			found := false
@@ -281,7 +292,26 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		svc.currentRegions = newRegions
+		// Check if regions changed
+		regionsChanged := false
+		if len(newRegions) != len(svc.currentRegions) {
+			regionsChanged = true
+		} else {
+			for i := range newRegions {
+				if newRegions[i] != svc.currentRegions[i] {
+					regionsChanged = true
+					break
+				}
+			}
+		}
+
+		if regionsChanged {
+			svc.currentRegions = newRegions
+			if err := svc.Deps.MustGetStateStore().Save("owntracks_regions", svc.currentRegions); err != nil {
+				logger.Error("failed to save current regions to state store", "error", err)
+			}
+		}
+		svc.mu.Unlock()
 	}
 
 	if deviceName != "" {

@@ -25,9 +25,14 @@ func testDeps() core.Dependencies {
 	deps.SetContext(ctx)
 	deps.SetCancel(cancel)
 
-	deps.SetOsProvider(core.OsProvider{})
+	osProvider := core.OsProvider{}
+	deps.SetOsProvider(osProvider)
 	deps.SetLogger(logger)
-	deps.SetMessenger(core.NewMessenger(logger, deps.MustGetOsProvider()))
+	deps.SetMessenger(core.NewMessenger(logger, osProvider))
+
+	// Add a dummy state store
+	dataDir, _ := os.MkdirTemp("", "owntracks-test-*")
+	deps.SetStateStore(core.NewFileStateStore(dataDir, osProvider))
 
 	return deps
 }
