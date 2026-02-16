@@ -1,6 +1,7 @@
 package webSocketClient
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -22,6 +23,9 @@ type Service struct {
 	Hostname string
 	state    map[string]queueState
 	mu       sync.Mutex
+
+	activeSubs   map[string]context.CancelFunc
+	activeSubsMu sync.Mutex
 }
 
 type queueState struct {
@@ -31,9 +35,10 @@ type queueState struct {
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps:  deps,
-		Cfg:   cfg,
-		state: make(map[string]queueState),
+		Deps:       deps,
+		Cfg:        cfg,
+		state:      make(map[string]queueState),
+		activeSubs: make(map[string]context.CancelFunc),
 	}
 
 	if port, ok := cfg.Config["port"].(int); ok {
@@ -145,37 +150,20 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 
 	logger.Info("webSocketClient: handling new connection")
 
-	// Send Subscribe message with all channels we want
-	var channels []string
-	for _, sub := range svc.Cfg.Subs {
-		channels = append(channels, sub.Name)
+	// Reset active local subscriptions on new connection to avoid duplicates
+	svc.activeSubsMu.Lock()
+	for _, cancel := range svc.activeSubs {
+		cancel()
 	}
+	svc.activeSubs = make(map[string]context.CancelFunc)
+	svc.activeSubsMu.Unlock()
 
-	subscribeMsg := wsMessage{
-		Type:     "subscribe",
-		Channels: channels,
-	}
-	logger.Info("webSocketClient: sending subscribe message", "message", subscribeMsg)
-	if err := conn.WriteJSON(subscribeMsg); err != nil {
-		logger.Error("webSocketClient: failed to send subscribe", "error", err)
-		return
-	}
+	_, cancel := context.WithCancel(svc.Deps.MustGetContext())
+	defer cancel()
 
 	// Send Resume messages for each queue we have state for
 	svc.mu.Lock()
 	for q, s := range svc.state {
-		// Only resume if it's one of the channels we are currently interested in
-		interested := false
-		for _, ch := range channels {
-			if ch == q {
-				interested = true
-				break
-			}
-		}
-		if !interested {
-			continue
-		}
-
 		resumeMsg := wsMessage{
 			Type:     "resume",
 			Queue:    q,
@@ -188,11 +176,30 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	}
 	svc.mu.Unlock()
 
+	// Immediately send initial subscribe
+	var initialChannels []string
+	for _, sub := range svc.Cfg.Subs {
+		initialChannels = append(initialChannels, sub.Name)
+	}
+	initialSubscribeMsg := wsMessage{
+		Type:     "subscribe",
+		Channels: initialChannels,
+	}
+	logger.Info("webSocketClient: sending initial subscribe message", "message", initialSubscribeMsg)
+	if err := conn.WriteJSON(initialSubscribeMsg); err != nil {
+		logger.Error("webSocketClient: failed to send initial subscribe", "error", err)
+		return
+	}
+
 	hostname, err := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 	if err != nil {
 		logger.Error("webSocketClient: failed to get hostname", "error", err)
 		hostname = "unknown"
 	}
+
+	// Loop detection ID
+	selfID := fmt.Sprintf("%s:%s:%s", hostname, svc.Cfg.Type, svc.Cfg.Name)
+
 	for {
 		logger.Debug("webSocketClient: waiting for message")
 		_, message, err := conn.ReadMessage()
@@ -208,13 +215,20 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		}
 
 		if msg.Type == "message" {
+			// Loop detection
+			for _, r := range msg.Payload.Route {
+				if r == selfID {
+					logger.Debug("webSocketClient: loop detected, skipping message", "uuid", msg.Payload.Uuid)
+					goto ack
+				}
+			}
+
 			// this message was sent between client and server without going through the messenger,
 			// so we manually append the route
-			msg.Payload.Route = append(msg.Payload.Route, fmt.Sprintf("%s:%s:%s", hostname, svc.Cfg.Type, svc.Cfg.Name)) // Add self to route
+			msg.Payload.Route = append(msg.Payload.Route, selfID) // Add self to route
 
 			// At least once processing: process then ACK
-			err := messenger.Send(msg.Payload)
-			if err != nil {
+			if err := messenger.Send(msg.Payload); err != nil {
 				logger.Error("webSocketClient: failed to forward message", "error", err)
 				// don't ack if send fails, so that the server can retry
 				// should be better handling here
@@ -223,16 +237,19 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 
 			// Save state
 			svc.mu.Lock()
+			// The server sends the fileName and offset of the message it just sent.
+			// When we resume, we want to start AFTER this message.
+			// The messenger's SubscribeExtended provides the nextOffset, which the server sends as 'Offset'.
 			svc.state[msg.Queue] = queueState{
 				FileName: msg.FileName,
 				Offset:   msg.Offset,
 			}
-			stateStore := svc.Deps.MustGetStateStore()
-			if err := stateStore.Save(svc.Cfg.Name, svc.state); err != nil {
+			if err := svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, svc.state); err != nil {
 				logger.Error("webSocketClient: failed to save state", "error", err)
 			}
 			svc.mu.Unlock()
 
+		ack:
 			// Send ACK
 			ack := wsMessage{Type: "ack"}
 			if err := conn.WriteJSON(ack); err != nil {
