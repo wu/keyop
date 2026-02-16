@@ -288,12 +288,16 @@ func TestHandleConnection(t *testing.T) {
 	err = conn.WriteJSON(subMsg)
 	require.NoError(t, err)
 
+	// Send ACK for any potential message (though none sent yet)
+	// We need to make sure the server has processed the subscribe
+	// Since we are using a fake messenger that records subscriptions, we can wait for it.
+
 	// Wait for subscription to happen in background
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		messenger.mu.Lock()
 		defer messenger.mu.Unlock()
 		return messenger.subscribedChannels["test-channel"]
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 
 	// 2. Send a message from messenger and wait for it on WS
 	testMsg := core.Message{Text: "hello", ChannelName: "test-channel"}

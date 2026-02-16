@@ -150,146 +150,149 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	readerName := "ws_" + uuid.New().String()
 	logger.Debug("webSocketServer: starting connection loop", "readerName", readerName)
 
+	activeSubs := make(map[string]context.CancelFunc)
+	activeSubsMu := sync.Mutex{}
+
 	// Receiver loop for ACKs, Resume, and Subscribe
-	resumeChan := make(chan wsMessage, 10)
-	subscribeChan := make(chan wsMessage, 1)
+	msgChan := make(chan wsMessage, 20)
 	go func() {
 		defer cancel() // Cancel context if reader loop exits
 		for {
 			logger.Debug("webSocketServer: waiting for message")
 			_, message, err := conn.ReadMessage()
-			logger.Debug("webSocketServer: received message", "message", string(message))
 			if err != nil {
 				return
 			}
+			logger.Debug("webSocketServer: received message", "message", string(message))
 			var msg wsMessage
 			if err := json.Unmarshal(message, &msg); err != nil {
 				continue
 			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if msg.Type == "ack" {
-					select {
-					case ackChan <- struct{}{}:
-					case <-ctx.Done():
-						return
-					}
-				} else if msg.Type == "resume" {
-					select {
-					case resumeChan <- msg:
-					case <-ctx.Done():
-						return
-					}
-				} else if msg.Type == "subscribe" {
-					select {
-					case subscribeChan <- msg:
-					case <-ctx.Done():
-						return
-					}
+
+			if msg.Type == "ack" {
+				select {
+				case ackChan <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+			} else {
+				select {
+				case msgChan <- msg:
+				case <-ctx.Done():
+					return
 				}
 			}
 		}
 	}()
 
-	// Wait for Subscribe message
-	var subMsg wsMessage
-	select {
-	case subMsg = <-subscribeChan:
-	case <-ctx.Done():
-		return
-	case <-time.After(10 * time.Second):
-		logger.Debug("webSocketServer: timeout waiting for subscribe message")
-		return
-	}
-
-	requestedChannels := make(map[string]bool)
-	for _, ch := range subMsg.Channels {
-		if ch != "" {
-			requestedChannels[ch] = true
-		}
-	}
-
-	// Filter requested channels by what the server is allowed to provide (if any)
-	// If svc.Cfg.Subs is empty, we might allow any channel?
-	// The original implementation used svc.Cfg.Subs to decide what to push.
-	var channelsToSubscribe []string
-	if len(svc.Cfg.Subs) > 0 {
-		for _, sub := range svc.Cfg.Subs {
-			if requestedChannels[sub.Name] {
-				channelsToSubscribe = append(channelsToSubscribe, sub.Name)
-			}
-		}
-	} else {
-		// If server has no subs defined, maybe it allows anything requested?
-		// For safety, let's assume it MUST be in server's Subs or we don't know MaxAge etc.
-		logger.Debug("webSocketServer: no subscriptions defined in server config, nothing to push")
-	}
-
-	// Process any Resume messages that arrived
+	resumesMu := sync.Mutex{}
 	resumes := make(map[string]wsMessage)
-L:
-	for {
-		select {
-		case rm := <-resumeChan:
-			resumes[rm.Queue] = rm
-		default:
-			break L
-		}
-	}
+	lastPing := time.Now()
 
-	for _, chName := range channelsToSubscribe {
-		subName := chName
-		sub, ok := svc.Cfg.Subs[subName]
-		if !ok {
-			// Find by sub.Name
-			for _, s := range svc.Cfg.Subs {
-				if s.Name == subName {
-					sub = s
-					break
-				}
-			}
-		}
-
-		go func(sub core.ChannelInfo) {
-			// Handle resume if provided for this queue
-			if rm, ok := resumes[sub.Name]; ok && rm.FileName != "" {
-				err := messenger.SetReaderState(sub.Name, readerName, rm.FileName, rm.Offset)
-				if err != nil {
-					logger.Error("webSocketServer: failed to set reader state", "error", err)
-				}
-			} else {
-				// start from the end when no resume is provided:
-				err := messenger.SeekToEnd(sub.Name, readerName)
-				if err != nil {
-					logger.Error("webSocketServer: failed to seek to end", "channel", sub.Name, "error", err)
-				}
-			}
-
-			err := messenger.SubscribeExtended(ctx, readerName, sub.Name, svc.Cfg.Type, svc.Cfg.Name, sub.MaxAge, func(msg core.Message, fileName string, offset int64) error {
-				return svc.sendAndWaitAck(ctx, conn, &mu, sub.Name, fileName, offset, msg, ackChan)
-			})
-			if err != nil {
-				logger.Error("webSocketServer: subscribe failed", "error", err)
-			}
-		}(sub)
-	}
-
-	// Keep connection alive
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			mu.Lock()
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				mu.Unlock()
-				return
+		case msg := <-msgChan:
+			if msg.Type == "resume" {
+				resumesMu.Lock()
+				resumes[msg.Queue] = msg
+				resumesMu.Unlock()
+				logger.Debug("webSocketServer: received resume", "queue", msg.Queue, "file", msg.FileName, "offset", msg.Offset)
+			} else if msg.Type == "subscribe" {
+				// Process subscribe
+				subMsg := msg
+				requestedChannels := make(map[string]bool)
+				for _, ch := range subMsg.Channels {
+					if ch != "" {
+						requestedChannels[ch] = true
+					}
+				}
+
+				var channelsToSubscribe []core.ChannelInfo
+				if len(svc.Cfg.Subs) > 0 {
+					for _, sub := range svc.Cfg.Subs {
+						if requestedChannels[sub.Name] {
+							channelsToSubscribe = append(channelsToSubscribe, sub)
+						}
+					}
+				}
+
+				activeSubsMu.Lock()
+				// Stop channels no longer requested
+				for chName, cancelSub := range activeSubs {
+					found := false
+					for _, sub := range channelsToSubscribe {
+						if sub.Name == chName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						cancelSub()
+						delete(activeSubs, chName)
+					}
+				}
+
+				// Start new channels
+				for _, sub := range channelsToSubscribe {
+					if _, active := activeSubs[sub.Name]; !active {
+						subCtx, subCancel := context.WithCancel(ctx)
+						activeSubs[sub.Name] = subCancel
+
+						go func(s core.ChannelInfo, sCtx context.Context, sCancel context.CancelFunc) {
+							// Handle resume if provided for this queue
+							resumesMu.Lock()
+							rm, ok := resumes[s.Name]
+							if ok {
+								delete(resumes, s.Name) // Use it once
+							}
+							resumesMu.Unlock()
+
+							if ok && rm.FileName != "" {
+								logger.Debug("webSocketServer: resuming subscription", "channel", s.Name, "file", rm.FileName, "offset", rm.Offset)
+								// Check if the reader already has THIS state or LATER.
+								// Since we use ephemeral reader name for each connection, it should be empty initially.
+								err := messenger.SetReaderState(s.Name, readerName, rm.FileName, rm.Offset)
+								if err != nil {
+									logger.Error("webSocketServer: failed to set reader state", "error", err)
+								}
+								// IMPORTANT: When resuming, SubscribeExtended will start reading FROM the given offset.
+								// If the offset was the position of a message that was ALREADY processed but NOT acknowledged,
+								// it will be sent again. This is "at least once" delivery.
+							} else {
+								// start from the end when no resume is provided:
+								logger.Debug("webSocketServer: seeking to end for new subscription", "channel", s.Name)
+								err := messenger.SeekToEnd(s.Name, readerName)
+								if err != nil {
+									logger.Error("webSocketServer: failed to seek to end", "channel", s.Name, "error", err)
+								}
+							}
+
+							err := messenger.SubscribeExtended(sCtx, readerName, s.Name, svc.Cfg.Type, svc.Cfg.Name, s.MaxAge, func(msg core.Message, fileName string, offset int64) error {
+								logger.Debug("webSocketServer: sending message", "channel", s.Name, "uuid", msg.Uuid)
+								return svc.sendAndWaitAck(sCtx, conn, &mu, s.Name, fileName, offset, msg, ackChan)
+							})
+							if err != nil && err != context.Canceled {
+								logger.Error("webSocketServer: subscribe failed", "channel", s.Name, "error", err)
+							}
+						}(sub, subCtx, subCancel)
+					}
+				}
+				activeSubsMu.Unlock()
 			}
-			mu.Unlock()
+
+		case <-time.After(1 * time.Second):
+			// Ping connection every 30 seconds
+			if time.Since(lastPing) > 30*time.Second {
+				mu.Lock()
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					mu.Unlock()
+					return
+				}
+				mu.Unlock()
+				lastPing = time.Now()
+			}
 		}
 	}
 }

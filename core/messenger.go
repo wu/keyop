@@ -204,8 +204,26 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				continue
 			}
 
-			// Add route
+			// Route for loop detection
 			addRoute := fmt.Sprintf("%s:%s:%s", m.hostname, serviceType, serviceName)
+
+			// Check if we should discard based on route
+			alreadySent := false
+			for _, r := range msg.Route {
+				if r == addRoute {
+					alreadySent = true
+					break
+				}
+			}
+			if alreadySent {
+				logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
+				if err := queue.Ack(source); err != nil {
+					logger.Error("Failed to ack discarded message", "error", err, "channel", channelName)
+				}
+				continue
+			}
+
+			// Add route
 			msg.Route = append(msg.Route, addRoute)
 
 			for {

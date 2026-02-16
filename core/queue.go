@@ -109,7 +109,7 @@ func (pq *PersistentQueue) Dequeue(ctx context.Context, readerName string) (stri
 					FileName: state.FileName,
 					Offset:   nextOffset,
 				}
-				return entry, state.FileName, state.Offset, nil
+				return entry, state.FileName, nextOffset, nil
 			}
 
 			if err == io.EOF {
