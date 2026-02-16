@@ -20,13 +20,15 @@ type Service struct {
 	cachedLat *float64
 	cachedLon *float64
 	cachedAlt *float64
+	timers    []*time.Timer
 	mu        sync.RWMutex
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps: deps,
-		Cfg:  cfg,
+		Deps:   deps,
+		Cfg:    cfg,
+		timers: make([]*time.Timer, 0),
 	}
 
 	if lat, ok := cfg.Config["lat"].(float64); ok {
@@ -113,6 +115,8 @@ type SunEvents struct {
 func (svc *Service) Check() error {
 	lat, lon, alt := svc.getObserverData()
 	now := time.Now()
+	logger := svc.Deps.MustGetLogger()
+	logger.Info("Calculating sun events", "lat", lat, "lon", lon, "alt", alt, "time", now)
 
 	events := svc.calculateSunEvents(lat, lon, alt, now)
 
@@ -154,6 +158,12 @@ func (svc *Service) scheduleAlerts() {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 
+	// Cancel existing timers
+	for _, t := range svc.timers {
+		t.Stop()
+	}
+	svc.timers = nil
+
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
@@ -170,7 +180,7 @@ func (svc *Service) scheduleAlerts() {
 			if eventTime.After(now) {
 				duration := eventTime.Sub(now)
 				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
-				time.AfterFunc(duration, func() {
+				timer := time.AfterFunc(duration, func() {
 					messenger.Send(core.Message{
 						Uuid:        uuid.New().String(),
 						ChannelName: svc.Cfg.Pubs["alerts"].Name,
@@ -182,6 +192,7 @@ func (svc *Service) scheduleAlerts() {
 					// Reschedule after the alert fires to keep it going
 					svc.scheduleAlerts()
 				})
+				svc.timers = append(svc.timers, timer)
 			}
 		}
 
