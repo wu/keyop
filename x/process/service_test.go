@@ -97,7 +97,6 @@ func TestProcessService(t *testing.T) {
 		// Kill the process
 		err := svc.cmd.Process.Kill()
 		assert.NoError(t, err)
-		// Wait for it to be actually gone (on some systems it might take a moment to be reflected in Signal(0))
 		//goland:noinspection GoUnhandledErrorResult
 		svc.cmd.Process.Wait()
 
