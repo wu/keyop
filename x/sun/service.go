@@ -127,11 +127,17 @@ func (svc *Service) Check() error {
 	if events.CivilDawn.After(now) {
 		nextEventName = "Dawn"
 		nextEventTime = events.CivilDawn
+	} else if events.Sunrise.After(now) {
+		nextEventName = "Sunrise"
+		nextEventTime = events.Sunrise
+	} else if events.Sunset.After(now) {
+		nextEventName = "Sunset"
+		nextEventTime = events.Sunset
 	} else if events.CivilDusk.After(now) {
 		nextEventName = "Dusk"
 		nextEventTime = events.CivilDusk
 	} else {
-		// Both events today have passed, get tomorrow's dawn
+		// All events today have passed, get tomorrow's dawn
 		tomorrow := now.AddDate(0, 0, 1)
 		tomorrowEvents := svc.calculateSunEvents(lat, lon, alt, tomorrow)
 		nextEventName = "Dawn"
@@ -186,8 +192,8 @@ func (svc *Service) scheduleAlerts() {
 						ChannelName: svc.Cfg.Pubs["alerts"].Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,
-						Text:        fmt.Sprintf("The sun is %s", name),
-						Summary:     fmt.Sprintf("Sun %s", name),
+						Text:        fmt.Sprintf("Sun event: %s", name),
+						Summary:     name,
 					})
 					// Reschedule after the alert fires to keep it going
 					svc.scheduleAlerts()
@@ -196,8 +202,10 @@ func (svc *Service) scheduleAlerts() {
 			}
 		}
 
-		schedule(events.CivilDawn, "rising")
-		schedule(events.CivilDusk, "setting")
+		schedule(events.Sunrise, "sunrise")
+		schedule(events.Sunset, "sunset")
+		schedule(events.CivilDawn, "dawn")
+		schedule(events.CivilDusk, "dusk")
 	}
 }
 
