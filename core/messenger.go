@@ -36,6 +36,7 @@ type MessengerApi interface {
 	SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error
 	SetReaderState(channelName string, readerName string, fileName string, offset int64) error
 	SeekToEnd(channelName string, readerName string) error
+	SetDataDir(dir string)
 }
 
 func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {

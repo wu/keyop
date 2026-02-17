@@ -23,6 +23,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 
 	rootCmd.AddCommand(run.NewCmd(deps))
 	rootCmd.AddCommand(systemd.NewCmd(deps))
+	rootCmd.AddCommand(NewMonitorCmd(deps))
 	rootCmd.AddCommand(NewSelfUpdateCmd(deps))
 	rootCmd.AddCommand(NewVersionCmd())
 
@@ -45,8 +46,8 @@ func Execute() {
 		os.Exit(0)
 	}
 
-	// always enable stdout if running with "systemd" as the first argument
-	if len(os.Args) > 1 && os.Args[1] != "run" {
+	// when to enable stdout
+	if len(os.Args) > 1 && os.Args[1] != "run" && os.Args[1] != "monitor" {
 		console = true
 	}
 

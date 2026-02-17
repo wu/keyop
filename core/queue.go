@@ -231,6 +231,7 @@ func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 	if strings.HasPrefix(readerName, "ws_") {
 		return pq.wsStates[readerName], nil
 	}
+
 	var state readerState
 	stateFile := filepath.Join(pq.dir, fmt.Sprintf("reader_state_%s_%s.json", pq.name, readerName))
 	if _, err := pq.osProvider.Stat(stateFile); os.IsNotExist(err) {

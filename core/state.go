@@ -61,3 +61,8 @@ func (s *FileStateStore) Load(key string, value interface{}) error {
 	decoder := json.NewDecoder(f)
 	return decoder.Decode(value)
 }
+
+type NoOpStateStore struct{}
+
+func (s *NoOpStateStore) Save(key string, value interface{}) error { return nil }
+func (s *NoOpStateStore) Load(key string, value interface{}) error { return nil }

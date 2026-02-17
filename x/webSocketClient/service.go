@@ -84,6 +84,9 @@ func (svc *Service) Initialize() error {
 	if err := stateStore.Load(svc.Cfg.Name, &svc.state); err != nil {
 		logger.Error("webSocketClient: failed to load state", "error", err)
 	}
+	if svc.state == nil {
+		svc.state = make(map[string]queueState)
+	}
 
 	go svc.connectLoop()
 
