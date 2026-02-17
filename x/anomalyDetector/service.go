@@ -6,7 +6,6 @@ import (
 	"keyop/util"
 	"math"
 	"math/rand"
-	"strings"
 	"sync"
 )
 
@@ -20,6 +19,7 @@ type Service struct {
 	mu           sync.Mutex
 	Training     bool
 	MinTrainSize int
+	SkipServices []string
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -40,6 +40,17 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		minTrainSize = int(mts)
 	}
 
+	var skipServices []string
+	if ss, ok := cfg.Config["skip_services"].([]interface{}); ok {
+		for _, s := range ss {
+			if str, ok := s.(string); ok {
+				skipServices = append(skipServices, str)
+			}
+		}
+	} else if ss, ok := cfg.Config["skip_services"].([]string); ok {
+		skipServices = ss
+	}
+
 	return &Service{
 		Deps:         deps,
 		Cfg:          cfg,
@@ -49,6 +60,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		MetricBuffer: make(map[string][]float64),
 		Training:     true,
 		MinTrainSize: minTrainSize,
+		SkipServices: skipServices,
 	}
 }
 
@@ -68,14 +80,10 @@ func (svc *Service) Initialize() error {
 
 func (svc *Service) messageHandler(msg core.Message) error {
 
-	// TODO: we should have a better way to filter out unwanted metrics
-	if strings.Contains(msg.MetricName, "heartbeat") {
-		// Ignore heartbeat metrics
-		return nil
-	}
-	if strings.Contains(msg.MetricName, "idle") {
-		// Ignore heartbeat metrics
-		return nil
+	for _, skipService := range svc.SkipServices {
+		if msg.ServiceName == skipService {
+			return nil
+		}
 	}
 
 	svc.mu.Lock()
