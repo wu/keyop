@@ -24,6 +24,7 @@ import (
 	"keyop/x/process"
 	"keyop/x/slack"
 	"keyop/x/speakMacos"
+	"keyop/x/sslMonitor"
 	"keyop/x/statusMonitor"
 	"keyop/x/sun"
 	"keyop/x/temp"
@@ -95,6 +96,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"speakMacos": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return speakMacos.NewService(deps, cfg)
+	},
+	"sslMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return sslMonitor.NewService(deps, cfg)
 	},
 	"statusMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return statusMonitor.NewService(deps, cfg)
