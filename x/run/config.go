@@ -6,6 +6,7 @@ import (
 	"keyop/util"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 // YAML representation of services in the config file
 type serviceConfigYaml struct {
-	Name   string                      `yaml:"name"`
+	Name   string                      `yaml:"name,omitempty"`
 	Freq   string                      `yaml:"freq"`
 	X      string                      `yaml:"x"`
 	Pubs   map[string]eventChannelYaml `yaml:"pubs"`
@@ -75,7 +76,10 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 		HomeDir:       userHome,
 	}
 
-	var allServiceConfigsSource []serviceConfigYaml
+	var allServiceConfigsSource []struct {
+		serviceConfigYaml
+		filename string
+	}
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -108,15 +112,23 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			return nil, fmt.Errorf("error executing template %s: %w", p, err)
 		}
 
-		var serviceConfigsSource []serviceConfigYaml
-		if err := yaml.Unmarshal(processed.Bytes(), &serviceConfigsSource); err != nil {
+		var serviceConfigSource serviceConfigYaml
+		if err := yaml.Unmarshal(processed.Bytes(), &serviceConfigSource); err != nil {
 			return nil, fmt.Errorf("error unmarshaling %s: %w", p, err)
 		}
-		allServiceConfigsSource = append(allServiceConfigsSource, serviceConfigsSource...)
+
+		// determine filename without extension
+		filenameBase := strings.TrimSuffix(file.Name(), ext)
+
+		allServiceConfigsSource = append(allServiceConfigsSource, struct {
+			serviceConfigYaml
+			filename string
+		}{serviceConfigSource, filenameBase})
 	}
 
 	var serviceConfigs []core.ServiceConfig
-	for _, serviceConfigSource := range allServiceConfigsSource {
+	for _, wrapper := range allServiceConfigsSource {
+		serviceConfigSource := wrapper.serviceConfigYaml
 
 		pubs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Pubs {
@@ -152,8 +164,13 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			}
 		}
 
+		name := serviceConfigSource.Name
+		if name == "" {
+			name = wrapper.filename
+		}
+
 		svcConfig := core.ServiceConfig{
-			Name:   serviceConfigSource.Name,
+			Name:   name,
 			Type:   serviceConfigSource.X,
 			Pubs:   pubs,
 			Subs:   subs,
