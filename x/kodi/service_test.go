@@ -266,3 +266,5 @@ func (f *fakeMessenger) SetReaderState(channelName string, readerName string, fi
 func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
+
+func (f *fakeMessenger) SetDataDir(dir string) {}

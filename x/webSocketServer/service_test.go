@@ -197,6 +197,8 @@ func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (f *fakeMessenger) SetDataDir(dir string) {}
+
 func TestHandleConnection(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-home-*")
 	require.NoError(t, err)
