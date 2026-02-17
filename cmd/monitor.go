@@ -158,10 +158,10 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 	app := tview.NewApplication()
 
 	hbTable := tview.NewTable().SetBorders(false)
-	hbTable.SetTitle(" HEARTBEATS ").SetTitleAlign(tview.AlignLeft).SetBorder(true)
+	hbTable.SetBorder(true)
 
 	tempTable := tview.NewTable().SetBorders(false)
-	tempTable.SetTitle(" TEMPERATURES ").SetTitleAlign(tview.AlignLeft).SetBorder(true)
+	tempTable.SetBorder(true)
 
 	errorTable := tview.NewTable().SetBorders(false)
 	errorTable.SetTitle(" ERRORS ").SetTitleAlign(tview.AlignLeft).SetBorder(true)
@@ -175,13 +175,11 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 		SetBorders(false).
 		AddItem(hbTable, 0, 0, 1, 1, 0, 0, false).
 		AddItem(tempTable, 0, 1, 1, 1, 0, 0, false).
-		AddItem(errorTable, 1, 0, 1, 1, 0, 0, false).
-		AddItem(alertTable, 1, 1, 1, 1, 0, 0, false)
+		AddItem(alertTable, 1, 0, 1, 1, 0, 0, false).
+		AddItem(errorTable, 1, 1, 1, 1, 0, 0, false)
 
-	footer := tview.NewTextView().SetTextAlign(tview.AlignLeft).SetText(" Press ESC or Ctrl-C to exit")
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(grid, 0, 1, true).
-		AddItem(footer, 1, 0, false)
+		AddItem(grid, 0, 1, true)
 
 	app.SetRoot(mainFlex, true)
 
@@ -386,6 +384,21 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 		sortedHosts = append(sortedHosts, h)
 	}
 	sort.Slice(sortedHosts, func(i, j int) bool {
+		now := time.Now()
+		tenMinutes := 10 * time.Minute
+		iOld := now.Sub(sortedHosts[i].LastSeen) > tenMinutes
+		jOld := now.Sub(sortedHosts[j].LastSeen) > tenMinutes
+
+		if iOld && jOld {
+			return sortedHosts[i].LastSeen.After(sortedHosts[j].LastSeen)
+		}
+		if iOld {
+			return true
+		}
+		if jOld {
+			return false
+		}
+
 		if sortedHosts[i].UptimeSeconds != sortedHosts[j].UptimeSeconds {
 			return sortedHosts[i].UptimeSeconds < sortedHosts[j].UptimeSeconds
 		}
@@ -412,6 +425,7 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 		hbTable.SetCell(i+1, 1, tview.NewTableCell(uptimeStr).SetStyle(hostStyle))
 		hbTable.SetCell(i+1, 2, tview.NewTableCell(sinceStr).SetStyle(hostStyle))
 	}
+	hbTable.ScrollToBeginning()
 
 	// 2. TEMPERATURES
 	tempTable.Clear()
@@ -424,6 +438,21 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 		sortedTemps = append(sortedTemps, t)
 	}
 	sort.Slice(sortedTemps, func(i, j int) bool {
+		now := time.Now()
+		tenMinutes := 10 * time.Minute
+		iOld := now.Sub(sortedTemps[i].LastSeen) > tenMinutes
+		jOld := now.Sub(sortedTemps[j].LastSeen) > tenMinutes
+
+		if iOld && jOld {
+			return sortedTemps[i].LastSeen.After(sortedTemps[j].LastSeen)
+		}
+		if iOld {
+			return true
+		}
+		if jOld {
+			return false
+		}
+
 		if sortedTemps[i].TempF != sortedTemps[j].TempF {
 			return sortedTemps[i].TempF < sortedTemps[j].TempF
 		}
@@ -442,37 +471,30 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 		tempTable.SetCell(i+1, 1, tview.NewTableCell(tempStr).SetStyle(tempStyle))
 		tempTable.SetCell(i+1, 2, tview.NewTableCell(sinceStr).SetStyle(tempStyle))
 	}
+	tempTable.ScrollToBeginning()
 
 	// 3. ERRORS
 	errorTable.Clear()
-	errorTable.SetCell(0, 0, tview.NewTableCell("TIME").SetStyle(headerStyle))
-	errorTable.SetCell(0, 1, tview.NewTableCell("HOSTNAME").SetStyle(headerStyle))
-	errorTable.SetCell(0, 2, tview.NewTableCell("SERVICE").SetStyle(headerStyle))
-	errorTable.SetCell(0, 3, tview.NewTableCell("ERROR").SetStyle(headerStyle).SetExpansion(1))
 
 	for i, e := range errors {
 		timeStr := e.timestamp.Format("15:04:05")
 		style := tcell.StyleDefault.Foreground(getAgeColor(e.timestamp))
-		errorTable.SetCell(i+1, 0, tview.NewTableCell(timeStr).SetStyle(style))
-		errorTable.SetCell(i+1, 1, tview.NewTableCell(e.hostname).SetStyle(style))
-		errorTable.SetCell(i+1, 2, tview.NewTableCell(e.serviceName).SetStyle(style))
-		errorTable.SetCell(i+1, 3, tview.NewTableCell(e.text).SetStyle(style))
+		errorTable.SetCell(i, 0, tview.NewTableCell(timeStr).SetStyle(style))
+		errorTable.SetCell(i, 1, tview.NewTableCell(e.hostname).SetStyle(style))
+		errorTable.SetCell(i, 2, tview.NewTableCell(e.serviceName).SetStyle(style))
+		errorTable.SetCell(i, 3, tview.NewTableCell(e.text).SetStyle(style))
 	}
 
 	// 4. ALERTS
 	alertTable.Clear()
-	alertTable.SetCell(0, 0, tview.NewTableCell("TIME").SetStyle(headerStyle))
-	alertTable.SetCell(0, 1, tview.NewTableCell("HOSTNAME").SetStyle(headerStyle))
-	alertTable.SetCell(0, 2, tview.NewTableCell("SERVICE").SetStyle(headerStyle))
-	alertTable.SetCell(0, 3, tview.NewTableCell("ALERT").SetStyle(headerStyle).SetExpansion(1))
 
 	for i, a := range alerts {
 		timeStr := a.timestamp.Format("15:04:05")
 		style := tcell.StyleDefault.Foreground(getAgeColor(a.timestamp))
-		alertTable.SetCell(i+1, 0, tview.NewTableCell(timeStr).SetStyle(style))
-		alertTable.SetCell(i+1, 1, tview.NewTableCell(a.hostname).SetStyle(style))
-		alertTable.SetCell(i+1, 2, tview.NewTableCell(a.serviceName).SetStyle(style))
-		alertTable.SetCell(i+1, 3, tview.NewTableCell(a.text).SetStyle(style))
+		alertTable.SetCell(i, 0, tview.NewTableCell(timeStr).SetStyle(style))
+		alertTable.SetCell(i, 1, tview.NewTableCell(a.hostname).SetStyle(style))
+		alertTable.SetCell(i, 2, tview.NewTableCell(a.serviceName).SetStyle(style))
+		alertTable.SetCell(i, 3, tview.NewTableCell(a.text).SetStyle(style))
 	}
 
 	app.Draw()
