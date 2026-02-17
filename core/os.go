@@ -15,6 +15,7 @@ type OsProviderApi interface {
 	ReadFile(name string) ([]byte, error)
 	OpenFile(name string, flag int, perm os.FileMode) (FileApi, error)
 	MkdirAll(path string, perm os.FileMode) error
+	RemoveAll(path string) error
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	Stat(name string) (os.FileInfo, error)
 	Chtimes(name string, atime time.Time, mtime time.Time) error
@@ -66,6 +67,9 @@ func (OsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, er
 func (OsProvider) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
+func (OsProvider) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
 func (OsProvider) ReadDir(dirname string) ([]os.DirEntry, error) {
 	return os.ReadDir(dirname)
 }
@@ -93,6 +97,7 @@ type FakeOsProvider struct {
 	UserHomeDirFunc func() (string, error)
 	OpenFileFunc    func(name string, flag int, perm os.FileMode) (FileApi, error)
 	MkdirAllFunc    func(path string, perm os.FileMode) error
+	RemoveAllFunc   func(path string) error
 	ReadDirFunc     func(dirname string) ([]os.DirEntry, error)
 	StatFunc        func(name string) (os.FileInfo, error)
 	ChtimesFunc     func(name string, atime time.Time, mtime time.Time) error
@@ -127,6 +132,12 @@ func (f FakeOsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileA
 func (f FakeOsProvider) MkdirAll(path string, perm os.FileMode) error {
 	if f.MkdirAllFunc != nil {
 		return f.MkdirAllFunc(path, perm)
+	}
+	return nil
+}
+func (f FakeOsProvider) RemoveAll(path string) error {
+	if f.RemoveAllFunc != nil {
+		return f.RemoveAllFunc(path)
 	}
 	return nil
 }
