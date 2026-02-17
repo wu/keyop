@@ -9,6 +9,7 @@ import (
 	"keyop/x/heartbeat"
 	"keyop/x/httpPostClient"
 	"keyop/x/httpPostServer"
+	"keyop/x/idleMonitorMacos"
 	"keyop/x/kodi"
 	"keyop/x/logManager"
 	"keyop/x/macosMessages"
@@ -55,6 +56,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"kodi": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return kodi.NewService(deps, cfg)
+	},
+	"idleMacos": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return idleMonitorMacos.NewService(deps, cfg)
 	},
 	"logManager": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return logManager.NewService(deps, cfg)
