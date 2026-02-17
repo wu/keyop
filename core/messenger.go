@@ -37,6 +37,7 @@ type MessengerApi interface {
 	SetReaderState(channelName string, readerName string, fileName string, offset int64) error
 	SeekToEnd(channelName string, readerName string) error
 	SetDataDir(dir string)
+	GetStats() MessengerStats
 }
 
 func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
@@ -53,11 +54,12 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 		home = "."
 	}
 	m := &Messenger{
-		subscriptions: make(map[string][]func(Message) error),
-		queues:        make(map[string]*PersistentQueue),
-		logger:        logger,
-		osProvider:    osProvider,
-		dataDir:       filepath.Join(home, ".keyop", "data"),
+		subscriptions:        make(map[string][]func(Message) error),
+		queues:               make(map[string]*PersistentQueue),
+		logger:               logger,
+		osProvider:           osProvider,
+		dataDir:              filepath.Join(home, ".keyop", "data"),
+		channelMessageCounts: make(map[string]int64),
 	}
 
 	if host, err := osProvider.Hostname(); err == nil {
@@ -81,6 +83,20 @@ type Messenger struct {
 	hostname      string
 	queues        map[string]*PersistentQueue
 	dataDir       string
+
+	// stats
+	channelMessageCounts map[string]int64
+	totalMessageCount    int64
+	totalFailureCount    int64
+	totalRetryCount      int64
+	statsMutex           sync.RWMutex
+}
+
+type MessengerStats struct {
+	ChannelMessageCounts map[string]int64 `json:"channelMessageCounts"`
+	TotalMessageCount    int64            `json:"totalMessageCount"`
+	TotalFailureCount    int64            `json:"totalFailureCount"`
+	TotalRetryCount      int64            `json:"totalRetryCount"`
 }
 
 //goland:noinspection GoVetCopyLock
@@ -126,13 +142,24 @@ func (m *Messenger) Send(msg Message) error {
 	logger.Info("SEND", "channel", channelName, "message", msg)
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
+		m.statsMutex.Lock()
+		m.totalFailureCount++
+		m.statsMutex.Unlock()
 		return err
 	}
 	err = m.queues[channelName].Enqueue(string(msgBytes))
 	if err != nil {
 		logger.Error("Failed to enqueue message", "error", err)
+		m.statsMutex.Lock()
+		m.totalFailureCount++
+		m.statsMutex.Unlock()
 		return err
 	}
+
+	m.statsMutex.Lock()
+	m.channelMessageCounts[channelName]++
+	m.totalMessageCount++
+	m.statsMutex.Unlock()
 
 	return nil
 }
@@ -236,6 +263,10 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				}
 
 				if err := messageHandler(msg, fileName, offset); err != nil {
+					m.statsMutex.Lock()
+					m.totalRetryCount++
+					m.statsMutex.Unlock()
+
 					retryCount++
 					logger.Error("Message handler returned error, retrying", "error", err, "message", msg, "retryCount", retryCount)
 
@@ -306,6 +337,24 @@ func (m *Messenger) SetDataDir(dir string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.dataDir = dir
+}
+
+func (m *Messenger) GetStats() MessengerStats {
+	m.statsMutex.RLock()
+	defer m.statsMutex.RUnlock()
+
+	// copy channelMessageCounts map
+	channelCounts := make(map[string]int64)
+	for k, v := range m.channelMessageCounts {
+		channelCounts[k] = v
+	}
+
+	return MessengerStats{
+		ChannelMessageCounts: channelCounts,
+		TotalMessageCount:    m.totalMessageCount,
+		TotalFailureCount:    m.totalFailureCount,
+		TotalRetryCount:      m.totalRetryCount,
+	}
 }
 
 func (m *Messenger) initializePersistentQueue(channelName string) error {
