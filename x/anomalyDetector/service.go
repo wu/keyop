@@ -73,6 +73,10 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		// Ignore heartbeat metrics
 		return nil
 	}
+	if strings.Contains(msg.MetricName, "idle") {
+		// Ignore heartbeat metrics
+		return nil
+	}
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
