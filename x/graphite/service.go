@@ -89,7 +89,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	metricName = fmt.Sprintf("keyop.%s", metricName)
 
 	unixTime := msg.Timestamp.Unix()
-	logger.Info("Sending to Graphite:",
+	logger.Info("Sending to Graphite",
 		"time", time.Unix(unixTime, 0).Format("2006-01-02 15:04:05"),
 		"service", msg.ServiceName,
 		"plugin", msg.ServiceType,
