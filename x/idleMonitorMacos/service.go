@@ -17,6 +17,7 @@ type Service struct {
 
 	isIdle           bool
 	lastTransition   time.Time
+	lastAlertHours   int
 	threshold        time.Duration
 	hostname         string
 	idleMetricName   string
@@ -26,6 +27,7 @@ type Service struct {
 type ServiceState struct {
 	IsIdle         bool      `json:"is_idle"`
 	LastTransition time.Time `json:"last_transition"`
+	LastAlertHours int       `json:"last_alert_hours"`
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -88,11 +90,12 @@ func (svc *Service) Initialize() error {
 	if err := stateStore.Load(svc.Cfg.Name, &state); err == nil {
 		svc.isIdle = state.IsIdle
 		svc.lastTransition = state.LastTransition
-		logger.Info("loaded state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition)
+		svc.lastAlertHours = state.LastAlertHours
+		logger.Info("loaded state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, "lastAlertHours", svc.lastAlertHours)
 	}
 	if svc.lastTransition.IsZero() {
 		svc.lastTransition = time.Now()
-		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition})
+		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
 		if err != nil {
 			logger.Error("failed to save state", "error", err)
 		}
@@ -185,6 +188,7 @@ func (svc *Service) Check() error {
 		// Transitioned to IDLE
 		activeTime := now.Sub(svc.lastTransition)
 		svc.lastTransition = now.Add(-idleDuration) // backdate to when it actually became idle
+		svc.lastAlertHours = 0                      // Reset alert counter
 		timeSinceLastStatusChange = now.Sub(svc.lastTransition)
 
 		err = messenger.Send(core.Message{
@@ -201,7 +205,7 @@ func (svc *Service) Check() error {
 
 		// Save state
 		logger.Error("transitioned to idle, saving state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, svc.Cfg.Name)
-		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition})
+		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
 		if err != nil {
 			logger.Error("failed to save state", "error", err)
 		}
@@ -209,6 +213,7 @@ func (svc *Service) Check() error {
 		// Transitioned to ACTIVE
 		idleTime := now.Sub(svc.lastTransition)
 		svc.lastTransition = now
+		svc.lastAlertHours = 0
 		timeSinceLastStatusChange = 0
 
 		err = messenger.Send(core.Message{
@@ -224,9 +229,32 @@ func (svc *Service) Check() error {
 		}
 
 		// Save state
-		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition})
+		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
 		if err != nil {
 			logger.Error("failed to save state", "error", err)
+		}
+	} else if !svc.isIdle {
+		// Stayed ACTIVE - check for hour-by-hour alert
+		activeHours := int(activeDuration.Hours())
+		if activeHours > svc.lastAlertHours {
+			svc.lastAlertHours = activeHours
+			err = messenger.Send(core.Message{
+				ChannelName: svc.Cfg.Pubs["alerts"].Name,
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Status:      "active_reminder",
+				Summary:     fmt.Sprintf("%s active reminder", svc.hostname),
+				Text:        fmt.Sprintf("Host %s has been active for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
+			})
+			if err != nil {
+				logger.Error("failed to send active reminder alert", "error", err)
+			}
+
+			// Save state
+			err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
+			if err != nil {
+				logger.Error("failed to save state", "error", err)
+			}
 		}
 	}
 
