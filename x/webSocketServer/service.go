@@ -317,7 +317,7 @@ func (svc *Service) sendAndWaitAck(ctx context.Context, conn *websocket.Conn, mu
 	case <-ackChan:
 		return nil
 	case <-time.After(60 * time.Second):
-		return fmt.Errorf("ack timeout")
+		return fmt.Errorf("ack timeout for message %s on channel %s", msg.Uuid, queueName)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
