@@ -34,6 +34,10 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 
 func (m *mockMessenger) SetDataDir(dir string) {}
 
+func (m *mockMessenger) GetStats() core.MessengerStats {
+	return core.MessengerStats{}
+}
+
 func TestAnomalyDetection(t *testing.T) {
 	messenger := &mockMessenger{}
 	deps := core.Dependencies{}
@@ -89,6 +93,65 @@ func TestAnomalyDetection(t *testing.T) {
 	if !foundAnomaly {
 		t.Errorf("Anomaly was not detected")
 	}
+}
+
+func TestSkipServices(t *testing.T) {
+	messenger := &mockMessenger{}
+	deps := core.Dependencies{}
+	deps.SetMessenger(messenger)
+	deps.SetLogger(&core.FakeLogger{})
+
+	cfg := core.ServiceConfig{
+		Name: "anomaly_test",
+		Subs: map[string]core.ChannelInfo{
+			"metrics": {Name: "metrics_channel"},
+		},
+		Pubs: map[string]core.ChannelInfo{
+			"status": {Name: "status_channel"},
+		},
+		Config: map[string]interface{}{
+			"window_size":    5.0,
+			"threshold":      0.001,
+			"min_train_size": 10.0,
+			"skip_services":  []interface{}{"skipped-service"},
+		},
+	}
+
+	svc := NewService(deps, cfg).(*Service)
+
+	// Send a message from a skipped service
+	err := svc.messageHandler(core.Message{
+		ServiceName: "skipped-service",
+		MetricName:  "test.metric",
+		Metric:      50.0,
+	})
+	if err != nil {
+		t.Fatalf("messageHandler failed: %v", err)
+	}
+
+	// It should NOT be in the MetricBuffer if it's skipped
+	svc.mu.Lock()
+	if _, ok := svc.MetricBuffer["test.metric"]; ok {
+		t.Errorf("Message from skipped service was not skipped")
+	}
+	svc.mu.Unlock()
+
+	// Send a message from a non-skipped service
+	err = svc.messageHandler(core.Message{
+		ServiceName: "other-service",
+		MetricName:  "other.metric",
+		Metric:      50.0,
+	})
+	if err != nil {
+		t.Fatalf("messageHandler failed: %v", err)
+	}
+
+	// It SHOULD be in the MetricBuffer
+	svc.mu.Lock()
+	if _, ok := svc.MetricBuffer["other.metric"]; !ok {
+		t.Errorf("Message from non-skipped service was skipped")
+	}
+	svc.mu.Unlock()
 }
 
 func TestAutoencoder_Train(t *testing.T) {
