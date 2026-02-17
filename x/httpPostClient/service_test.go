@@ -456,6 +456,42 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 	assert.Contains(t, err.Error(), "x509: certificate signed by unknown authority")
 }
 
+func TestService_MessageHandler_RoutingLoop(t *testing.T) {
+	deps := testDeps(t)
+
+	cfg := core.ServiceConfig{
+		Name: "test-httpPostClient",
+		Config: map[string]interface{}{
+			"port":                 8080,
+			"hostname":             "localhost",
+			"route_loop_skip_host": "skip-this-host",
+		},
+	}
+	svc := NewService(deps, cfg).(*Service)
+	err := svc.Initialize()
+	assert.NoError(t, err)
+
+	// Message with route containing the skip host
+	testMsg := core.Message{
+		ServiceName: "test-service",
+		Route:       []string{"skip-this-host:service:name", "other-host:service:name"},
+	}
+
+	// Should return nil (skipped) and NOT try to send the message
+	// Since we haven't set up a mock server, if it tries to send it will fail with an error.
+	err = svc.messageHandler(testMsg)
+	assert.NoError(t, err)
+
+	// Message without the skip host in route should proceed to try and send
+	testMsg2 := core.Message{
+		ServiceName: "test-service",
+		Route:       []string{"allowed-host:service:name"},
+	}
+	err = svc.messageHandler(testMsg2)
+	// Should error because there is no server running on 8080
+	assert.Error(t, err)
+}
+
 func TestService_Check(t *testing.T) {
 	deps := testDeps(t)
 	svc := NewService(deps, core.ServiceConfig{})

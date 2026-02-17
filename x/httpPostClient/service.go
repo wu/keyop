@@ -12,16 +12,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 type Service struct {
-	Deps       core.Dependencies
-	Cfg        core.ServiceConfig
-	Port       int
-	Hostname   string
-	Timeout    time.Duration
-	httpClient *http.Client
+	Deps              core.Dependencies
+	Cfg               core.ServiceConfig
+	Port              int
+	Hostname          string
+	Timeout           time.Duration
+	RouteLoopSkipHost string
+	httpClient        *http.Client
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -39,6 +41,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	hostname, hostnameDirExists := svc.Cfg.Config["hostname"].(string)
 	if hostnameDirExists {
 		svc.Hostname = hostname
+	}
+
+	routeLoopSkipHost, routeLoopSkipHostExists := svc.Cfg.Config["route_loop_skip_host"].(string)
+	if routeLoopSkipHostExists {
+		svc.RouteLoopSkipHost = routeLoopSkipHost
 	}
 
 	timeoutStr, timeoutExists := svc.Cfg.Config["timeout"].(string)
@@ -213,6 +220,17 @@ func (svc *Service) Check() error {
 
 func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
+
+	// check for routing loops
+	if svc.RouteLoopSkipHost != "" {
+		for _, route := range msg.Route {
+			parts := strings.Split(route, ":")
+			if len(parts) > 0 && parts[0] == svc.RouteLoopSkipHost {
+				logger.Info("httpPostClient: skipping message due to routing loop", "host", svc.RouteLoopSkipHost, "route", route)
+				return nil
+			}
+		}
+	}
 
 	// process incoming message
 	logger.Info("httpPostClient: forwarding message", "channel", msg.ChannelName, "message", msg)
