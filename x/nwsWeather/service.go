@@ -150,8 +150,6 @@ func (svc *Service) fetchForecastURL() error {
 }
 
 func (svc *Service) Check() error {
-	logger := svc.Deps.MustGetLogger()
-
 	svc.mu.RLock()
 	forecastURL := svc.forecastURL
 	svc.mu.RUnlock()
@@ -190,8 +188,6 @@ func (svc *Service) Check() error {
 	if err != nil {
 		return err
 	}
-
-	logger.Error("WEATHER BODY: %s", string(body))
 
 	var forecastData struct {
 		Properties struct {
