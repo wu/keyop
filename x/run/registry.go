@@ -16,6 +16,7 @@ import (
 	"keyop/x/metricsMonitor"
 	"keyop/x/moon"
 	"keyop/x/notifyMacos"
+	"keyop/x/nwsWeather"
 	"keyop/x/ollama"
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
@@ -96,6 +97,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"sun": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return sun.NewService(deps, cfg)
+	},
+	"weather": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return nwsWeather.NewService(deps, cfg)
 	},
 
 	"temp": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service { return temp.NewService(deps, cfg) },
