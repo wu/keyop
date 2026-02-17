@@ -150,3 +150,5 @@ func (m *mockMessenger) SetReaderState(channelName string, readerName string, fi
 func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
+
+func (m *mockMessenger) SetDataDir(dir string) {}

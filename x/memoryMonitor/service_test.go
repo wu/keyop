@@ -44,6 +44,8 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *mockMessenger) SetDataDir(dir string) {}
+
 func TestCheck_Darwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("Skipping Darwin test on non-darwin platform")

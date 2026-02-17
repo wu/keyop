@@ -41,6 +41,8 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *mockMessenger) SetDataDir(dir string) {}
+
 func TestHeartbeatMetricName(t *testing.T) {
 	deps := core.Dependencies{}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))

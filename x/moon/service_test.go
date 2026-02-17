@@ -40,6 +40,8 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *mockMessenger) SetDataDir(dir string) {}
+
 type mockStateStore struct {
 	data map[string]interface{}
 	mu   sync.Mutex

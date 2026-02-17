@@ -60,6 +60,8 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *mockMessenger) SetDataDir(dir string) {}
+
 func TestNwsWeatherService(t *testing.T) {
 	// Setup mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

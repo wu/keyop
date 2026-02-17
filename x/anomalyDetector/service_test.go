@@ -32,6 +32,8 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *mockMessenger) SetDataDir(dir string) {}
+
 func TestAnomalyDetection(t *testing.T) {
 	messenger := &mockMessenger{}
 	deps := core.Dependencies{}

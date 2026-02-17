@@ -243,7 +243,7 @@ func (svc *Service) Check() error {
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Status:      "active_reminder",
-				Summary:     fmt.Sprintf("break time", svc.hostname),
+				Summary:     fmt.Sprintf("break time for %s", svc.hostname),
 				Text:        fmt.Sprintf("Active on %s for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
 			})
 			if err != nil {

@@ -37,6 +37,8 @@ func (m *MockMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+func (m *MockMessenger) SetDataDir(dir string) {}
+
 func testDeps(t *testing.T, messenger core.MessengerApi) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
