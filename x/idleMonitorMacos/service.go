@@ -145,7 +145,7 @@ func (svc *Service) Check() error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Status:      status,
-		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s, Time since last status change: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration), formatHumanDuration(timeSinceLastStatusChange)),
+		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration)),
 		Data: map[string]interface{}{
 			"idle_duration_seconds":            idleDuration.Seconds(),
 			"active_duration_seconds":          activeDuration.Seconds(),
@@ -197,7 +197,7 @@ func (svc *Service) Check() error {
 			ServiceType: svc.Cfg.Type,
 			Status:      "idle",
 			Summary:     fmt.Sprintf("Idle on %s", svc.hostname),
-			Text:        fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s. Time since last status change: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime), formatHumanDuration(timeSinceLastStatusChange)),
+			Text:        fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime)),
 		})
 		if err != nil {
 			logger.Error("failed to send idle alert", "error", err)
@@ -222,7 +222,7 @@ func (svc *Service) Check() error {
 			ServiceType: svc.Cfg.Type,
 			Status:      "active",
 			Summary:     fmt.Sprintf("Active on %s", svc.hostname),
-			Text:        fmt.Sprintf("Host %s is active again. Was idle for: %s. Time since last status change: %s", svc.hostname, formatHumanDuration(idleTime), formatHumanDuration(timeSinceLastStatusChange)),
+			Text:        fmt.Sprintf("Host %s is active again. Was idle for: %s.", svc.hostname, formatHumanDuration(idleTime)),
 		})
 		if err != nil {
 			logger.Error("failed to send active alert", "error", err)

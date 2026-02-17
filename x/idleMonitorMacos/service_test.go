@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"keyop/core"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 )
@@ -117,18 +116,6 @@ func TestCheck(t *testing.T) {
 	assertMessage(t, messenger.messages, "events_channel", "active")
 	assertEventData(t, messenger.messages, 0, true) // active duration might be small but > 0
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 0)
-
-	// Verify time since status change in text
-	foundStatusChange := false
-	for _, msg := range messenger.messages {
-		if msg.ChannelName == "events_channel" && strings.Contains(msg.Text, "Time since last status change:") {
-			foundStatusChange = true
-			break
-		}
-	}
-	if !foundStatusChange {
-		t.Errorf("Time since last status change not found in event text")
-	}
 
 	messenger.messages = nil // reset
 
