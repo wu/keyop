@@ -28,13 +28,17 @@ func Test_run_missing_config_returns_error(t *testing.T) {
 }
 
 func Test_loadServices_success(t *testing.T) {
-	// setup: temp dir with a valid config.yaml containing two svcs
+	// setup: temp dir with a valid config.yaml containing a single svc
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: heartbeat\n  freq: 1s\n  x: heartbeat\n" +
-		"- name: office-temp\n  freq: 2s\n  x: temp\n"
-	if err := os.WriteFile(filepath.Join(dir, "10-services.yaml"), []byte(cfg), 0o600); err != nil {
+	cfg1 := "name: heartbeat\nfreq: 1s\nx: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "10-heartbeat.yaml"), []byte(cfg1), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg2 := "name: office-temp\nfreq: 2s\nx: temp\n"
+	if err := os.WriteFile(filepath.Join(dir, "20-temp.yaml"), []byte(cfg2), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -55,7 +59,7 @@ func Test_loadServices_success(t *testing.T) {
 		assert.Equal(t, "office-temp", svcs[1].Name)
 		assert.Equal(t, "temp", svcs[1].Type)
 		assert.Equal(t, 2*time.Second, svcs[1].Freq)
-		assert.NotNil(t, ServiceRegistry[svcs[0].Type])
+		assert.NotNil(t, ServiceRegistry[svcs[1].Type])
 	}
 }
 
@@ -63,11 +67,11 @@ func Test_loadServices_multiple_files_order(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg2 := "- name: service2\n  x: heartbeat\n"
+	cfg2 := "name: service2\nx: heartbeat\n"
 	if err := os.WriteFile(filepath.Join(dir, "20-service.yaml"), []byte(cfg2), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
-	cfg1 := "- name: service1\n  x: heartbeat\n"
+	cfg1 := "name: service1\nx: heartbeat\n"
 	if err := os.WriteFile(filepath.Join(dir, "10-service.yaml"), []byte(cfg1), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -90,7 +94,7 @@ func Test_loadServices_bad_duration(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: heartbeat\n  freq: not-a-duration\n  x: heartbeat\n"
+	cfg := "name: heartbeat\nfreq: not-a-duration\nx: heartbeat\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -109,13 +113,13 @@ func Test_loadServices_pubs_loaded(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: heartbeat\n" +
-		"  freq: 1s\n" +
-		"  x: heartbeat\n" +
-		"  pubs:\n" +
-		"    events:\n" +
-		"      name: heartbeat\n" +
-		"      description: Publish Heartbeat Events every 1 second\n"
+	cfg := "name: heartbeat\n" +
+		"freq: 1s\n" +
+		"x: heartbeat\n" +
+		"pubs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    description: Publish Heartbeat Events every 1 second\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -138,12 +142,12 @@ func Test_loadServices_subs_loaded(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: foo\n" +
-		"  x: heartbeat\n" +
-		"  subs:\n" +
-		"    events:\n" +
-		"      name: heartbeat\n" +
-		"      description: Read Heartbeat Events\n"
+	cfg := "name: foo\n" +
+		"x: heartbeat\n" +
+		"subs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    description: Read Heartbeat Events\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -165,12 +169,12 @@ func Test_loadServices_maxAge_loaded(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: foo\n" +
-		"  x: heartbeat\n" +
-		"  subs:\n" +
-		"    events:\n" +
-		"      name: heartbeat\n" +
-		"      max_age: 1h\n"
+	cfg := "name: foo\n" +
+		"x: heartbeat\n" +
+		"subs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    max_age: 1h\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -188,15 +192,32 @@ func Test_loadServices_maxAge_loaded(t *testing.T) {
 	}
 }
 
+func Test_loadServices_no_name(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "freq: 1s\nx: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "my-service.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(core.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "my-service", svcs[0].Name)
+	}
+}
+
 func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "[]\n" // empty YAML array, valid but no services
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-
+	// No files in directory
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
@@ -214,7 +235,7 @@ func Test_loadServiceConfigs_template_hostname(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: {{.ShortHostname}}-service\n  x: heartbeat\n"
+	cfg := "name: {{.ShortHostname}}-service\nx: heartbeat\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -235,7 +256,7 @@ func Test_loadServiceConfigs_template_userhome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
 
-	cfg := "- name: home-service\n  x: heartbeat\n  config:\n    home: {{.HomeDir}}\n"
+	cfg := "name: test\nx: heartbeat\nconfig:\n  path: {{.HomeDir}}/test\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -251,6 +272,6 @@ func Test_loadServiceConfigs_template_userhome(t *testing.T) {
 	userHome, _ := os.UserHomeDir()
 
 	if assert.Len(t, svcs, 1) {
-		assert.Equal(t, userHome, svcs[0].Config["home"])
+		assert.Equal(t, userHome+"/test", svcs[0].Config["path"])
 	}
 }
