@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -565,4 +566,69 @@ func TestMessenger_InitializePersistentQueue_NilQueues(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, m.queues)
 	assert.Contains(t, m.queues, "test-chan")
+}
+
+func TestMessenger_Stats(t *testing.T) {
+	logger := &FakeLogger{}
+	tempDir := t.TempDir()
+	osProvider := OsProvider{}
+	m := NewMessenger(logger, osProvider)
+	dataDir := filepath.Join(tempDir, "data")
+	m.SetDataDir(dataDir)
+
+	msg1 := Message{ChannelName: "chan1", Text: "msg1"}
+	msg2 := Message{ChannelName: "chan1", Text: "msg2"}
+	msg3 := Message{ChannelName: "chan2", Text: "msg3"}
+
+	err1 := m.Send(msg1)
+	err2 := m.Send(msg2)
+	err3 := m.Send(msg3)
+
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+	assert.NoError(t, err3)
+
+	stats := m.GetStats()
+	assert.Equal(t, int64(3), stats.TotalMessageCount)
+	assert.Equal(t, int64(2), stats.ChannelMessageCounts["chan1"])
+	assert.Equal(t, int64(1), stats.ChannelMessageCounts["chan2"])
+	assert.Equal(t, int64(0), stats.TotalFailureCount)
+	assert.Equal(t, int64(0), stats.TotalRetryCount)
+}
+
+func TestMessenger_RetryStats(t *testing.T) {
+	logger := &FakeLogger{}
+	tempDir := t.TempDir()
+	osProvider := OsProvider{}
+	m := NewMessenger(logger, osProvider)
+	dataDir := filepath.Join(tempDir, "data")
+	m.SetDataDir(dataDir)
+
+	channelName := "test_retry_stats" // must contain "test" for fast retry
+	msg := Message{ChannelName: channelName, Text: "retry_msg"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	retryCount := 0
+	handler := func(m Message) error {
+		if retryCount < 2 {
+			retryCount++
+			return fmt.Errorf("temporary error")
+		}
+		return nil
+	}
+
+	err := m.Subscribe(ctx, "subscriber1", channelName, "testType", "testName", 0, handler)
+	assert.NoError(t, err)
+
+	err = m.Send(msg)
+	assert.NoError(t, err)
+
+	// Wait for retries to happen and succeed
+	// The sleep time in SubscribeExtended is 10ms for "test" source/channel
+	time.Sleep(500 * time.Millisecond)
+
+	stats := m.GetStats()
+	assert.Equal(t, int64(2), stats.TotalRetryCount)
 }

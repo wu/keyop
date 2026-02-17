@@ -14,6 +14,7 @@ import (
 	"keyop/x/logManager"
 	"keyop/x/macosMessages"
 	"keyop/x/memoryMonitor"
+	"keyop/x/messengerStats"
 	"keyop/x/metricsMonitor"
 	"keyop/x/moon"
 	"keyop/x/notifyMacos"
@@ -66,6 +67,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"memoryMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return memoryMonitor.NewService(deps, cfg)
+	},
+	"messengerStats": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return messengerStats.NewService(deps, cfg)
 	},
 	"metricsMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return metricsMonitor.NewService(deps, cfg)
