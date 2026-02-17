@@ -196,7 +196,7 @@ func (svc *Service) Check() error {
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Status:      "idle",
-			Summary:     fmt.Sprintf("%s is idle", svc.hostname),
+			Summary:     fmt.Sprintf("Idle on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s. Time since last status change: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime), formatHumanDuration(timeSinceLastStatusChange)),
 		})
 		if err != nil {
@@ -221,7 +221,7 @@ func (svc *Service) Check() error {
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Status:      "active",
-			Summary:     fmt.Sprintf("%s is active", svc.hostname),
+			Summary:     fmt.Sprintf("Active on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s is active again. Was idle for: %s. Time since last status change: %s", svc.hostname, formatHumanDuration(idleTime), formatHumanDuration(timeSinceLastStatusChange)),
 		})
 		if err != nil {
@@ -243,8 +243,8 @@ func (svc *Service) Check() error {
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Status:      "active_reminder",
-				Summary:     fmt.Sprintf("%s active reminder", svc.hostname),
-				Text:        fmt.Sprintf("Host %s has been active for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
+				Summary:     fmt.Sprintf("break time", svc.hostname),
+				Text:        fmt.Sprintf("Active on %s for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
 			})
 			if err != nil {
 				logger.Error("failed to send active reminder alert", "error", err)
