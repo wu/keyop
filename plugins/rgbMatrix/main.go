@@ -272,22 +272,22 @@ func (p *RGBMatrixPlugin) Render() error {
 		tempStr := fmt.Sprintf("%.1f", temp)
 		d.Face = p.bigFace
 		d.Src = image.NewUniform(p.getTempColor(p.statuses[name]))
-		d.Dot = fixed.Point26_6{X: fixed.I(25), Y: fixed.I(20)}
+		d.Dot = fixed.Point26_6{X: fixed.I(26), Y: fixed.I(20)}
 		d.DrawString(tempStr)
 
 		tempNameStr := fmt.Sprintf("%s", displayName)
 		d.Face = p.bigFace
 		d.Src = image.NewUniform(p.getTempColor(p.statuses[name]))
-		d.Dot = fixed.Point26_6{X: fixed.I(51), Y: fixed.I(20)}
+		d.Dot = fixed.Point26_6{X: fixed.I(52), Y: fixed.I(20)}
 		d.DrawString(tempNameStr)
 	}
 
-	// 5. Draw Info (Bottom)
-	infoStr := "keyop"
-	d.Face = p.bigFace
-	d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
-	d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(30)}
-	d.DrawString(infoStr)
+	//// 5. Draw Info (Bottom)
+	//infoStr := "keyop"
+	//d.Face = p.bigFace
+	//d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+	//d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(30)}
+	//d.DrawString(infoStr)
 
 	p.mu.RUnlock()
 
