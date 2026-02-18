@@ -31,6 +31,7 @@ type RGBMatrixPlugin struct {
 
 	mu        sync.RWMutex
 	temps     map[string]float64
+	statuses  map[string]string
 	tempNames []string
 	tempIdx   int
 	nameMap   map[string]string
@@ -69,6 +70,7 @@ func (p *RGBMatrixPlugin) Initialize() error {
 	p.matrix = m
 	p.canvas = rgbmatrix.NewCanvas(p.matrix)
 	p.temps = make(map[string]float64)
+	p.statuses = make(map[string]string)
 	p.nameMap = make(map[string]string)
 
 	if v, ok := p.cfg.Config["temp_name_map"].(map[string]interface{}); ok {
@@ -145,9 +147,10 @@ func (p *RGBMatrixPlugin) Check() error {
 			return nil
 		}
 
-		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metric", msg.Metric)
+		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metric", msg.Metric, "status", msg.Status)
 
 		p.temps[msg.ServiceName] = msg.Metric
+		p.statuses[msg.ServiceName] = msg.Status
 
 		// Update sorted names
 		names := make([]string, 0, len(p.temps))
@@ -240,6 +243,7 @@ func (p *RGBMatrixPlugin) Render() error {
 		}
 		name := p.tempNames[p.tempIdx]
 		temp := p.temps[name]
+
 		// todo: main temp should be configurable
 		mainTemp, ok := p.temps["temp.heaterbot"]
 		if !ok {
@@ -261,19 +265,19 @@ func (p *RGBMatrixPlugin) Render() error {
 		}
 		mainTempStr := fmt.Sprintf("%.1f", mainTemp)
 		d.Face = p.bigFace
-		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Src = image.NewUniform(p.getTempColor(p.statuses["temp.heaterbot"]))
 		d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(20)}
 		d.DrawString(mainTempStr)
 
 		tempStr := fmt.Sprintf("%.1f", temp)
 		d.Face = p.bigFace
-		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Src = image.NewUniform(p.getTempColor(p.statuses[name]))
 		d.Dot = fixed.Point26_6{X: fixed.I(25), Y: fixed.I(20)}
 		d.DrawString(tempStr)
 
 		tempNameStr := fmt.Sprintf("%s", displayName)
 		d.Face = p.bigFace
-		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Src = image.NewUniform(p.getTempColor(p.statuses[name]))
 		d.Dot = fixed.Point26_6{X: fixed.I(51), Y: fixed.I(20)}
 		d.DrawString(tempNameStr)
 	}
@@ -293,6 +297,19 @@ func (p *RGBMatrixPlugin) Render() error {
 	p.canvas.Render()
 
 	return nil
+}
+
+func (p *RGBMatrixPlugin) getTempColor(status string) color.RGBA {
+	switch status {
+	case "warning":
+		return p.colorRGBA(173, 216, 230, 255)
+	case "critical":
+		return p.colorRGBA(255, 0, 0, 255)
+	case "ok":
+		return p.colorRGBA(0, 100, 0, 255)
+	default:
+		return p.colorRGBA(50, 50, 50, 255)
+	}
 }
 
 func (p *RGBMatrixPlugin) ValidateConfig() []error {
