@@ -39,6 +39,8 @@ func (m *MockMessenger) SeekToEnd(channelName string, readerName string) error {
 
 func (m *MockMessenger) SetDataDir(dir string) {}
 
+func (m *MockMessenger) SetHostname(hostname string) {}
+
 func (m *MockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
 }
