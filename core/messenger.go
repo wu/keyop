@@ -364,6 +364,42 @@ func (m *Messenger) GetStats() MessengerStats {
 	}
 }
 
+type FakeMessenger struct {
+	Messages []Message
+	mu       sync.RWMutex
+}
+
+func (f *FakeMessenger) Send(msg Message) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Messages = append(f.Messages, msg)
+	return nil
+}
+
+func (f *FakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message) error) error {
+	return nil
+}
+
+func (f *FakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(Message, string, int64) error) error {
+	return nil
+}
+
+func (f *FakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+	return nil
+}
+
+func (f *FakeMessenger) SeekToEnd(channelName string, readerName string) error {
+	return nil
+}
+
+func (f *FakeMessenger) SetDataDir(dir string) {}
+
+func (f *FakeMessenger) SetHostname(hostname string) {}
+
+func (f *FakeMessenger) GetStats() MessengerStats {
+	return MessengerStats{}
+}
+
 func (m *Messenger) initializePersistentQueue(channelName string) error {
 	// initialize persistent queue for source and channel
 	m.mutex.Lock()
