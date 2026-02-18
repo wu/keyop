@@ -37,6 +37,7 @@ type MessengerApi interface {
 	SetReaderState(channelName string, readerName string, fileName string, offset int64) error
 	SeekToEnd(channelName string, readerName string) error
 	SetDataDir(dir string)
+	SetHostname(hostname string)
 	GetStats() MessengerStats
 }
 
@@ -337,6 +338,12 @@ func (m *Messenger) SetDataDir(dir string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.dataDir = dir
+}
+
+func (m *Messenger) SetHostname(hostname string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.hostname = hostname
 }
 
 func (m *Messenger) GetStats() MessengerStats {

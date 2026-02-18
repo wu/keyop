@@ -97,6 +97,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 	messenger.SetDataDir(dataDir)
+	messenger.SetHostname(fmt.Sprintf("tui-%d", rand.Intn(1000000)))
 
 	// Persist state in ~/.keyop/monitor_state
 	home, err := osProvider.UserHomeDir()

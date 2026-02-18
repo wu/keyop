@@ -271,9 +271,63 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 }
 
 func TestMessenger_SetDataDir(t *testing.T) {
-	m := &Messenger{}
+	m := NewMessenger(&FakeLogger{}, OsProvider{})
 	m.SetDataDir("new-dir")
 	assert.Equal(t, "new-dir", m.dataDir)
+}
+
+func TestMessenger_SetHostname(t *testing.T) {
+	m := NewMessenger(&FakeLogger{}, OsProvider{})
+	m.SetHostname("new-hostname")
+	assert.Equal(t, "new-hostname", m.hostname)
+}
+
+func TestMessenger_Send_CustomHostnameLoop(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "messenger_test_custom_hostname")
+	if err != nil {
+		t.Fatal(err)
+	}
+	//goland:noinspection GoUnhandledErrorResult
+	defer os.RemoveAll(tmpDir)
+
+	m := NewMessenger(&FakeLogger{}, OsProvider{})
+	m.dataDir = tmpDir
+	m.SetHostname("tui-123")
+
+	channelName := "tui-channel"
+	addRoute := "tui-123:tui-channel"
+
+	var received bool
+	err = m.Subscribe(context.Background(), "test", channelName, "testType", "test", 0, func(msg Message) error {
+		received = true
+		return nil
+	})
+	assert.NoError(t, err)
+
+	// Send message that already has the route with custom hostname
+	msg := Message{
+		ChannelName: channelName,
+		Text:        "should be discarded",
+		Route:       []string{addRoute},
+	}
+
+	err = m.Send(msg)
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.False(t, received, "Message should have been discarded due to custom hostname routing loop")
+
+	// Send message with DIFFERENT route, should be received
+	msg2 := Message{
+		ChannelName: channelName,
+		Text:        "should be received",
+		Route:       []string{"other-host:tui-channel"},
+	}
+	err = m.Send(msg2)
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.True(t, received, "Message from other host should have been received")
 }
 
 func TestMessenger_InitializePersistentQueue_Error(t *testing.T) {
