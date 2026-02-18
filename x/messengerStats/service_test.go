@@ -94,14 +94,12 @@ func TestCheck_MetricName(t *testing.T) {
 				}
 			}
 
-			assert.NotNil(t, metricMsg, "metric message should be sent")
-			assert.Equal(t, tt.expectedMetric, metricMsg.MetricName)
-			assert.Equal(t, float64(10), metricMsg.Metric)
+			assert.Nil(t, metricMsg, "metric message should not be sent on first check")
 		})
 	}
 }
 
-func TestCheck_MessagesPerSecond(t *testing.T) {
+func TestCheck_MessagesPerMinute(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	messenger := &mockMessenger{
@@ -122,17 +120,17 @@ func TestCheck_MessagesPerSecond(t *testing.T) {
 
 	svc := NewService(deps, cfg)
 
-	// First check, lastCheckTime is zero, so no MPS metric
+	// First check, lastCheckTime is zero, so no MPM metric
 	err := svc.Check()
 	assert.NoError(t, err)
 
-	mpsSent := false
+	mpmSent := false
 	for _, m := range messenger.messages {
-		if m.MetricName == "messages_per_second" {
-			mpsSent = true
+		if m.MetricName == "stats_service" {
+			mpmSent = true
 		}
 	}
-	assert.False(t, mpsSent, "MPS should not be sent on first check")
+	assert.False(t, mpmSent, "MPM should not be sent on first check")
 
 	// Advance stats and wait a bit
 	messenger.stats.TotalMessageCount = 20
@@ -143,16 +141,16 @@ func TestCheck_MessagesPerSecond(t *testing.T) {
 	err = svc.Check()
 	assert.NoError(t, err)
 
-	var mpsMsg *core.Message
+	var mpmMsg *core.Message
 	for _, m := range messenger.messages {
-		if m.MetricName == "messages_per_second" {
-			mpsMsg = &m
+		if m.MetricName == "stats_service" {
+			mpmMsg = &m
 			break
 		}
 	}
 
-	assert.NotNil(t, mpsMsg, "MPS metric message should be sent on second check")
-	assert.Greater(t, mpsMsg.Metric, 0.0, "MPS metric should be greater than 0")
-	// 10 messages in ~0.1s -> ~100 msgs/s
-	assert.InDelta(t, 100.0, mpsMsg.Metric, 50.0)
+	assert.NotNil(t, mpmMsg, "metric message should be sent on second check")
+	assert.Greater(t, mpmMsg.Metric, 0.0, "MPM metric should be greater than 0")
+	// 10 messages in ~0.1s -> ~100 msgs/s -> ~6000 msgs/min
+	assert.InDelta(t, 6000.0, mpmMsg.Metric, 3000.0)
 }

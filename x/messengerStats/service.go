@@ -60,41 +60,28 @@ func (svc *Service) Check() error {
 	// send total to metrics channel
 	metricName, _ := svc.Cfg.Config["metric_name"].(string)
 	if metricName == "" {
-		metricName = "messages"
+		metricName = svc.Cfg.Name
 	}
 
+	// send msgs per minute to metrics channel
 	var metricErr error
-	metricErr = messenger.Send(core.Message{
-		Uuid:        msgUuid,
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
-		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
-		MetricName:  metricName,
-		Metric:      float64(stats.TotalMessageCount),
-		Text:        fmt.Sprintf("total messages: %d", stats.TotalMessageCount),
-	})
-	if metricErr != nil {
-		logger.Error("Failed to send messenger stats to metrics channel", "error", metricErr)
-	}
-
-	// send msgs per second to metrics channel
 	if !svc.lastCheckTime.IsZero() {
 		deltaMessages := stats.TotalMessageCount - svc.lastTotalMessageCount
 		deltaTime := currentTime.Sub(svc.lastCheckTime).Seconds()
 		if deltaTime > 0 {
-			msgsPerSecond := float64(deltaMessages) / deltaTime
+			msgsPerMinute := float64(deltaMessages) / (deltaTime / 60.0)
 
 			metricErr = messenger.Send(core.Message{
 				Uuid:        msgUuid,
 				ChannelName: svc.Cfg.Pubs["metrics"].Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
-				MetricName:  "messages_per_second",
-				Metric:      msgsPerSecond,
-				Text:        fmt.Sprintf("message rate per second: %.2f", msgsPerSecond),
+				MetricName:  metricName,
+				Metric:      msgsPerMinute,
+				Text:        fmt.Sprintf("message rate per minute: %.2f", msgsPerMinute),
 			})
 			if metricErr != nil {
-				logger.Error("Failed to send messenger mps to metrics channel", "error", metricErr)
+				logger.Error("Failed to send messenger mpm to metrics channel", "error", metricErr)
 			}
 		}
 	}
