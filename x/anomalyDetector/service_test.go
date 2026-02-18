@@ -121,7 +121,7 @@ func TestSkipServices(t *testing.T) {
 
 	// Send a message from a skipped service
 	err := svc.messageHandler(core.Message{
-		ServiceName: "skipped-service",
+		ServiceType: "skipped-service",
 		MetricName:  "test.metric",
 		Metric:      50.0,
 	})
@@ -138,7 +138,7 @@ func TestSkipServices(t *testing.T) {
 
 	// Send a message from a non-skipped service
 	err = svc.messageHandler(core.Message{
-		ServiceName: "other-service",
+		ServiceType: "other-service",
 		MetricName:  "other.metric",
 		Metric:      50.0,
 	})
