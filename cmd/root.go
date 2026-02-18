@@ -47,7 +47,7 @@ func Execute() {
 	}
 
 	// when to enable stdout
-	if len(os.Args) > 1 && os.Args[1] != "run" && os.Args[1] != "monitor" {
+	if len(os.Args) > 1 && os.Args[1] != "run" && os.Args[1] != "tui" {
 		console = true
 	}
 
