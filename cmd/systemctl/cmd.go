@@ -1,4 +1,4 @@
-package systemd
+package systemctl
 
 import (
 	"keyop/core"
@@ -8,7 +8,7 @@ import (
 
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	installCmd := &cobra.Command{
-		Use:   "systemd",
+		Use:   "systemctl",
 		Short: "keyop systemd utilities",
 		Long:  `Install into systemd and manage the service.`,
 	}

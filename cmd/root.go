@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"keyop/cmd/systemd"
+	"keyop/cmd/systemctl"
 	"keyop/core"
 	"keyop/util"
 	"keyop/x/run"
@@ -22,7 +22,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.PersistentFlags().BoolP("stdout", "o", false, "display the logs in colorized output to stdout")
 
 	rootCmd.AddCommand(run.NewCmd(deps))
-	rootCmd.AddCommand(systemd.NewCmd(deps))
+	rootCmd.AddCommand(systemctl.NewCmd(deps))
 	rootCmd.AddCommand(NewMonitorCmd(deps))
 	rootCmd.AddCommand(NewSelfUpdateCmd(deps))
 	rootCmd.AddCommand(NewVersionCmd())
