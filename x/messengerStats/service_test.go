@@ -50,12 +50,12 @@ func TestCheck_MetricName(t *testing.T) {
 		{
 			name:           "default metric name",
 			config:         map[string]interface{}{},
-			expectedMetric: "total_messages",
+			expectedMetric: "messages",
 		},
 		{
 			name: "override metric name",
 			config: map[string]interface{}{
-				"metricName": "custom_metric_name",
+				"metric_name": "custom_metric_name",
 			},
 			expectedMetric: "custom_metric_name",
 		},
@@ -99,4 +99,60 @@ func TestCheck_MetricName(t *testing.T) {
 			assert.Equal(t, float64(10), metricMsg.Metric)
 		})
 	}
+}
+
+func TestCheck_MessagesPerSecond(t *testing.T) {
+	deps := core.Dependencies{}
+	deps.SetLogger(&core.FakeLogger{})
+	messenger := &mockMessenger{
+		stats: core.MessengerStats{
+			TotalMessageCount: 10,
+		},
+	}
+	deps.SetMessenger(messenger)
+
+	cfg := core.ServiceConfig{
+		Name: "stats_service",
+		Type: "messengerStats",
+		Pubs: map[string]core.ChannelInfo{
+			"events":  {Name: "events_chan"},
+			"metrics": {Name: "metrics_chan"},
+		},
+	}
+
+	svc := NewService(deps, cfg)
+
+	// First check, lastCheckTime is zero, so no MPS metric
+	err := svc.Check()
+	assert.NoError(t, err)
+
+	mpsSent := false
+	for _, m := range messenger.messages {
+		if m.MetricName == "messages_per_second" {
+			mpsSent = true
+		}
+	}
+	assert.False(t, mpsSent, "MPS should not be sent on first check")
+
+	// Advance stats and wait a bit
+	messenger.stats.TotalMessageCount = 20
+	messenger.messages = nil // clear messages
+	time.Sleep(100 * time.Millisecond)
+
+	// Second check
+	err = svc.Check()
+	assert.NoError(t, err)
+
+	var mpsMsg *core.Message
+	for _, m := range messenger.messages {
+		if m.MetricName == "messages_per_second" {
+			mpsMsg = &m
+			break
+		}
+	}
+
+	assert.NotNil(t, mpsMsg, "MPS metric message should be sent on second check")
+	assert.Greater(t, mpsMsg.Metric, 0.0, "MPS metric should be greater than 0")
+	// 10 messages in ~0.1s -> ~100 msgs/s
+	assert.InDelta(t, 100.0, mpsMsg.Metric, 50.0)
 }
