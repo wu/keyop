@@ -268,3 +268,7 @@ func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
 }
 
 func (f *fakeMessenger) SetDataDir(dir string) {}
+
+func (f *fakeMessenger) GetStats() core.MessengerStats {
+	return core.MessengerStats{}
+}

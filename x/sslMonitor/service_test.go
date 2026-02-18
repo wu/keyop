@@ -44,6 +44,10 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 
 func (m *mockMessenger) SetDataDir(dir string) {}
 
+func (m *mockMessenger) GetStats() core.MessengerStats {
+	return core.MessengerStats{}
+}
+
 func TestCheck(t *testing.T) {
 	// 1. Setup a test TLS server
 	cert, key, err := generateTestCert(time.Now().Add(10 * 24 * time.Hour)) // Expires in 10 days
