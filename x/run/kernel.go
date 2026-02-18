@@ -62,6 +62,7 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				select {
 				case <-globalCtx.Done():
 					logger.Error("task: global context done, exiting check loop", "service", task.Name)
+					task.Cancel()
 					return
 				default:
 				}
