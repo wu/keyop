@@ -7,7 +7,11 @@ import (
 	"image/draw"
 	"keyop/core"
 	"os"
+	"strings"
 	"time"
+
+	"sort"
+	"sync"
 
 	"github.com/mcuadros/go-rpi-rgb-led-matrix"
 	"golang.org/x/image/font"
@@ -16,14 +20,20 @@ import (
 )
 
 type RGBMatrixPlugin struct {
-	deps           core.Dependencies
-	cfg            core.ServiceConfig
-	matrix         rgbmatrix.Matrix
-	canvas         *rgbmatrix.Canvas
-	timeFace       font.Face
-	dayOfWeekFace  font.Face
-	dayOfMonthFace font.Face
-	swapGB         bool
+	deps       core.Dependencies
+	cfg        core.ServiceConfig
+	matrix     rgbmatrix.Matrix
+	canvas     *rgbmatrix.Canvas
+	bigFace    font.Face
+	smallFace  font.Face
+	mediumFace font.Face
+	swapGB     bool
+
+	mu        sync.RWMutex
+	temps     map[string]float64
+	tempNames []string
+	tempIdx   int
+	nameMap   map[string]string
 }
 
 func (p *RGBMatrixPlugin) Initialize() error {
@@ -58,18 +68,28 @@ func (p *RGBMatrixPlugin) Initialize() error {
 
 	p.matrix = m
 	p.canvas = rgbmatrix.NewCanvas(p.matrix)
+	p.temps = make(map[string]float64)
+	p.nameMap = make(map[string]string)
 
-	p.timeFace, err = loadFontFace("resources/pixelmix-8.ttf", 8)
+	if v, ok := p.cfg.Config["temp_name_map"].(map[string]interface{}); ok {
+		for k, val := range v {
+			if s, ok := val.(string); ok {
+				p.nameMap[k] = s
+			}
+		}
+	}
+
+	p.bigFace, err = loadFontFace("resources/pixelmix-8.ttf", 8)
 	if err != nil {
 		return err
 	}
 
-	p.dayOfMonthFace, err = loadFontFace("resources/pixelation-7.ttf", 7)
+	p.mediumFace, err = loadFontFace("resources/pixelation-7.ttf", 7)
 	if err != nil {
 		return err
 	}
 
-	p.dayOfWeekFace, err = loadFontFace("resources/pixel-letters-6.ttf", 6)
+	p.smallFace, err = loadFontFace("resources/pixel-letters-6.ttf", 6)
 	if err != nil {
 		return err
 	}
@@ -115,8 +135,38 @@ func (p *RGBMatrixPlugin) Check() error {
 	logger.Warn("RGBMatrixPlugin Check called")
 
 	ctx := p.deps.MustGetContext()
+	messenger := p.deps.MustGetMessenger()
+
+	err := messenger.Subscribe(ctx, "rgbMatrix", "status", "plugin", "rgbMatrix", 0, func(msg core.Message) error {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+
+		if msg.ServiceType != "temp" {
+			return nil
+		}
+
+		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metric", msg.Metric)
+
+		p.temps[msg.ServiceName] = msg.Metric
+
+		// Update sorted names
+		names := make([]string, 0, len(p.temps))
+		for name := range p.temps {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		p.tempNames = names
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to status channel: %w", err)
+	}
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+
+	cycleTicker := time.NewTicker(3 * time.Second)
+	defer cycleTicker.Stop()
 
 	// Initial render
 	if err := p.Render(); err != nil {
@@ -127,7 +177,17 @@ func (p *RGBMatrixPlugin) Check() error {
 		select {
 		case <-ctx.Done():
 			logger.Info("RGBMatrixPlugin Check context cancelled")
+			err = p.canvas.Clear()
+			if err != nil {
+				return fmt.Errorf("failed to clear canvas: %w", err)
+			}
 			return ctx.Err()
+		case <-cycleTicker.C:
+			p.mu.Lock()
+			if len(p.tempNames) > 0 {
+				p.tempIdx = (p.tempIdx + 1) % len(p.tempNames)
+			}
+			p.mu.Unlock()
 		case <-ticker.C:
 			if err := p.Render(); err != nil {
 				logger.Error("Failed to render", "error", err)
@@ -137,21 +197,15 @@ func (p *RGBMatrixPlugin) Check() error {
 }
 
 func (p *RGBMatrixPlugin) Render() error {
-	logger := p.deps.MustGetLogger()
-	logger.Warn("RGBMatrixPlugin Render called")
 
 	if p.canvas == nil {
 		return fmt.Errorf("canvas not initialized")
 	}
 
-	logger.Warn("Foo: RGBMatrixPlugin Check passed")
-
 	t := time.Now()
 	timeStr := t.Format("3:04pm")
 	dayOfWeek := t.Format("Mon")
 	dayOfMonth := t.Format("_2") // Day of month (1-31)
-
-	p.deps.MustGetLogger().Debug("RGBMatrixPlugin displaying info", "time", timeStr, "day", dayOfWeek, "date", dayOfMonth)
 
 	// Create an image to draw the text onto
 	bounds := p.canvas.Bounds()
@@ -164,25 +218,79 @@ func (p *RGBMatrixPlugin) Render() error {
 	}
 
 	// 1. Draw Day of Week (Upper Left)
-	d.Face = p.dayOfWeekFace
+	d.Face = p.smallFace
 	d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(6)}
 	d.DrawString(dayOfWeek)
 
 	// 2. Draw Day of Month (Upper Left, Below Day of Week)
-	d.Face = p.dayOfMonthFace
+	d.Face = p.mediumFace
 	d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(11)}
 	d.DrawString(dayOfMonth)
 
 	// 3. Draw Time (Top Center/Right)
-	d.Face = p.timeFace
+	d.Face = p.bigFace
 	d.Dot = fixed.Point26_6{X: fixed.I(20), Y: fixed.I(10)}
 	d.DrawString(timeStr)
+
+	// 4. Draw Temperature (Middle)
+	p.mu.RLock()
+	if len(p.tempNames) > 0 {
+		if p.tempIdx >= len(p.tempNames) {
+			p.tempIdx = 0
+		}
+		name := p.tempNames[p.tempIdx]
+		temp := p.temps[name]
+		// todo: main temp should be configurable
+		mainTemp, ok := p.temps["temp.heaterbot"]
+		if !ok {
+			mainTemp = 0.0
+		}
+
+		displayName := name
+		if mappedName, ok := p.nameMap[name]; ok {
+			displayName = mappedName
+		} else {
+			// Fallback to existing logic if no mapping exists
+			nameIdx := strings.Index(name, ".")
+			if nameIdx != -1 {
+				displayName = name[nameIdx+1:]
+			}
+			if len(displayName) > 1 {
+				displayName = displayName[0:1]
+			}
+		}
+		mainTempStr := fmt.Sprintf("%.1f", mainTemp)
+		d.Face = p.bigFace
+		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(20)}
+		d.DrawString(mainTempStr)
+
+		tempStr := fmt.Sprintf("%.1f", temp)
+		d.Face = p.bigFace
+		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Dot = fixed.Point26_6{X: fixed.I(25), Y: fixed.I(20)}
+		d.DrawString(tempStr)
+
+		tempNameStr := fmt.Sprintf("%s", displayName)
+		d.Face = p.bigFace
+		d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+		d.Dot = fixed.Point26_6{X: fixed.I(51), Y: fixed.I(20)}
+		d.DrawString(tempNameStr)
+	}
+
+	// 5. Draw Info (Bottom)
+	infoStr := "keyop"
+	d.Face = p.bigFace
+	d.Src = image.NewUniform(p.colorRGBA(0, 100, 0, 255))
+	d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(30)}
+	d.DrawString(infoStr)
+
+	p.mu.RUnlock()
 
 	// Copy image pixels to canvas
 	draw.Draw(p.canvas, bounds, img, image.Point{}, draw.Over)
 
 	p.canvas.Render()
-	logger.Warn("RGBMatrixPlugin Render called")
 
 	return nil
 }
