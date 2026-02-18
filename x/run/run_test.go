@@ -24,6 +24,7 @@ func Test_run_logs_error_when_service_type_not_registered(t *testing.T) {
 	deps.SetLogger(logger)
 	deps.SetContext(ctx)
 	deps.SetMessenger(core.NewMessenger(logger, osProvider))
+	deps.SetStateStore(&core.NoOpStateStore{})
 
 	serviceConfigs := []core.ServiceConfig{
 		{

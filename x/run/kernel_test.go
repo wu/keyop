@@ -29,6 +29,8 @@ func getDefaultTestDeps() core.Dependencies {
 
 	deps.SetMessenger(core.NewMessenger(logger, osProvider))
 
+	deps.SetStateStore(&core.NoOpStateStore{})
+
 	return deps
 }
 
@@ -155,4 +157,80 @@ func (m *mockMessenger) SetDataDir(dir string) {}
 
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
+}
+
+type mockStateStore struct {
+	data map[string]interface{}
+}
+
+func (m *mockStateStore) Save(key string, value interface{}) error {
+	if m.data == nil {
+		m.data = make(map[string]interface{})
+	}
+	m.data[key] = value
+	return nil
+}
+
+func (m *mockStateStore) Load(key string, value interface{}) error {
+	if m.data == nil {
+		return nil
+	}
+	val, ok := m.data[key]
+	if !ok {
+		return nil
+	}
+
+	// Simple simulation of JSON decoding
+	v := value.(*time.Time)
+	*v = val.(time.Time)
+	return nil
+}
+
+func TestStartKernelStateCache(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		deps := getDefaultTestDeps()
+		cancel := deps.MustGetCancel()
+
+		stateStore := &mockStateStore{
+			data: make(map[string]interface{}),
+		}
+		deps.SetStateStore(stateStore)
+
+		// Set last run time to 30 seconds ago
+		lastRun := time.Now().Add(-30 * time.Second)
+		stateStore.Save("last_check_test-service", lastRun)
+
+		runCount := 0
+		interval := 60 * time.Second
+
+		tasks := []Task{{
+			Name:     "test-service",
+			Interval: interval,
+			Run: func() error {
+				runCount++
+				if runCount >= 1 {
+					cancel()
+				}
+				return nil
+			},
+			Ctx:    context.Background(),
+			Cancel: func() {},
+		}}
+
+		// Start kernel in a goroutine because it blocks
+		go StartKernel(deps, tasks)
+
+		// It should NOT run immediately.
+		// Since last run was 30s ago and interval is 60s, it should run in about 30s (+ jitter).
+		time.Sleep(10 * time.Second)
+		assert.Equal(t, 0, runCount, "Task should not have run yet")
+
+		time.Sleep(25 * time.Second) // Total 35s, should have run by now (30s + small jitter)
+		assert.Equal(t, 1, runCount, "Task should have run by now")
+
+		// Check if state was updated
+		var updatedRun time.Time
+		stateStore.Load("last_check_test-service", &updatedRun)
+		assert.True(t, updatedRun.After(lastRun), "State should have been updated")
+	})
 }

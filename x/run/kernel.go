@@ -21,6 +21,7 @@ type Task struct {
 func StartKernel(deps core.Dependencies, tasks []Task) error {
 	logger := deps.MustGetLogger()
 	globalCtx := deps.MustGetContext()
+	stateStore := deps.MustGetStateStore()
 
 	logger.Info("kernel started")
 	logger.Info("Tasks: ", "count", len(tasks))
@@ -33,6 +34,29 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 		// create a goroutine for each task
 		go func(task Task) {
 			defer wg.Done()
+
+			stateKey := fmt.Sprintf("last_check_%s", task.Name)
+			var lastRun time.Time
+			if err := stateStore.Load(stateKey, &lastRun); err != nil {
+				logger.Error("failed to load state", "service", task.Name, "error", err)
+			}
+
+			if !lastRun.IsZero() && task.Interval > 0 {
+				nextRun := lastRun.Add(task.Interval)
+				wait := time.Until(nextRun)
+				if wait > 0 {
+					logger.Info("Scheduled next run based on cached state", "service", task.Name, "wait", wait)
+					timer := time.NewTimer(wait)
+					select {
+					case <-globalCtx.Done():
+						if !timer.Stop() {
+							<-timer.C
+						}
+						return
+					case <-timer.C:
+					}
+				}
+			}
 
 			for {
 				select {
@@ -60,6 +84,10 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 								Data:        err.Error(),
 							})
 						}
+					}
+					// Always save last check time
+					if err := stateStore.Save(stateKey, time.Now()); err != nil {
+						logger.Error("failed to save state", "service", task.Name, "error", err)
 					}
 				}()
 
