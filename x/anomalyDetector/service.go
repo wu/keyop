@@ -81,7 +81,7 @@ func (svc *Service) Initialize() error {
 func (svc *Service) messageHandler(msg core.Message) error {
 
 	for _, skipService := range svc.SkipServices {
-		if msg.ServiceType == skipService {
+		if msg.ServiceName == skipService {
 			return nil
 		}
 	}
