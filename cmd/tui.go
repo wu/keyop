@@ -430,7 +430,7 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 
 	// 2. TEMPERATURES
 	tempTable.Clear()
-	tempTable.SetCell(0, 0, tview.NewTableCell("HOSTNAME").SetStyle(headerStyle).SetExpansion(1))
+	tempTable.SetCell(0, 0, tview.NewTableCell("SERVICE").SetStyle(headerStyle).SetExpansion(1))
 	tempTable.SetCell(0, 1, tview.NewTableCell("TEMP").SetStyle(headerStyle).SetExpansion(1))
 	tempTable.SetCell(0, 2, tview.NewTableCell("LAST SEEN").SetStyle(headerStyle).SetExpansion(1))
 
@@ -468,7 +468,9 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 		}
 		tempStr := fmt.Sprintf("%.1f°F", t.TempF)
 		tempStyle := tcell.StyleDefault.Foreground(getServiceColor(t.ServiceName, stateStore, hosts, temps))
-		tempTable.SetCell(i+1, 0, tview.NewTableCell(t.ServiceName).SetStyle(tempStyle))
+		displayName := getServiceDisplayName(t.ServiceName)
+
+		tempTable.SetCell(i+1, 0, tview.NewTableCell(displayName).SetStyle(tempStyle))
 		tempTable.SetCell(i+1, 1, tview.NewTableCell(tempStr).SetStyle(tempStyle))
 		tempTable.SetCell(i+1, 2, tview.NewTableCell(sinceStr).SetStyle(tempStyle))
 	}
@@ -588,4 +590,18 @@ func getAgeColor(timestamp time.Time) tcell.Color {
 	}
 
 	return tcell.GetColor(c.Hex())
+}
+
+func getServiceDisplayName(serviceName string) string {
+	lastPeriodIndex := -1
+	for i := len(serviceName) - 1; i >= 0; i-- {
+		if serviceName[i] == '.' {
+			lastPeriodIndex = i
+			break
+		}
+	}
+	if lastPeriodIndex >= 0 && lastPeriodIndex < len(serviceName)-1 {
+		return serviceName[lastPeriodIndex+1:]
+	}
+	return serviceName
 }
