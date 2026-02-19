@@ -143,14 +143,14 @@ func (p *RGBMatrixPlugin) Check() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
-		if msg.ServiceType != "temp" {
+		if msg.ServiceType != "temp" && !strings.HasPrefix(msg.MetricName, "temp") {
 			return nil
 		}
 
 		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metric", msg.Metric, "status", msg.Status)
 
-		p.temps[msg.ServiceName] = msg.Metric
-		p.statuses[msg.ServiceName] = msg.Status
+		p.temps[msg.MetricName] = msg.Metric
+		p.statuses[msg.MetricName] = msg.Status
 
 		// Update sorted names
 		names := make([]string, 0, len(p.temps))
@@ -245,7 +245,7 @@ func (p *RGBMatrixPlugin) Render() error {
 		temp := p.temps[name]
 
 		// todo: main temp should be configurable
-		mainTemp, ok := p.temps["temp.heaterbot"]
+		mainTemp, ok := p.temps["temp.outside"]
 		if !ok {
 			mainTemp = 0.0
 		}
@@ -265,7 +265,7 @@ func (p *RGBMatrixPlugin) Render() error {
 		}
 		mainTempStr := fmt.Sprintf("%.1f", mainTemp)
 		d.Face = p.bigFace
-		d.Src = image.NewUniform(p.getTempColor(p.statuses["temp.heaterbot"]))
+		d.Src = image.NewUniform(p.getTempColor(p.statuses["temp.outside"]))
 		d.Dot = fixed.Point26_6{X: fixed.I(0), Y: fixed.I(20)}
 		d.DrawString(mainTempStr)
 
