@@ -166,7 +166,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				state.AlertSent = true
 				state.AlertCount = 1
 				state.LastAlertTime = now
-				alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state: %s", msg.ServiceName, msg.ServiceType, msg.Status, msg.Text)
+				alertText = fmt.Sprintf("ALERT: %s is in %s state: %s", msg.ServiceName, msg.Status, msg.Text)
 				alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 			}
 		} else if isProblem(state.Status) {
@@ -180,7 +180,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 					state.AlertSent = true
 					state.AlertCount = 1
 					state.LastAlertTime = now
-					alertText = fmt.Sprintf("ALERT: %s (%s) is in %s state (for %s): %s", msg.ServiceName, msg.ServiceType, msg.Status, svc.notificationDelay, msg.Text)
+					alertText = fmt.Sprintf("ALERT: %s is in %s state (for %s): %s", msg.ServiceName, msg.Status, svc.notificationDelay, msg.Text)
 					alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 				} else {
 					timeRemaining := svc.notificationDelay - now.Sub(state.ProblemSince)
@@ -196,7 +196,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				shouldAlert = true
 				state.AlertCount = 1
 				state.LastAlertTime = now
-				alertText = fmt.Sprintf("ALERT: %s (%s) status changed from %s to %s: %s", msg.ServiceName, msg.ServiceType, oldStatus, msg.Status, msg.Text)
+				alertText = fmt.Sprintf("ALERT: %s status changed from %s to %s: %s", msg.ServiceName, oldStatus, msg.Status, msg.Text)
 				alertSummary = fmt.Sprintf("ALERT: %s", alertSummary)
 			} else {
 				// Stayed in the same problem state, check backoff
@@ -224,7 +224,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			if state.AlertSent {
 				shouldAlert = true
 				alertStatus = "ok"
-				alertText = fmt.Sprintf("RECOVERY: %s (%s): %s", msg.ServiceName, msg.ServiceType, msg.Text)
+				alertText = fmt.Sprintf("RECOVERY: %s: %s", msg.ServiceName, msg.Text)
 				alertSummary = fmt.Sprintf("RECOVERY: %s", alertSummary)
 			}
 		}
@@ -247,6 +247,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		alertsChan := alertsChanInfo.Name
 
 		return messenger.Send(core.Message{
+			Correlation: msg.Uuid,
 			ChannelName: alertsChan,
 			ServiceName: msg.ServiceName,
 			ServiceType: msg.ServiceType,
