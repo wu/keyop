@@ -1,15 +1,10 @@
 package aurora
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"keyop/core"
 	"keyop/util"
-	"math"
-	"net/http"
 	"sync"
-	"time"
 )
 
 type Service struct {
@@ -27,7 +22,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps:   deps,
 		Cfg:    cfg,
-		apiURL: "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json",
+		apiURL: DefaultApiURL,
 	}
 
 	if lat, ok := cfg.Config["lat"].(float64); ok {
@@ -98,74 +93,12 @@ func (svc *Service) Check() error {
 	}
 	svc.mu.RUnlock()
 
-	// Normalize longitude to 0-360 for OVATION data
-	// NOAA OVATION data uses 0 to 360 degrees east.
-	ovationLon := lon
-	if ovationLon < 0 {
-		ovationLon += 360
-	}
-
-	// Fetch data from NOAA
-	// https://services.swpc.noaa.gov/json/ovation_aurora_latest.json
-	url := svc.apiURL
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return fmt.Errorf("aurora: failed to fetch data: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("aurora: failed to fetch data: status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	data, err := FetchOvationData(svc.apiURL)
 	if err != nil {
 		return err
 	}
 
-	var data struct {
-		ForecastTime string  `json:"Forecast Time"`
-		Coordinates  [][]int `json:"coordinates"`
-	}
-
-	if err := json.Unmarshal(body, &data); err != nil {
-		return fmt.Errorf("aurora: failed to parse json: %v", err)
-	}
-
-	// Finding the nearest grid cell
-	// The data is a grid: [longitude, latitude, aurora_probability]
-	// Longitude is 0-359, Latitude is -90 to 90.
-
-	bestProb := 0
-	minDist := math.MaxFloat64
-
-	for _, coord := range data.Coordinates {
-		if len(coord) < 3 {
-			continue
-		}
-		cLon := float64(coord[0])
-		cLat := float64(coord[1])
-		prob := coord[2]
-
-		// Simple Euclidean distance for the grid (good enough for 1 degree grid)
-		dLon := cLon - ovationLon
-		if dLon > 180 {
-			dLon -= 360
-		} else if dLon < -180 {
-			dLon += 360
-		}
-		dist := dLon*dLon + (cLat-lat)*(cLat-lat)
-
-		if dist < minDist {
-			minDist = dist
-			bestProb = prob
-		}
-		// If we found an exact match (or very close), we can stop
-		if dist < 0.1 {
-			break
-		}
-	}
+	bestProb := data.FindProbability(lat, lon)
 
 	messenger := svc.Deps.MustGetMessenger()
 
