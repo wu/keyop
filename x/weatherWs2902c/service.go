@@ -189,6 +189,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		Correlation: correlationId,
 		ChannelName: svc.WeatherChan.Name,
 		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
 		Data:        data,
 	}
 
@@ -204,6 +205,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			Correlation: correlationId,
 			ChannelName: svc.TempChan.Name,
 			ServiceName: svc.Cfg.Name + "-intemp",
+			ServiceType: svc.Cfg.Type,
 			MetricName:  intTempMetricName,
 			Metric:      data.InTemp,
 		}
@@ -220,6 +222,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			Correlation: correlationId,
 			ChannelName: svc.TempChan.Name,
 			ServiceName: svc.Cfg.Name + "-outtemp",
+			ServiceType: svc.Cfg.Type,
 			MetricName:  outTempMetricName,
 			Metric:      data.OutTemp,
 		}
@@ -242,6 +245,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 				Correlation: correlationId,
 				ChannelName: svc.MetricsChan.Name,
 				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
 				MetricName:  metricName,
 			}
 
