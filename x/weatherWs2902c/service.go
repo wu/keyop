@@ -69,6 +69,7 @@ type Service struct {
 	WeatherChan      core.ChannelInfo
 	MetricsChan      core.ChannelInfo
 	TempChan         core.ChannelInfo
+	RainChan         core.ChannelInfo
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -107,6 +108,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if tempChan, ok := cfg.Pubs["temp"]; ok {
 		svc.TempChan = tempChan
 	}
+	if rainChan, ok := cfg.Pubs["rain"]; ok {
+		svc.RainChan = rainChan
+	}
 
 	return svc
 }
@@ -119,7 +123,7 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, fmt.Errorf("weatherWs2902c: port is required in config"))
 	}
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"weather", "metrics", "temp"}, logger)
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"weather", "metrics", "temp", "rain"}, logger)
 	if len(pubErrs) > 0 {
 		errs = append(errs, pubErrs...)
 	}
@@ -228,6 +232,23 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := messenger.Send(tempOutMsg); err != nil {
 			logger.Error("weatherWs2902c: failed to send outTemp message", "error", err)
+		}
+	}
+
+	rainRateMetricName, rainRateMetricExists := svc.FieldMetricNames["Rainratein"]
+	if !rainRateMetricExists || rainRateMetricName == "" {
+		logger.Warn("weatherWs2902c: rainRate metric name not configured, skipping rainRate metric publication")
+	} else {
+		rainOutMsg := core.Message{
+			Correlation: correlationId,
+			ChannelName: svc.RainChan.Name,
+			ServiceName: svc.Cfg.Name + "-rain",
+			ServiceType: svc.Cfg.Type,
+			MetricName:  rainRateMetricName,
+			Metric:      data.Rainratein,
+		}
+		if err := messenger.Send(rainOutMsg); err != nil {
+			logger.Error("weatherWs2902c: failed to send rainRate message", "error", err)
 		}
 	}
 

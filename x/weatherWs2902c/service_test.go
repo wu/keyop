@@ -180,6 +180,7 @@ func TestValidateConfig(t *testing.T) {
 				"weather": {Name: "w"},
 				"metrics": {Name: "m"},
 				"temp":    {Name: "t"},
+				"rain":    {Name: "r"},
 			},
 		}
 		svc := NewService(deps, cfg)
