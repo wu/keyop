@@ -247,6 +247,11 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			MetricName:  rainRateMetricName,
 			Metric:      data.Rainratein,
 		}
+		if data.Rainratein > 0 {
+			rainOutMsg.Summary = "raining"
+		} else {
+			rainOutMsg.Summary = "not raining"
+		}
 		if err := messenger.Send(rainOutMsg); err != nil {
 			logger.Error("weatherWs2902c: failed to send rainRate message", "error", err)
 		}
