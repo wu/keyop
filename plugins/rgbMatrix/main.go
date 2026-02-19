@@ -306,7 +306,7 @@ func (p *RGBMatrixPlugin) Render() error {
 func (p *RGBMatrixPlugin) getTempColor(status string) color.RGBA {
 	switch status {
 	case "warning":
-		return p.colorRGBA(100, 100, 255, 255)
+		return p.colorRGBA(50, 50, 255, 255)
 	case "critical":
 		return p.colorRGBA(255, 0, 0, 255)
 	case "ok":
