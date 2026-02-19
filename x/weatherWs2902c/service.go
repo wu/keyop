@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 type WeatherData struct {
@@ -64,6 +66,9 @@ type Service struct {
 	Cfg              core.ServiceConfig
 	Port             int
 	FieldMetricNames map[string]string
+	WeatherChan      core.ChannelInfo
+	MetricsChan      core.ChannelInfo
+	TempChan         core.ChannelInfo
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -93,6 +98,16 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.Port = int(portFloat)
 	}
 
+	if weatherChan, ok := cfg.Pubs["weather"]; ok {
+		svc.WeatherChan = weatherChan
+	}
+	if metricsChan, ok := cfg.Pubs["metrics"]; ok {
+		svc.MetricsChan = metricsChan
+	}
+	if tempChan, ok := cfg.Pubs["temp"]; ok {
+		svc.TempChan = tempChan
+	}
+
 	return svc
 }
 
@@ -104,7 +119,7 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, fmt.Errorf("weatherWs2902c: port is required in config"))
 	}
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"weather"}, logger)
+	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"weather", "metrics", "temp"}, logger)
 	if len(pubErrs) > 0 {
 		errs = append(errs, pubErrs...)
 	}
@@ -122,6 +137,11 @@ func (svc *Service) ValidateConfig() []error {
 }
 
 func (svc *Service) Initialize() error {
+	return nil
+}
+
+func (svc *Service) Check() error {
+
 	logger := svc.Deps.MustGetLogger()
 
 	mux := http.NewServeMux()
@@ -162,16 +182,13 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 
 	logger.Debug("weatherWs2902c: received weather data", "data", data)
 
-	weatherChan, ok := svc.Cfg.Pubs["weather"]
-	if !ok {
-		logger.Error("weatherWs2902c: weather publication not configured")
-		return
-	}
+	// generate correlation id for this check to tie together the events and metrics in the backend
+	msgUuid := uuid.New().String()
 
 	msg := core.Message{
-		ChannelName: weatherChan.Name,
+		Uuid:        msgUuid,
+		ChannelName: svc.WeatherChan.Name,
 		ServiceName: svc.Cfg.Name,
-		MetricName:  "weatherData",
 		Data:        data,
 	}
 
@@ -179,10 +196,36 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		logger.Error("weatherWs2902c: failed to send message", "error", err)
 	}
 
-	metricsChan, ok := svc.Cfg.Pubs["metrics"]
-	if !ok {
-		logger.Error("weatherWs2902c: metrics publication not configured")
-		return
+	intTempMetricName, intTempMetricExists := svc.FieldMetricNames["InTemp"]
+	if !intTempMetricExists || intTempMetricName == "" {
+		logger.Warn("weatherWs2902c: inTemp metric name not configured, skipping inTemp metric publication")
+	} else {
+		tempInMsg := core.Message{
+			Uuid:        msgUuid,
+			ChannelName: svc.TempChan.Name,
+			ServiceName: svc.Cfg.Name + "-intemp",
+			MetricName:  intTempMetricName,
+			Metric:      data.InTemp,
+		}
+		if err := messenger.Send(tempInMsg); err != nil {
+			logger.Error("weatherWs2902c: failed to send inTemp message", "error", err)
+		}
+	}
+
+	outTempMetricName, outTempMetricExists := svc.FieldMetricNames["OutTemp"]
+	if !outTempMetricExists || outTempMetricName == "" {
+		logger.Warn("weatherWs2902c: outTemp metric name not configured, skipping outTemp metric publication")
+	} else {
+		tempOutMsg := core.Message{
+			Uuid:        msgUuid,
+			ChannelName: svc.TempChan.Name,
+			ServiceName: svc.Cfg.Name + "-outtemp",
+			MetricName:  outTempMetricName,
+			Metric:      data.OutTemp,
+		}
+		if err := messenger.Send(tempOutMsg); err != nil {
+			logger.Error("weatherWs2902c: failed to send outTemp message", "error", err)
+		}
 	}
 
 	// iterate over the fields in the weatherdata struct using reflection
@@ -196,7 +239,8 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			logger.Debug("Publishing weather metric", "field", fieldName, "metric", metricName, "value", fieldValue)
 
 			metricMsg := core.Message{
-				ChannelName: metricsChan.Name,
+				Uuid:        msgUuid,
+				ChannelName: svc.MetricsChan.Name,
 				ServiceName: svc.Cfg.Name,
 				MetricName:  metricName,
 			}
@@ -223,43 +267,24 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 
 func (svc *Service) ParseWeatherData(req *http.Request) *WeatherData {
 	baromabsin, _ := strconv.ParseFloat(req.FormValue("baromabsin"), 64)
-
 	baromrelin, _ := strconv.ParseFloat(req.FormValue("baromrelin"), 64)
-
 	dailyrainin, _ := strconv.ParseFloat(req.FormValue("dailyrainin"), 64)
-
 	eventrainin, _ := strconv.ParseFloat(req.FormValue("eventrainin"), 64)
-
 	hourlyrainin, _ := strconv.ParseFloat(req.FormValue("hourlyrainin"), 64)
-
 	humidity, _ := strconv.Atoi(req.FormValue("humidity"))
-
 	humidityin, _ := strconv.Atoi(req.FormValue("humidityin"))
-
 	maxdailygust, _ := strconv.ParseFloat(req.FormValue("maxdailygust"), 64)
-
 	monthlyrainin, _ := strconv.ParseFloat(req.FormValue("monthlyrainin"), 64)
-
 	rainratein, _ := strconv.ParseFloat(req.FormValue("rainratein"), 64)
-
 	solarradiation, _ := strconv.ParseFloat(req.FormValue("solarradiation"), 64)
-
 	tempf, _ := strconv.ParseFloat(req.FormValue("tempf"), 64)
-
 	tempinf, _ := strconv.ParseFloat(req.FormValue("tempinf"), 64)
-
 	totalrainin, _ := strconv.ParseFloat(req.FormValue("totalrainin"), 64)
-
 	uv, _ := strconv.Atoi(req.FormValue("uv"))
-
 	weeklyrainin, _ := strconv.ParseFloat(req.FormValue("weeklyrainin"), 64)
-
 	wh65batt, _ := strconv.Atoi(req.FormValue("wh65batt"))
-
 	winddir, _ := strconv.Atoi(req.FormValue("winddir"))
-
 	windgustmph, _ := strconv.ParseFloat(req.FormValue("windgustmph"), 64)
-
 	windspeedmph, _ := strconv.ParseFloat(req.FormValue("windspeedmph"), 64)
 
 	weatherdata := &WeatherData{
@@ -289,18 +314,4 @@ func (svc *Service) ParseWeatherData(req *http.Request) *WeatherData {
 		Windspeedmph:   windspeedmph,
 	}
 	return weatherdata
-}
-
-func parseFloat(s string) float64 {
-	v, _ := strconv.ParseFloat(s, 64)
-	return v
-}
-
-func parseInt(s string) int {
-	v, _ := strconv.Atoi(s)
-	return v
-}
-
-func (svc *Service) Check() error {
-	return nil
 }
