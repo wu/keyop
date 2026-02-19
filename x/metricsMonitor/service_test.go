@@ -302,6 +302,131 @@ func TestService_MessageHandler(t *testing.T) {
 	})
 }
 
+func TestService_Updates(t *testing.T) {
+	cfg := core.ServiceConfig{
+		Name: "monitor",
+		Pubs: map[string]core.ChannelInfo{"status": {Name: "status-chan"}},
+		Config: map[string]interface{}{
+			"thresholds": []interface{}{
+				map[string]interface{}{
+					"metricName": "cpu_load",
+					"value":      0.8,
+					"condition":  "above",
+					"updates": map[string]interface{}{
+						"status":  "critical",
+						"text":    "CPU LOAD TOO HIGH",
+						"summary": "CRITICAL: cpu_load",
+						"state":   "alerting",
+					},
+				},
+			},
+		},
+	}
+
+	messenger := &MockMessenger{}
+	deps := testDeps(t, messenger)
+	svc := NewService(deps, cfg).(*Service)
+
+	t.Run("trigger updates threshold", func(t *testing.T) {
+		msg := core.Message{
+			MetricName: "cpu_load",
+			Metric:     0.85,
+		}
+
+		err := svc.messageHandler(msg)
+		assert.NoError(t, err)
+
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		assert.Equal(t, "CPU LOAD TOO HIGH", messenger.SentMessages[0].Text)
+		assert.Equal(t, "CRITICAL: cpu_load", messenger.SentMessages[0].Summary)
+		assert.Equal(t, "alerting", messenger.SentMessages[0].State)
+	})
+
+	t.Run("recovery with updates", func(t *testing.T) {
+		recoveryCfg := core.ServiceConfig{
+			Name: "monitor",
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "status-chan"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName":        "temp",
+						"value":             40.0,
+						"recoveryThreshold": 39.0,
+						"condition":         "above",
+						"updates":           map[string]interface{}{"status": "critical"},
+					},
+				},
+			},
+		}
+
+		messenger := &MockMessenger{}
+		deps := testDeps(t, messenger)
+		svc := NewService(deps, recoveryCfg).(*Service)
+
+		// 1. Trigger
+		msg := core.Message{MetricName: "temp", Metric: 41.0}
+		svc.messageHandler(msg)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
+
+		// 2. Above recovery
+		msg.Metric = 39.5
+		svc.messageHandler(msg)
+		require.Equal(t, "critical", messenger.SentMessages[1].Status)
+
+		// 3. Below recovery
+		msg.Metric = 38.5
+		svc.messageHandler(msg)
+		require.Equal(t, "ok", messenger.SentMessages[2].Status)
+	})
+}
+
+func TestService_ValidateConfig_Updates(t *testing.T) {
+	deps := testDeps(t, nil)
+
+	t.Run("both status and updates", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName": "test",
+						"value":      10,
+						"condition":  "above",
+						"status":     "warning",
+						"updates":    map[string]interface{}{"text": "foo"},
+					},
+				},
+			},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.Contains(t, errs[0].Error(), "cannot have both 'status' and 'updates'")
+	})
+
+	t.Run("neither status nor updates", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName": "test",
+						"value":      10,
+						"condition":  "above",
+					},
+				},
+			},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.Contains(t, errs[0].Error(), "must have either 'status' or 'updates'")
+	})
+}
+
 func TestService_StateTransitions(t *testing.T) {
 	thresholds := []interface{}{
 		map[string]interface{}{

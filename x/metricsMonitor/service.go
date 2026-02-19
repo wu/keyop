@@ -1,19 +1,21 @@
 package metricsMonitor
 
 import (
+	"encoding/json"
 	"fmt"
 	"keyop/core"
 	"keyop/util"
 )
 
 type Threshold struct {
-	MetricName        string   `json:"metricName"`
-	Value             float64  `json:"value"`
-	RecoveryThreshold *float64 `json:"recoveryThreshold,omitempty"`
-	Condition         string   `json:"condition"` // "above" or "below"
-	Status            string   `json:"status"`
-	Hostname          string   `json:"hostname,omitempty"`
-	ServiceName       string   `json:"serviceName,omitempty"`
+	MetricName        string         `json:"metricName"`
+	Value             float64        `json:"value"`
+	RecoveryThreshold *float64       `json:"recoveryThreshold,omitempty"`
+	Condition         string         `json:"condition"` // "above" or "below"
+	Status            string         `json:"status"`
+	Updates           map[string]any `json:"updates"`
+	Hostname          string         `json:"hostname,omitempty"`
+	ServiceName       string         `json:"serviceName,omitempty"`
 }
 
 type Service struct {
@@ -59,6 +61,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 				if v, ok := tMap["status"].(string); ok {
 					t.Status = v
 				}
+				if updates, ok := tMap["updates"].(map[string]any); ok {
+					t.Updates = updates
+				} else if updatesRaw, ok := tMap["updates"].(map[string]interface{}); ok {
+					t.Updates = updatesRaw
+				}
 				t.Hostname = hostname
 				t.ServiceName = svc.Cfg.Name
 				svc.Thresholds = append(svc.Thresholds, t)
@@ -92,6 +99,16 @@ func (svc *Service) ValidateConfig() []error {
 							errs = append(errs, fmt.Errorf("metricsMonitor: threshold %d 'recoveryThreshold' must be a number, got %T", i, v))
 						}
 					}
+				}
+
+				status, _ := tMap["status"].(string)
+				updates, _ := tMap["updates"].(map[string]interface{})
+
+				if status == "" && updates == nil {
+					errs = append(errs, fmt.Errorf("metricsMonitor: threshold %d must have either 'status' or 'updates'", i))
+				}
+				if status != "" && updates != nil {
+					errs = append(errs, fmt.Errorf("metricsMonitor: threshold %d cannot have both 'status' and 'updates'", i))
 				}
 			}
 		}
@@ -159,6 +176,27 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			} else if t.Status == "warning" && currentStatus != "critical" {
 				currentStatus = "warning"
 				triggeredThreshold = &t
+			} else if t.Updates != nil {
+				// If it's an updates threshold, we check if it specifies a status
+				if status, ok := t.Updates["status"].(string); ok {
+					if status == "critical" {
+						currentStatus = "critical"
+						triggeredThreshold = &t
+						break
+					} else if status == "warning" && currentStatus != "critical" {
+						currentStatus = "warning"
+						triggeredThreshold = &t
+					} else if currentStatus == "ok" {
+						// Custom status or no priority, but still triggered
+						currentStatus = status
+						triggeredThreshold = &t
+					}
+				} else {
+					// No status in updates, just use it if nothing else is triggered
+					if triggeredThreshold == nil {
+						triggeredThreshold = &t
+					}
+				}
 			}
 		}
 	}
@@ -188,10 +226,36 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	// Set the status on the message and publish to status channel
 	if triggeredThreshold != nil {
-		newMessage.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
-		newMessage.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
-		newMessage.Data = map[string]interface{}{
-			"threshold": *triggeredThreshold,
+		if triggeredThreshold.Status != "" {
+			newMessage.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
+			newMessage.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
+			newMessage.Data = map[string]interface{}{
+				"threshold": *triggeredThreshold,
+			}
+		} else if triggeredThreshold.Updates != nil {
+			// Apply updates to the message
+			// Convert message to map for generic access, similar to condition service
+			msgMap := make(map[string]any)
+			data, err := json.Marshal(newMessage)
+			if err != nil {
+				return fmt.Errorf("failed to marshal message: %w", err)
+			}
+			if err := json.Unmarshal(data, &msgMap); err != nil {
+				return fmt.Errorf("failed to unmarshal message: %w", err)
+			}
+
+			for k, v := range triggeredThreshold.Updates {
+				msgMap[k] = v
+			}
+
+			// Convert back to message
+			data, err = json.Marshal(msgMap)
+			if err != nil {
+				return fmt.Errorf("failed to marshal updated message map: %w", err)
+			}
+			if err := json.Unmarshal(data, &newMessage); err != nil {
+				return fmt.Errorf("failed to unmarshal updated message: %w", err)
+			}
 		}
 	}
 
