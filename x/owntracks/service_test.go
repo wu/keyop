@@ -227,7 +227,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		select {
 		case msg := <-owntracksChan:
 			// Drain previous messages if any (unlikely but safe)
-			for msg.Uuid != correlationID {
+			for msg.Correlation != correlationID {
 				select {
 				case msg = <-owntracksChan:
 				case <-time.After(100 * time.Millisecond):
@@ -235,7 +235,7 @@ func TestService_ServeHTTP(t *testing.T) {
 				}
 			}
 			assert.Equal(t, "owntracks", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, correlationID, msg.Correlation)
 		case <-time.After(500 * time.Millisecond):
 			t.Fatal("timed out waiting for owntracks message")
 		}
@@ -243,7 +243,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		// Check gps message
 		select {
 		case msg := <-gpsChan:
-			for msg.Uuid != correlationID {
+			for msg.Correlation != correlationID {
 				select {
 				case msg = <-gpsChan:
 				case <-time.After(100 * time.Millisecond):
@@ -251,7 +251,7 @@ func TestService_ServeHTTP(t *testing.T) {
 				}
 			}
 			assert.Equal(t, "gps", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, correlationID, msg.Correlation)
 			data := msg.Data.(map[string]interface{})
 			assert.Equal(t, 51.5033, data["lat"])
 			assert.Equal(t, 2, len(data)) // lat, lon
@@ -264,7 +264,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		// Check metrics message
 		select {
 		case msg := <-metricsChan:
-			for msg.Uuid != correlationID {
+			for msg.Correlation != correlationID {
 				select {
 				case msg = <-metricsChan:
 				case <-time.After(100 * time.Millisecond):
@@ -272,7 +272,7 @@ func TestService_ServeHTTP(t *testing.T) {
 				}
 			}
 			assert.Equal(t, "metrics", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, correlationID, msg.Correlation)
 			assert.Equal(t, float64(85), msg.Metric)
 			assert.Equal(t, "test-owntracks", msg.ServiceName)
 			assert.Equal(t, "owntracks", msg.ServiceType)
@@ -285,7 +285,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		// Check events message (enter home)
 		select {
 		case msg := <-eventsChan:
-			for msg.Uuid != correlationID {
+			for msg.Correlation != correlationID {
 				select {
 				case msg = <-eventsChan:
 				case <-time.After(100 * time.Millisecond):
@@ -293,7 +293,7 @@ func TestService_ServeHTTP(t *testing.T) {
 				}
 			}
 			assert.Equal(t, "events", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Uuid)
+			assert.Equal(t, correlationID, msg.Correlation)
 			assert.Equal(t, "test-owntracks", msg.ServiceName)
 			assert.Equal(t, "owntracks", msg.ServiceType)
 			data := msg.Data.(map[string]interface{})
@@ -395,7 +395,7 @@ func TestService_ServeHTTP(t *testing.T) {
 		// Check metrics message
 		select {
 		case msg := <-metricsChan:
-			for msg.Uuid != correlationID {
+			for msg.Correlation != correlationID {
 				select {
 				case msg = <-metricsChan:
 				case <-time.After(100 * time.Millisecond):

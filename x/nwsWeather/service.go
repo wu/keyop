@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -207,7 +205,6 @@ func (svc *Service) Check() error {
 
 	messenger := svc.Deps.MustGetMessenger()
 	msg := core.Message{
-		Uuid:        uuid.New().String(),
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

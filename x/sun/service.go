@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sj14/astral/pkg/astral"
 )
 
@@ -145,11 +144,9 @@ func (svc *Service) Check() error {
 	}
 
 	// Send event message
-	msgUuid := uuid.New().String()
 	messenger := svc.Deps.MustGetMessenger()
 
 	eventMsg := core.Message{
-		Uuid:        msgUuid,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -188,7 +185,6 @@ func (svc *Service) scheduleAlerts() {
 				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
 				timer := time.AfterFunc(duration, func() {
 					messenger.Send(core.Message{
-						Uuid:        uuid.New().String(),
 						ChannelName: svc.Cfg.Pubs["alerts"].Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,

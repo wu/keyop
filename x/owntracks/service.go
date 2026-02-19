@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-
-	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -158,11 +156,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// use provided uuid as correlation id or generate a new one
+	correlationID := ""
 	if uuidVal, ok := data["uuid"].(string); ok && uuidVal != "" {
-		msg.Uuid = uuidVal
-	} else {
-		msg.Uuid = uuid.New().String()
+		correlationID = uuidVal
 	}
+	msg.Correlation = correlationID
 
 	err = messenger.Send(msg)
 	if err != nil {
@@ -181,7 +179,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		gpsMsg := core.Message{
-			Uuid:        msg.Uuid,
+			Correlation: correlationID,
 			ChannelName: svc.Cfg.Pubs["gps"].Name,
 			ServiceType: svc.Cfg.Type,
 			ServiceName: serviceName,
@@ -211,7 +209,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		metricsMsg := core.Message{
-			Uuid:        msg.Uuid,
+			Correlation: correlationID,
 			ChannelName: svc.Cfg.Pubs["metrics"].Name,
 			ServiceType: svc.Cfg.Type,
 			ServiceName: serviceName,
@@ -247,7 +245,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if !found {
 				eventMsg := core.Message{
-					Uuid:        msg.Uuid,
+					Correlation: correlationID,
 					ChannelName: eventsChannel,
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
@@ -275,7 +273,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if !found {
 				eventMsg := core.Message{
-					Uuid:        msg.Uuid,
+					Correlation: correlationID,
 					ChannelName: eventsChannel,
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
