@@ -12,6 +12,8 @@ type Threshold struct {
 	RecoveryThreshold *float64 `json:"recoveryThreshold,omitempty"`
 	Condition         string   `json:"condition"` // "above" or "below"
 	Status            string   `json:"status"`
+	Hostname          string   `json:"hostname,omitempty"`
+	ServiceName       string   `json:"serviceName,omitempty"`
 }
 
 type Service struct {
@@ -28,6 +30,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		lastStatus: make(map[string]string),
 	}
 
+	hostname, err := util.GetShortHostname(deps.MustGetOsProvider())
+	if err != nil {
+		hostname = "unknown"
+	}
+
 	if thresholdsRaw, ok := cfg.Config["thresholds"].([]interface{}); ok {
 		for _, tRaw := range thresholdsRaw {
 			if tMap, ok := tRaw.(map[string]interface{}); ok {
@@ -37,9 +44,14 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 				}
 				if v, ok := tMap["value"].(float64); ok {
 					t.Value = v
+				} else if v, ok := tMap["value"].(int); ok {
+					t.Value = float64(v)
 				}
 				if v, ok := tMap["recoveryThreshold"].(float64); ok {
 					t.RecoveryThreshold = &v
+				} else if v, ok := tMap["recoveryThreshold"].(int); ok {
+					fv := float64(v)
+					t.RecoveryThreshold = &fv
 				}
 				if v, ok := tMap["condition"].(string); ok {
 					t.Condition = v
@@ -47,6 +59,8 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 				if v, ok := tMap["status"].(string); ok {
 					t.Status = v
 				}
+				t.Hostname = hostname
+				t.ServiceName = svc.Cfg.Name
 				svc.Thresholds = append(svc.Thresholds, t)
 			}
 		}
@@ -60,8 +74,27 @@ func (svc *Service) ValidateConfig() []error {
 	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"metrics"}, logger)
 
 	// thresholds is optional but recommended
-	if _, ok := svc.Cfg.Config["thresholds"].([]interface{}); !ok {
+	if thresholdsRaw, ok := svc.Cfg.Config["thresholds"].([]interface{}); !ok {
 		logger.Warn("metricsMonitor: 'thresholds' not found or not an array in config")
+	} else {
+		for i, tRaw := range thresholdsRaw {
+			if tMap, ok := tRaw.(map[string]interface{}); ok {
+				if v, ok := tMap["value"]; ok {
+					if _, ok := v.(float64); !ok {
+						if _, ok := v.(int); !ok {
+							errs = append(errs, fmt.Errorf("metricsMonitor: threshold %d 'value' must be a number, got %T", i, v))
+						}
+					}
+				}
+				if v, ok := tMap["recoveryThreshold"]; ok {
+					if _, ok := v.(float64); !ok {
+						if _, ok := v.(int); !ok {
+							errs = append(errs, fmt.Errorf("metricsMonitor: threshold %d 'recoveryThreshold' must be a number, got %T", i, v))
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// status pub is required to work with statusMonitor
