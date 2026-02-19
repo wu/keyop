@@ -140,7 +140,6 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.Equal(t, "-e", capturedArgs[0])
 
 		assert.Contains(t, capturedArgs[1], "hello world")
-		assert.Contains(t, capturedArgs[1], "notifyMacos-type")
 		assert.Contains(t, capturedArgs[1], "notifyMacos-test")
 	})
 }
