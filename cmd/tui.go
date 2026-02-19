@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,10 +35,10 @@ type hostStatus struct {
 }
 
 type tempStatus struct {
-	Hostname    string    `json:"hostname"`
-	TempF       float32   `json:"tempF"`
-	LastSeen    time.Time `json:"lastSeen"`
-	ServiceName string    `json:"serviceName"`
+	Hostname   string    `json:"hostname"`
+	TempF      float32   `json:"tempF"`
+	LastSeen   time.Time `json:"lastSeen"`
+	MetricName string    `json:"metricName"`
 }
 
 type monitorState struct {
@@ -58,7 +59,7 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 	var wsPort int
 	var wsHost string
 	var hbChannel string
-	var tempChannel string
+	var statusChannel string
 	var errorChannel string
 	var alertChannel string
 
@@ -66,21 +67,21 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "tui",
 		Short: "TUI monitor for heartbeats, temperatures, errors, and alerts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMonitor(deps, wsHost, wsPort, hbChannel, tempChannel, errorChannel, alertChannel)
+			return runMonitor(deps, wsHost, wsPort, hbChannel, statusChannel, errorChannel, alertChannel)
 		},
 	}
 
 	cmd.Flags().IntVarP(&wsPort, "port", "p", 8080, "WebSocket server port")
 	cmd.Flags().StringVarP(&wsHost, "host", "H", "localhost", "WebSocket server host")
 	cmd.Flags().StringVarP(&hbChannel, "heartbeat-channel", "c", "heartbeat", "Heartbeat channel to subscribe to")
-	cmd.Flags().StringVarP(&tempChannel, "temp-channel", "t", "temp", "Temperature channel to subscribe to")
+	cmd.Flags().StringVarP(&statusChannel, "status-channel", "s", "status", "Status channel to subscribe to")
 	cmd.Flags().StringVarP(&errorChannel, "error-channel", "e", "errors", "Error channel to subscribe to")
 	cmd.Flags().StringVarP(&alertChannel, "alert-channel", "a", "alerts", "Alert channel to subscribe to")
 
 	return cmd
 }
 
-func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, tempChannel, errorChannel, alertChannel string) error {
+func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, statusChannel, errorChannel, alertChannel string) error {
 	messenger := deps.MustGetMessenger()
 
 	osProvider := deps.MustGetOsProvider()
@@ -127,7 +128,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 		Type: "webSocketClient",
 		Subs: map[string]core.ChannelInfo{
 			"heartbeatSub": {Name: hbChannel},
-			"tempSub":      {Name: tempChannel},
+			"tempSub":      {Name: statusChannel},
 			"errorSub":     {Name: errorChannel},
 			"alertSub":     {Name: alertChannel},
 		},
@@ -244,7 +245,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 
 	// Seek to end of queues to avoid processing old messages
 	_ = messenger.SeekToEnd(hbChannel, "monitorTUI_HB")
-	_ = messenger.SeekToEnd(tempChannel, "monitorTUI_Temp")
+	_ = messenger.SeekToEnd(statusChannel, "monitorTUI_Temp")
 	_ = messenger.SeekToEnd(errorChannel, "monitorTUI_Error")
 	_ = messenger.SeekToEnd(alertChannel, "monitorTUI_Alert")
 
@@ -281,25 +282,19 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 	}
 
 	// Subscribe to temperatures
-	err = messenger.Subscribe(ctx, "monitorTUI_Temp", tempChannel, "monitor", "monitor", 0, func(msg core.Message) error {
-		if msg.ServiceType == "temp" {
-			data, ok := msg.Data.(map[string]interface{})
-			if !ok {
-				return nil
-			}
-
-			tempF, _ := data["TempF"].(float64)
+	err = messenger.Subscribe(ctx, "monitorTUI_Temp", statusChannel, "monitor", "monitor", 0, func(msg core.Message) error {
+		if strings.HasPrefix(msg.MetricName, "temp") && !strings.Contains(msg.ServiceName, "anomaly") {
 
 			mu.Lock()
-			if t, ok := temps[msg.ServiceName]; ok {
-				t.TempF = float32(tempF)
+			if t, ok := temps[msg.MetricName]; ok {
+				t.TempF = float32(msg.Metric)
 				t.LastSeen = msg.Timestamp
 			} else {
-				temps[msg.ServiceName] = &tempStatus{
-					Hostname:    msg.Hostname,
-					TempF:       float32(tempF),
-					LastSeen:    msg.Timestamp,
-					ServiceName: msg.ServiceName,
+				temps[msg.MetricName] = &tempStatus{
+					Hostname:   msg.Hostname,
+					TempF:      float32(msg.Metric),
+					LastSeen:   msg.Timestamp,
+					MetricName: msg.MetricName,
 				}
 			}
 			mu.Unlock()
@@ -467,8 +462,8 @@ func updateUI(app *tview.Application, hbTable, tempTable, errorTable, alertTable
 			sinceStr = "<1m"
 		}
 		tempStr := fmt.Sprintf("%.1f°F", t.TempF)
-		tempStyle := tcell.StyleDefault.Foreground(getServiceColor(t.ServiceName, stateStore, hosts, temps))
-		displayName := getServiceDisplayName(t.ServiceName)
+		tempStyle := tcell.StyleDefault.Foreground(getServiceColor(t.MetricName, stateStore, hosts, temps))
+		displayName := getServiceDisplayName(t.MetricName)
 
 		tempTable.SetCell(i+1, 0, tview.NewTableCell(displayName).SetStyle(tempStyle))
 		tempTable.SetCell(i+1, 1, tview.NewTableCell(tempStr).SetStyle(tempStyle))
