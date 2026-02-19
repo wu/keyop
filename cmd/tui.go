@@ -175,8 +175,8 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		SetRows(0, 0).
 		SetColumns(0, 0).
 		SetBorders(false).
-		AddItem(hbTable, 0, 0, 1, 1, 0, 0, false).
-		AddItem(tempTable, 0, 3, 1, 1, 0, 0, false).
+		AddItem(hbTable, 0, 3, 1, 1, 0, 0, false).
+		AddItem(tempTable, 0, 0, 1, 1, 0, 0, false).
 		AddItem(alertTable, 0, 1, 1, 2, 0, 0, false).
 		AddItem(errorTable, 1, 0, 1, 4, 0, 0, false)
 
