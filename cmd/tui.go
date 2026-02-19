@@ -176,9 +176,9 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		SetColumns(0, 0).
 		SetBorders(false).
 		AddItem(hbTable, 0, 0, 1, 1, 0, 0, false).
-		AddItem(tempTable, 0, 1, 1, 1, 0, 0, false).
-		AddItem(alertTable, 1, 0, 1, 1, 0, 0, false).
-		AddItem(errorTable, 1, 1, 1, 1, 0, 0, false)
+		AddItem(tempTable, 0, 3, 1, 1, 0, 0, false).
+		AddItem(alertTable, 0, 1, 1, 2, 0, 0, false).
+		AddItem(errorTable, 1, 0, 1, 4, 0, 0, false)
 
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(grid, 0, 1, true)
