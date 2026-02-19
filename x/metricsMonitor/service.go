@@ -90,12 +90,15 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	currentStatus := "ok"
 	var triggeredThreshold *Threshold
 
+	matchedMetricName := false
+
 	// Find the "highest" status triggered.
 	// Order of severity: critical > warning > ok
 	for _, t := range svc.Thresholds {
 		if t.MetricName != "" && msg.MetricName != t.MetricName {
 			continue
 		}
+		matchedMetricName = true
 
 		triggered := false
 		if t.Condition == "above" {
@@ -124,6 +127,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				triggeredThreshold = &t
 			}
 		}
+	}
+
+	if !matchedMetricName {
+		logger.Warn("metricsMonitor: no thresholds matched for metric", "metricName", msg.MetricName)
+		return nil
 	}
 
 	if currentStatus != lastStatus {
