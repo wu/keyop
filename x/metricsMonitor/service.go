@@ -112,6 +112,7 @@ func (svc *Service) Initialize() error {
 
 func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
 
 	logger.Info("metricsMonitor: received message", "metricName", msg.MetricName, "metricValue", msg.Metric)
 
@@ -172,24 +173,29 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		svc.lastStatus[msg.MetricName] = currentStatus
 	}
 
+	newMessage := core.Message{
+		Correlation: msg.Correlation,
+		ChannelName: svc.Cfg.Pubs["status"].Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		MetricName:  msg.MetricName,
+		Metric:      msg.Metric,
+		Status:      currentStatus,
+		Text:        msg.Text,
+		Summary:     msg.Summary,
+		Data:        msg.Data,
+	}
+
 	// Set the status on the message and publish to status channel
-	msg.Status = currentStatus
 	if triggeredThreshold != nil {
-		msg.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
-		msg.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
-		msg.Data = map[string]interface{}{
+		newMessage.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
+		newMessage.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
+		newMessage.Data = map[string]interface{}{
 			"threshold": *triggeredThreshold,
 		}
 	}
 
-	messenger := svc.Deps.MustGetMessenger()
-	statusChan, ok := svc.Cfg.Pubs["status"]
-	if !ok {
-		return fmt.Errorf("metricsMonitor: status publication not configured")
-	}
-
-	msg.ChannelName = statusChan.Name
-	return messenger.Send(msg)
+	return messenger.Send(newMessage)
 }
 
 func (svc *Service) Check() error {
