@@ -183,10 +183,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 	logger.Debug("weatherWs2902c: received weather data", "data", data)
 
 	// generate correlation id for this check to tie together the events and metrics in the backend
-	msgUuid := uuid.New().String()
+	correlationId := uuid.New().String()
 
 	msg := core.Message{
-		Uuid:        msgUuid,
+		Correlation: correlationId,
 		ChannelName: svc.WeatherChan.Name,
 		ServiceName: svc.Cfg.Name,
 		Data:        data,
@@ -201,7 +201,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		logger.Warn("weatherWs2902c: inTemp metric name not configured, skipping inTemp metric publication")
 	} else {
 		tempInMsg := core.Message{
-			Uuid:        msgUuid,
+			Correlation: correlationId,
 			ChannelName: svc.TempChan.Name,
 			ServiceName: svc.Cfg.Name + "-intemp",
 			MetricName:  intTempMetricName,
@@ -217,7 +217,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		logger.Warn("weatherWs2902c: outTemp metric name not configured, skipping outTemp metric publication")
 	} else {
 		tempOutMsg := core.Message{
-			Uuid:        msgUuid,
+			Correlation: correlationId,
 			ChannelName: svc.TempChan.Name,
 			ServiceName: svc.Cfg.Name + "-outtemp",
 			MetricName:  outTempMetricName,
@@ -239,7 +239,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			logger.Debug("Publishing weather metric", "field", fieldName, "metric", metricName, "value", fieldValue)
 
 			metricMsg := core.Message{
-				Uuid:        msgUuid,
+				Correlation: correlationId,
 				ChannelName: svc.MetricsChan.Name,
 				ServiceName: svc.Cfg.Name,
 				MetricName:  metricName,

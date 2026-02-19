@@ -16,6 +16,7 @@ import (
 type Message struct {
 	Timestamp   time.Time   `json:"timestamp,omitempty"`
 	Uuid        string      `json:"uuid,omitempty"`
+	Correlation string      `json:"correlation,omitempty"`
 	Hostname    string      `json:"hostname,omitempty"`
 	ChannelName string      `json:"channelName,omitempty"`
 	ServiceType string      `json:"serviceType,omitempty"`
@@ -28,6 +29,7 @@ type Message struct {
 	State       string      `json:"state,omitempty"`
 	Data        interface{} `json:"data,omitempty"`
 	Route       []string    `json:"route,omitempty"`
+	Log         []string    `json:"log,omitempty"`
 }
 
 type MessengerApi interface {

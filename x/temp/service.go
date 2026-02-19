@@ -131,10 +131,10 @@ func (svc Service) temp() (Event, error) {
 	}
 
 	// generate correlation id for this check to tie together the events and metrics in the backend
-	msgUuid := uuid.New().String()
+	correlationId := uuid.New().String()
 
 	eventErr := messenger.Send(core.Message{
-		Uuid:        msgUuid,
+		Correlation: correlationId,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -149,7 +149,7 @@ func (svc Service) temp() (Event, error) {
 	}
 
 	metricErr := messenger.Send(core.Message{
-		Uuid:        msgUuid,
+		Correlation: correlationId,
 		ChannelName: svc.Cfg.Pubs["metrics"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

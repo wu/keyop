@@ -149,8 +149,8 @@ func (svc *Service) reportAnomalyStatus(msg core.Message, mse float64, status st
 
 	newMessage := core.Message{
 		ChannelName: svc.Cfg.Pubs["status"].Name,
-		Uuid:        msg.Uuid,
-		MetricName:  msg.MetricName,
+		Correlation: msg.Uuid,
+		MetricName:  msg.MetricName + "-anomaly",
 		Metric:      msg.Metric,
 		Timestamp:   msg.Timestamp,
 		ServiceName: msg.ServiceName + "-anomaly",

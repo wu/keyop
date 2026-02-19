@@ -62,7 +62,7 @@ func (svc *Service) Check() error {
 	logger.Debug("Calculating moon phase", "time", now, "phase", phase)
 
 	messenger := svc.Deps.MustGetMessenger()
-	msgUuid := uuid.New().String()
+	correlationId := uuid.New().String()
 
 	phaseName := getMoonPhaseName(phase)
 	lastPhaseName := ""
@@ -72,7 +72,7 @@ func (svc *Service) Check() error {
 
 	// Send event message with details
 	eventMsg := core.Message{
-		Uuid:        msgUuid,
+		Correlation: correlationId,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -90,7 +90,7 @@ func (svc *Service) Check() error {
 	// Send alert if the phase name has changed
 	if phaseName != lastPhaseName {
 		alertMsg := core.Message{
-			Uuid:        uuid.New().String(),
+			Correlation: correlationId,
 			ChannelName: svc.Cfg.Pubs["alerts"].Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,

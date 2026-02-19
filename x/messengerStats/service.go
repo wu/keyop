@@ -42,11 +42,11 @@ func (svc *Service) Check() error {
 	logger.Debug("messenger stats", "stats", stats)
 
 	currentTime := time.Now()
-	msgUuid := uuid.New().String()
+	correlationId := uuid.New().String()
 
 	// send to events channel
 	eventErr := messenger.Send(core.Message{
-		Uuid:        msgUuid,
+		Correlation: correlationId,
 		ChannelName: svc.Cfg.Pubs["events"].Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -72,7 +72,7 @@ func (svc *Service) Check() error {
 			msgsPerMinute := float64(deltaMessages) / (deltaTime / 60.0)
 
 			metricErr = messenger.Send(core.Message{
-				Uuid:        msgUuid,
+				Correlation: correlationId,
 				ChannelName: svc.Cfg.Pubs["metrics"].Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
