@@ -147,7 +147,7 @@ func (p *RGBMatrixPlugin) Check() error {
 			return nil
 		}
 
-		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metric", msg.Metric, "status", msg.Status)
+		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metricName", msg.MetricName, "metric", msg.Metric, "status", msg.Status)
 
 		p.temps[msg.MetricName] = msg.Metric
 		p.statuses[msg.MetricName] = msg.Status
@@ -241,6 +241,10 @@ func (p *RGBMatrixPlugin) Render() error {
 		if p.tempIdx >= len(p.tempNames) {
 			p.tempIdx = 0
 		}
+		if p.tempNames[p.tempIdx] == "temp.outside" {
+			// Skip outside temp in cycle since it's always shown as main temp
+			p.tempIdx = (p.tempIdx + 1) % len(p.tempNames)
+		}
 		name := p.tempNames[p.tempIdx]
 		temp := p.temps[name]
 
@@ -302,7 +306,7 @@ func (p *RGBMatrixPlugin) Render() error {
 func (p *RGBMatrixPlugin) getTempColor(status string) color.RGBA {
 	switch status {
 	case "warning":
-		return p.colorRGBA(173, 216, 230, 255)
+		return p.colorRGBA(100, 100, 255, 255)
 	case "critical":
 		return p.colorRGBA(255, 0, 0, 255)
 	case "ok":
