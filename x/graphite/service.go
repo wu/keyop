@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"keyop/util"
+	"strings"
 	"time"
 
 	"github.com/marpaia/graphite-golang"
@@ -86,7 +87,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	if metricName == "" {
 		metricName = msg.ServiceName
 	}
-	metricName = fmt.Sprintf("keyop.%s", metricName)
+	if !strings.HasPrefix(metricName, "weewx.") {
+		metricName = fmt.Sprintf("keyop.%s", metricName)
+	}
 
 	unixTime := msg.Timestamp.Unix()
 	logger.Info("Sending to Graphite",
