@@ -4,6 +4,7 @@ import (
 	"keyop/core"
 	"keyop/x/anomalyDetector"
 	"keyop/x/aurora"
+	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
@@ -42,6 +43,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"aurora": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return aurora.NewService(deps, cfg)
+	},
+	"condition": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return condition.NewService(deps, cfg)
 	},
 	"graphite": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return graphite.NewService(deps, cfg)
