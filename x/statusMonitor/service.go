@@ -250,6 +250,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			ChannelName: alertsChan,
 			ServiceName: msg.ServiceName,
 			ServiceType: msg.ServiceType,
+			MetricName:  msg.MetricName,
 			Status:      alertStatus,
 			Text:        alertText,
 			Summary:     alertSummary,
