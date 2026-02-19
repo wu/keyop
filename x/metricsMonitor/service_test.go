@@ -50,6 +50,7 @@ func testDeps(t *testing.T, messenger core.MessengerApi) core.Dependencies {
 	deps := core.Dependencies{}
 
 	deps.SetLogger(logger)
+	deps.SetOsProvider(core.FakeOsProvider{Host: "test-host"})
 	if messenger != nil {
 		deps.SetMessenger(messenger)
 	}
@@ -438,5 +439,50 @@ func TestService_ValidateConfig(t *testing.T) {
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
+	})
+
+	t.Run("invalid threshold value type", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName": "test",
+						"value":      "not-a-number",
+						"condition":  "above",
+						"status":     "warning",
+					},
+				},
+			},
+		}
+		svc := NewService(deps, cfg)
+		errs := svc.ValidateConfig()
+		assert.NotEmpty(t, errs)
+		assert.Contains(t, errs[0].Error(), "value")
+	})
+
+	t.Run("int threshold values", func(t *testing.T) {
+		cfg := core.ServiceConfig{
+			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
+			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
+			Config: map[string]interface{}{
+				"thresholds": []interface{}{
+					map[string]interface{}{
+						"metricName":        "test",
+						"value":             70,
+						"recoveryThreshold": 60,
+						"condition":         "above",
+						"status":            "warning",
+					},
+				},
+			},
+		}
+		svc := NewService(deps, cfg).(*Service)
+		errs := svc.ValidateConfig()
+		assert.Empty(t, errs)
+		assert.Equal(t, 70.0, svc.Thresholds[0].Value)
+		assert.NotNil(t, svc.Thresholds[0].RecoveryThreshold)
+		assert.Equal(t, 60.0, *svc.Thresholds[0].RecoveryThreshold)
 	})
 }
