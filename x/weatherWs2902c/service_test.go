@@ -55,6 +55,13 @@ func TestHandleWeather(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"weather": {Name: "weather-channel"},
 			"metrics": {Name: "metrics-channel"},
+			"temp":    {Name: "temp-channel"},
+		},
+		Config: map[string]interface{}{
+			"port": 8080,
+			"fieldMetricNames": map[string]interface{}{
+				"OutTemp": "outTemp",
+			},
 		},
 	}
 
@@ -80,7 +87,7 @@ func TestHandleWeather(t *testing.T) {
 	// Find the main weatherData message
 	var receivedData *WeatherData
 	for _, m := range mockMessenger.Messages {
-		if m.MetricName == "weatherData" {
+		if m.Data != nil {
 			if data, ok := m.Data.(*WeatherData); ok {
 				receivedData = data
 				break
@@ -122,8 +129,10 @@ func TestHandleWeatherWithConfiguredMetrics(t *testing.T) {
 		Pubs: map[string]core.ChannelInfo{
 			"weather": {Name: "weather-channel"},
 			"metrics": {Name: "metrics-channel"},
+			"temp":    {Name: "temp-channel"},
 		},
 		Config: map[string]interface{}{
+			"port": 8080,
 			"fieldMetricNames": map[string]interface{}{
 				"OutTemp": "customTempMetric",
 			},
@@ -169,6 +178,8 @@ func TestValidateConfig(t *testing.T) {
 			},
 			Pubs: map[string]core.ChannelInfo{
 				"weather": {Name: "w"},
+				"metrics": {Name: "m"},
+				"temp":    {Name: "t"},
 			},
 		}
 		svc := NewService(deps, cfg)
