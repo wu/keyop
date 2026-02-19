@@ -1,30 +1,29 @@
 package ollama
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"keyop/core"
 	"keyop/util"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
 
 type Service struct {
-	Deps      core.Dependencies
-	Cfg       core.ServiceConfig
-	Host      string
-	Port      int
-	Model     string
-	BatchSize int
-	Timeout   time.Duration
-	Context   []int
-	Mu        sync.Mutex
+	Deps          core.Dependencies
+	Cfg           core.ServiceConfig
+	Host          string
+	Port          int
+	Model         string
+	BatchSize     int
+	Timeout       time.Duration
+	HighWaterMark int
+	LowWaterMark  int
+	Guidelines    string
+	Messages      []Message
+	Client        *Client
+	Mu            sync.Mutex
 }
 
 type OllamaRequest struct {
@@ -44,13 +43,15 @@ type OllamaResponse struct {
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps:      deps,
-		Cfg:       cfg,
-		Host:      "localhost",
-		Port:      11434,
-		Model:     "llama3.3",
-		BatchSize: 100,
-		Timeout:   60 * time.Second,
+		Deps:          deps,
+		Cfg:           cfg,
+		Host:          "localhost",
+		Port:          11434,
+		Model:         "llama3.3",
+		BatchSize:     100,
+		Timeout:       60 * time.Second,
+		HighWaterMark: 20,
+		LowWaterMark:  10,
 	}
 
 	if host, ok := cfg.Config["host"].(string); ok {
@@ -70,6 +71,17 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 			svc.Timeout = timeout
 		}
 	}
+	if hwm, ok := cfg.Config["highWaterMark"].(int); ok {
+		svc.HighWaterMark = hwm
+	}
+	if lwm, ok := cfg.Config["lowWaterMark"].(int); ok {
+		svc.LowWaterMark = lwm
+	}
+	if guidelines, ok := cfg.Config["guidelines"].(string); ok {
+		svc.Guidelines = guidelines
+	}
+
+	svc.Client = NewClient(svc.Host, svc.Port, svc.Timeout)
 
 	return svc
 }
@@ -103,10 +115,10 @@ func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	state := svc.Deps.MustGetStateStore()
 
-	// Load context from state store
-	err := state.Load(fmt.Sprintf("%s_context", svc.Cfg.Name), &svc.Context)
+	// Load history from state store
+	err := state.Load(fmt.Sprintf("%s_history", svc.Cfg.Name), &svc.Messages)
 	if err != nil {
-		logger.Error("ollama: failed to load context", "error", err)
+		logger.Error("ollama: failed to load history", "error", err)
 	}
 
 	sub, ok := svc.Cfg.Subs["requests"]
@@ -131,81 +143,89 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
-	var ollamaReq OllamaRequest
-	ollamaReq.Model = svc.Model
-
-	svc.Mu.Lock()
-	ollamaReq.Context = svc.Context
-	svc.Mu.Unlock()
-
-	if msg.Text != "" {
-		ollamaReq.Prompt = msg.Text
-		logger.Warn("ollama: received message with text", "text", msg.Text)
-	}
-
-	if ollamaReq.Prompt == "" {
+	if msg.Text == "" {
 		logger.Warn("ollama: empty request received")
 		return nil
 	}
-	ollamaReq.Stream = true
 
-	url := fmt.Sprintf("http://%s:%d/api/generate", svc.Host, svc.Port)
-	reqBody, err := json.Marshal(ollamaReq)
-	if err != nil {
-		return fmt.Errorf("ollama: failed to marshal request: %w", err)
+	svc.Mu.Lock()
+	svc.Messages = append(svc.Messages, Message{Role: "user", Content: msg.Text})
+
+	pub, ok := svc.Cfg.Pubs["responses"]
+	if !ok {
+		svc.Mu.Unlock()
+		return fmt.Errorf("ollama: responses publication not found")
 	}
+
+	// Check if history needs summarization
+	if len(svc.Messages) >= svc.HighWaterMark {
+		logger.Info("ollama: history high water mark reached, summarizing", "highWaterMark", svc.HighWaterMark, "lowWaterMark", svc.LowWaterMark)
+
+		// Send notification that summarization is happening
+		svc.sendBatch(messenger, pub.Name, fmt.Sprintf("Summarizing conversation history for %s...", svc.Cfg.Name))
+
+		// Adjust summarization if guidelines are present (keep guidelines, summarize after them)
+		hasGuidelines := len(svc.Messages) > 0 && svc.Messages[0].Role == "system"
+		startIndex := 0
+		if hasGuidelines {
+			startIndex = 1
+		}
+
+		lowWaterMark := svc.LowWaterMark
+		if hasGuidelines && lowWaterMark > 0 {
+			lowWaterMark--
+		}
+
+		if len(svc.Messages) > startIndex+lowWaterMark {
+			oldest := svc.Messages[startIndex : startIndex+lowWaterMark]
+			remaining := svc.Messages[startIndex+lowWaterMark:]
+
+			ctx, cancel := context.WithTimeout(context.Background(), svc.Timeout)
+			summaryMsg, err := svc.Client.Summarize(ctx, svc.Model, oldest)
+			cancel()
+
+			if err != nil {
+				logger.Error("ollama: failed to summarize history", "error", err)
+			} else {
+				if hasGuidelines {
+					svc.Messages = append([]Message{svc.Messages[0], summaryMsg}, remaining...)
+				} else {
+					svc.Messages = append([]Message{summaryMsg}, remaining...)
+				}
+			}
+		}
+	}
+
+	// Check if guidelines in history match config, and update if necessary
+	if svc.Guidelines != "" {
+		if len(svc.Messages) > 0 && svc.Messages[0].Role == "system" && !strings.Contains(svc.Messages[0].Content, "Summary of previous conversation:") {
+			// Check if it's a guidelines message (we assume the first system message is the guidelines if it's not a summary)
+			// If it doesn't match, update it
+			if svc.Messages[0].Content != svc.Guidelines {
+				svc.Messages[0].Content = svc.Guidelines
+			}
+		} else {
+			// Prepend guidelines if not present at the very beginning
+			svc.Messages = append([]Message{{Role: "system", Content: svc.Guidelines}}, svc.Messages...)
+		}
+	} else {
+		// If guidelines are empty but exist in history, remove them if they are not a summary
+		if len(svc.Messages) > 0 && svc.Messages[0].Role == "system" && !strings.Contains(svc.Messages[0].Content, "Summary of previous conversation:") {
+			svc.Messages = svc.Messages[1:]
+		}
+	}
+
+	messages := svc.Messages
+	svc.Mu.Unlock()
+
+	var batch strings.Builder
+	charCount := 0
 
 	ctx, cancel := context.WithTimeout(context.Background(), svc.Timeout)
 	defer cancel()
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("ollama: failed to create http request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("ollama: failed to call ollama api: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ollama: api returned status %d", resp.StatusCode)
-	}
-
-	reader := bufio.NewReader(resp.Body)
-	var fullResponse strings.Builder
-	var batch strings.Builder
-	charCount := 0
-
-	pub, ok := svc.Cfg.Pubs["responses"]
-	if !ok {
-		return fmt.Errorf("ollama: responses publication not found")
-	}
-
-	var finalContext []int
-
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("ollama: error reading stream: %w", err)
-		}
-
-		var ollamaResp OllamaResponse
-		if err := json.Unmarshal(line, &ollamaResp); err != nil {
-			logger.Error("ollama: failed to unmarshal stream response", "error", err, "line", string(line))
-			continue
-		}
-
-		content := ollamaResp.Response
-
+	updatedMessages, err := svc.Client.Chat(ctx, svc.Model, messages, func(content string) error {
 		batch.WriteString(content)
-		fullResponse.WriteString(content)
 		charCount += len(content)
 
 		if charCount >= svc.BatchSize {
@@ -213,26 +233,26 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			batch.Reset()
 			charCount = 0
 		}
+		return nil
+	})
 
-		if ollamaResp.Done {
-			finalContext = ollamaResp.Context
-			break
-		}
+	if err != nil {
+		return fmt.Errorf("ollama: chat failed: %w", err)
 	}
 
 	if batch.Len() > 0 {
 		svc.sendBatch(messenger, pub.Name, batch.String())
 	}
 
-	// Update context
+	// Update history (remove assistant message added by Client.Chat before saving,
+	// because we want to manage history ourselves or just use what Client.Chat returned)
+	// Actually Client.Chat returns updatedMessages which INCLUDES the assistant response.
 	svc.Mu.Lock()
-	if len(finalContext) > 0 {
-		svc.Context = finalContext
-		state := svc.Deps.MustGetStateStore()
-		err := state.Save(fmt.Sprintf("%s_context", svc.Cfg.Name), svc.Context)
-		if err != nil {
-			logger.Error("ollama: failed to save context", "error", err)
-		}
+	svc.Messages = updatedMessages
+	state := svc.Deps.MustGetStateStore()
+	err = state.Save(fmt.Sprintf("%s_history", svc.Cfg.Name), svc.Messages)
+	if err != nil {
+		logger.Error("ollama: failed to save history", "error", err)
 	}
 	svc.Mu.Unlock()
 
