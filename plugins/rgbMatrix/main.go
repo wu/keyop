@@ -147,7 +147,7 @@ func (p *RGBMatrixPlugin) Check() error {
 			return nil
 		}
 
-		logger.Warn("Got temp update", "serviceName", msg.ServiceName, "metricName", msg.MetricName, "metric", msg.Metric, "status", msg.Status)
+		logger.Debug("Got temp update", "serviceName", msg.ServiceName, "metricName", msg.MetricName, "metric", msg.Metric, "status", msg.Status)
 
 		p.temps[msg.MetricName] = msg.Metric
 		p.statuses[msg.MetricName] = msg.Status
