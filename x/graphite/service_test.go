@@ -197,7 +197,7 @@ func TestService_MessageHandler(t *testing.T) {
 		// Our implementation: metric := graphite.NewMetric(msg.ServiceName, fmt.Sprintf("%v", value), unixTime)
 		// and value := fmt.Sprintf("%2.2f", msg.Metric)
 		expectedValue := "123.46"
-		assert.Contains(t, data, "test-service")
+		assert.Contains(t, data, "keyop.test-service")
 		assert.Contains(t, data, expectedValue)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for graphite metric")
@@ -259,7 +259,7 @@ func TestService_MessageHandler_UsesMessageTimestamp(t *testing.T) {
 	case data := <-received:
 		// Graphite format: <metric_path> <metric_value> <metric_timestamp>\n
 		expectedTimestamp := fmt.Sprintf("%d", testTimestamp.Unix())
-		assert.Contains(t, data, "timestamp-test")
+		assert.Contains(t, data, "keyop.timestamp-test")
 		assert.Contains(t, data, "42.00")
 		assert.True(t, strings.HasSuffix(strings.TrimSpace(data), expectedTimestamp), "Metric should end with the correct timestamp, got: %s", data)
 	case <-time.After(2 * time.Second):
