@@ -10,6 +10,9 @@ LDFLAGS="-X keyop/cmd.Branch=${GIT_BRANCH} -X keyop/cmd.Commit=${GIT_HASH} -X ke
 
 echo "Building keyop for macos arm"
 env GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o output/keyop-darwin-arm64
+cd plugins/helloWorldPlugin
+make
+cd ../..
 
 echo "Building keyop for macos intel"
 env GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o output/keyop-darwin-amd64
