@@ -306,6 +306,12 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				if err := queue.Ack(source); err != nil {
 					logger.Error("Failed to ack message", "error", err, "channel", channelName)
 				}
+
+				m.statsMutex.Lock()
+				m.channelMessageCounts[channelName]++
+				m.totalMessageCount++
+				m.statsMutex.Unlock()
+
 				break
 			}
 		}

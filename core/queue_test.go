@@ -411,3 +411,56 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "item3", item)
 }
+
+func TestPersistentQueue_WSReaderPersistence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "queue_test_ws_persistence")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	osProvider := OsProvider{}
+	logger := &FakeLogger{}
+
+	// 1. Create queue and add item
+	pq, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
+	require.NoError(t, err)
+
+	err = pq.Enqueue("item1")
+	require.NoError(t, err)
+
+	// 2. Read as non-ws reader and ack
+	_, _, _, err = pq.Dequeue(context.Background(), "normal_reader")
+	require.NoError(t, err)
+	err = pq.Ack("normal_reader")
+	require.NoError(t, err)
+
+	// 3. Read as ws reader and ack
+	_, _, _, err = pq.Dequeue(context.Background(), "ws_reader")
+	require.NoError(t, err)
+	err = pq.Ack("ws_reader")
+	require.NoError(t, err)
+
+	// 4. Verify normal_reader state file exists
+	stateFile := filepath.Join(tmpDir, "reader_state_test_queue_normal_reader.json")
+	_, err = os.Stat(stateFile)
+	assert.NoError(t, err, "normal reader state should be persisted")
+
+	// 5. Verify ws_reader state file does NOT exist
+	wsStateFile := filepath.Join(tmpDir, "reader_state_test_queue_ws_reader.json")
+	_, err = os.Stat(wsStateFile)
+	assert.True(t, os.IsNotExist(err), "ws reader state should NOT be persisted")
+
+	// 6. Restart queue (new instance)
+	pq2, err := NewPersistentQueue("test_queue", tmpDir, osProvider, logger)
+	require.NoError(t, err)
+
+	// 7. normal_reader should have NO messages (already acked and persisted)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, _, _, err = pq2.Dequeue(ctx, "normal_reader")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// 8. ws_reader SHOULD have item1 again (acked but NOT persisted)
+	item, _, _, err := pq2.Dequeue(context.Background(), "ws_reader")
+	require.NoError(t, err)
+	assert.Equal(t, "item1", item)
+}

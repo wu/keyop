@@ -175,6 +175,10 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 				case <-ctx.Done():
 					return
 				}
+			} else if msg.Type == "message" {
+				if err := messenger.Send(msg.Payload); err != nil {
+					logger.Error("webSocketServer: failed to forward message from client", "error", err)
+				}
 			} else {
 				select {
 				case msgChan <- msg:
@@ -202,19 +206,11 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			} else if msg.Type == "subscribe" {
 				// Process subscribe
 				subMsg := msg
-				requestedChannels := make(map[string]bool)
-				for _, ch := range subMsg.Channels {
-					if ch != "" {
-						requestedChannels[ch] = true
-					}
-				}
 
 				var channelsToSubscribe []core.ChannelInfo
-				if len(svc.Cfg.Subs) > 0 {
-					for _, sub := range svc.Cfg.Subs {
-						if requestedChannels[sub.Name] {
-							channelsToSubscribe = append(channelsToSubscribe, sub)
-						}
+				for _, chName := range subMsg.Channels {
+					if chName != "" {
+						channelsToSubscribe = append(channelsToSubscribe, core.ChannelInfo{Name: chName})
 					}
 				}
 

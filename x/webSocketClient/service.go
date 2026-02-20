@@ -17,12 +17,13 @@ import (
 )
 
 type Service struct {
-	Deps     core.Dependencies
-	Cfg      core.ServiceConfig
-	Port     int
-	Hostname string
-	state    map[string]queueState
-	mu       sync.Mutex
+	Deps              core.Dependencies
+	Cfg               core.ServiceConfig
+	Port              int
+	Hostname          string
+	RouteLoopSkipHost string
+	state             map[string]queueState
+	mu                sync.Mutex
 
 	activeSubs   map[string]context.CancelFunc
 	activeSubsMu sync.Mutex
@@ -46,6 +47,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 	if hostname, ok := cfg.Config["hostname"].(string); ok {
 		svc.Hostname = hostname
+	}
+	if skipHost, ok := cfg.Config["route_loop_skip_host"].(string); ok {
+		svc.RouteLoopSkipHost = skipHost
 	}
 
 	return svc
@@ -203,6 +207,35 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	// Loop detection ID
 	selfID := fmt.Sprintf("%s:%s:%s", hostname, svc.Cfg.Type, svc.Cfg.Name)
 
+	var wsMu sync.Mutex
+
+	// Start publishing to server
+	for _, pub := range svc.Cfg.Pubs {
+		pubCtx, pubCancel := context.WithCancel(svc.Deps.MustGetContext())
+		svc.activeSubsMu.Lock()
+		svc.activeSubs["pub_"+pub.Name] = pubCancel
+		svc.activeSubsMu.Unlock()
+
+		go func(p core.ChannelInfo, pCtx context.Context) {
+			err := messenger.Subscribe(pCtx, "client_pub_"+p.Name, p.Name, svc.Cfg.Type, svc.Cfg.Name, p.MaxAge, func(m core.Message) error {
+				if svc.RouteLoopSkipHost != "" && m.Hostname == svc.RouteLoopSkipHost {
+					logger.Debug("webSocketClient: skipping message from route_loop_skip_host", "uuid", m.Uuid, "hostname", m.Hostname)
+					return nil
+				}
+				msg := wsMessage{
+					Type:    "message",
+					Payload: m,
+				}
+				wsMu.Lock()
+				defer wsMu.Unlock()
+				return conn.WriteJSON(msg)
+			})
+			if err != nil && err != context.Canceled {
+				logger.Error("webSocketClient: publication subscribe failed", "channel", p.Name, "error", err)
+			}
+		}(pub, pubCtx)
+	}
+
 	for {
 		logger.Debug("webSocketClient: waiting for message")
 		_, message, err := conn.ReadMessage()
@@ -230,6 +263,8 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			// so we manually append the route
 			msg.Payload.Route = append(msg.Payload.Route, selfID) // Add self to route
 
+			logger.Warn("Sending message to server", "hostname", msg.Payload.Hostname, "service", msg.Payload.ServiceName)
+
 			// At least once processing: process then ACK
 			if err := messenger.Send(msg.Payload); err != nil {
 				logger.Error("webSocketClient: failed to forward message", "error", err)
@@ -255,7 +290,10 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		ack:
 			// Send ACK
 			ack := wsMessage{Type: "ack"}
-			if err := conn.WriteJSON(ack); err != nil {
+			wsMu.Lock()
+			err := conn.WriteJSON(ack)
+			wsMu.Unlock()
+			if err != nil {
 				logger.Error("webSocketClient: failed to send ack", "error", err)
 				return
 			}

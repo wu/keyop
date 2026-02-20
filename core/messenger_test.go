@@ -634,6 +634,13 @@ func TestMessenger_Stats(t *testing.T) {
 	msg2 := Message{ChannelName: "chan1", Text: "msg2"}
 	msg3 := Message{ChannelName: "chan2", Text: "msg3"}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handler := func(m Message) error { return nil }
+	_ = m.Subscribe(ctx, "sub1", "chan1", "test", "test", 0, handler)
+	_ = m.Subscribe(ctx, "sub2", "chan2", "test", "test", 0, handler)
+
 	err1 := m.Send(msg1)
 	err2 := m.Send(msg2)
 	err3 := m.Send(msg3)
@@ -641,6 +648,9 @@ func TestMessenger_Stats(t *testing.T) {
 	assert.NoError(t, err1)
 	assert.NoError(t, err2)
 	assert.NoError(t, err3)
+
+	// Wait for processing
+	time.Sleep(200 * time.Millisecond)
 
 	stats := m.GetStats()
 	assert.Equal(t, int64(3), stats.TotalMessageCount)
