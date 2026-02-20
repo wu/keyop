@@ -409,7 +409,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	// Subscribe to task manager output
 	err = messenger.Subscribe(ctx, "monitorTUI_Taskmgr", "taskmgr-out", "monitor", "monitor", 0, func(msg core.Message) error {
 		app.QueueUpdateDraw(func() {
-			taskmgrView.SetText(msg.Text)
+			taskmgrView.SetText(formatMarkdown(msg.Text))
 		})
 		return nil
 	})
@@ -671,4 +671,150 @@ func getServiceDisplayName(serviceName string) string {
 		return serviceName[lastPeriodIndex+1:]
 	}
 	return serviceName
+}
+
+func formatMarkdown(text string) string {
+	lines := strings.Split(text, "\n")
+	var result []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Code blocks
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			if inCodeBlock {
+				result = append(result, "[gray]")
+			} else {
+				result = append(result, "[-]")
+			}
+			continue
+		}
+
+		if inCodeBlock {
+			// Escape existing [ inside code blocks
+			line = strings.ReplaceAll(line, "[", "[\"[\"]")
+			result = append(result, line)
+			continue
+		}
+
+		// Headers
+		isHeader := false
+		if strings.HasPrefix(trimmed, "# ") {
+			line = "[yellow][bold]" + strings.ReplaceAll(line, "[", "[\"[\"]") + "[-][-]"
+			isHeader = true
+		} else if strings.HasPrefix(trimmed, "## ") {
+			line = "[yellow]" + strings.ReplaceAll(line, "[", "[\"[\"]") + "[-]"
+			isHeader = true
+		} else if strings.HasPrefix(trimmed, "### ") {
+			line = "[orange]" + strings.ReplaceAll(line, "[", "[\"[\"]") + "[-]"
+			isHeader = true
+		}
+
+		if isHeader {
+			result = append(result, line)
+			continue
+		}
+
+		// Lists
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+			line = "[green]" + strings.ReplaceAll(line, "[", "[\"[\"]") + "[-]"
+			result = append(result, line)
+			continue
+		}
+
+		// Escape existing [ for normal lines
+		line = strings.ReplaceAll(line, "[", "[\"[\"]")
+
+		// Inline formatting (very basic)
+		// Italics (double asterisk as requested)
+		for {
+			start := strings.Index(line, "**")
+			if start == -1 {
+				break
+			}
+			end := strings.Index(line[start+2:], "**")
+			if end == -1 {
+				break
+			}
+			end += start + 2
+			content := line[start+2 : end]
+			line = line[:start] + "[red]" + content + "[-]" + line[end+2:]
+		}
+
+		// Bold/Italic (single asterisk)
+		for {
+			start := strings.Index(line, "*")
+			if start == -1 {
+				break
+			}
+			// Skip our already processed tags
+			if len(line) > start+1 && line[start+1] == '[' {
+				// This is likely start of [red] or similar.
+				// Need to find real next *
+				nextStar := strings.Index(line[start+1:], "*")
+				if nextStar == -1 {
+					break
+				}
+				// Look for * after this one
+				start = start + 1 + nextStar
+				continue
+			}
+
+			end := strings.Index(line[start+1:], "*")
+			if end == -1 {
+				break
+			}
+			end += start + 1
+			content := line[start+1 : end]
+			line = line[:start] + "[blue::b]" + content + "[-]" + line[end+1:]
+		}
+
+		// Italic/Bold (underscore)
+		for {
+			start := strings.Index(line, "_")
+			if start == -1 {
+				break
+			}
+			end := strings.Index(line[start+1:], "_")
+			if end == -1 {
+				break
+			}
+			end += start + 1
+			content := line[start+1 : end]
+			line = line[:start] + "[blue::b]" + content + "[-]" + line[end+1:]
+		}
+
+		// Restore bold (backwards compatible if already converted)
+		line = strings.ReplaceAll(line, "BOLD_TMP_START", "[red]")
+		line = strings.ReplaceAll(line, "BOLD_TMP_END", "[-]")
+
+		// Inline code
+		for {
+			start := strings.Index(line, "`")
+			if start == -1 {
+				break
+			}
+			end := strings.Index(line[start+1:], "`")
+			if end == -1 {
+				break
+			}
+			end += start + 1
+			content := line[start+1 : end]
+			line = line[:start] + "[gray]" + content + "[-]" + line[end+1:]
+		}
+
+		// Escape remaining tview tags (only if they aren't ours)
+		// Actually TextView with DynamicColors=true treats [ as start of tag.
+		// If the markdown content has [something], it might be interpreted as color.
+		// To escape, we should use [[.
+		// Our translator just added tags like [red], [blue], etc.
+		// We should probably escape original [ first, but it's tricky.
+		// For now, let's assume the content doesn't have many [ unless they are intended.
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }
