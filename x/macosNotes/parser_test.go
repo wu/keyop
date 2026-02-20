@@ -46,15 +46,48 @@ func TestParseNotes(t *testing.T) {
 </ul>
 </ul>`
 
-	expected := `todo:
+	expected := `TODO: 
   - point4
+TODO: 
     - point4a
+TODO: 
   - point5
+TODO: 
   - point6
 
-done:
+DONE: 
   - point7
+DONE: 
   - point8`
+
+	deps := core.Dependencies{}
+	deps.SetLogger(&core.FakeLogger{})
+	svc := &Service{Deps: deps}
+	result := svc.parseNotes(input)
+	if strings.TrimSpace(result) != strings.TrimSpace(expected) {
+		t.Errorf("Expected:\n%s\nGot:\n%s", expected, result)
+	}
+}
+
+func TestParseNotesActive(t *testing.T) {
+	input := `<div><h2>tasks</h2></div>
+<ul>
+<li>point1 @active</li>
+<li>point2</li>
+<li>❌❌❌❌❌❌❌❌❌❌❌❌❌<br></li>
+<li>point3 @active</li>
+<li>point4</li>
+</ul>`
+
+	expected := `ACTIVE: 
+  - point1 @active
+TODO: 
+  - point2
+
+DONE: 
+  - point3
+DONE: 
+  - point4`
 
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})

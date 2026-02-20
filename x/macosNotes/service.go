@@ -181,11 +181,19 @@ func (svc *Service) parseNotes(input string) string {
 			if depth > 0 {
 				indent = strings.Repeat("  ", depth-1)
 			}
-			formatted := fmt.Sprintf("  %s- %s", indent, content)
-
 			if isDone {
+				if strings.Contains(content, "@active") {
+					content = strings.ReplaceAll(content, "@active", "")
+					content = strings.TrimSpace(content)
+				}
+				formatted := fmt.Sprintf("DONE: \n  %s- %s", indent, content)
 				done = append(done, formatted)
 			} else {
+				prefix := "TODO: "
+				if strings.Contains(content, "@active") {
+					prefix = "ACTIVE: "
+				}
+				formatted := fmt.Sprintf("%s\n  %s- %s", prefix, indent, content)
 				todo = append(todo, formatted)
 			}
 		}
@@ -193,7 +201,6 @@ func (svc *Service) parseNotes(input string) string {
 
 	var result strings.Builder
 	if len(todo) > 0 {
-		result.WriteString("todo:\n")
 		for _, s := range todo {
 			result.WriteString(s)
 			result.WriteString("\n")
@@ -204,7 +211,6 @@ func (svc *Service) parseNotes(input string) string {
 		if result.Len() > 0 {
 			result.WriteString("\n")
 		}
-		result.WriteString("done:\n")
 		for _, s := range done {
 			result.WriteString(s)
 			result.WriteString("\n")
