@@ -133,6 +133,9 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 			"alertSub":     {Name: alertChannel},
 			"taskmgrSub":   {Name: "taskmgr-out"},
 		},
+		Pubs: map[string]core.ChannelInfo{
+			"taskmgrPub": {Name: "taskmgr-in"},
+		},
 		Config: map[string]interface{}{
 			"hostname": wsHost,
 			"port":     wsPort,
@@ -161,16 +164,30 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	app := tview.NewApplication()
 
 	hbTable := tview.NewTable().SetBorders(false)
-	hbTable.SetBorder(true)
+	hbTable.SetBorder(true).
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple).
+		SetTitle(" HEARTBEATS ")
 
 	tempTable := tview.NewTable().SetBorders(false)
-	tempTable.SetBorder(true)
+	tempTable.SetBorder(true).
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple).
+		SetTitle(" TEMPERATURES ")
 
 	errorTable := tview.NewTable().SetBorders(false)
-	errorTable.SetTitle(" ERRORS ").SetTitleAlign(tview.AlignLeft).SetBorder(true)
+	errorTable.SetTitle(" ERRORS ").
+		SetTitleAlign(tview.AlignLeft).
+		SetBorder(true).
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple)
 
 	alertTable := tview.NewTable().SetBorders(false)
-	alertTable.SetTitle(" ALERTS ").SetTitleAlign(tview.AlignLeft).SetBorder(true)
+	alertTable.SetTitle(" ALERTS ").
+		SetTitleAlign(tview.AlignLeft).
+		SetBorder(true).
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple)
 
 	grid := tview.NewGrid().
 		SetRows(0, 0).
@@ -188,14 +205,45 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		SetChangedFunc(func() {
 			app.Draw()
 		})
-	taskmgrView.SetBorder(true).SetTitle(" TASK MANAGER ")
+	taskmgrView.SetBorder(true).
+		SetTitle(" TASK MANAGER ").
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple)
 
-	grid.AddItem(taskmgrView, 1, 2, 1, 2, 0, 0, false)
+	var taskmgrInput *tview.InputField
+	taskmgrInput = tview.NewInputField().
+		SetLabel("Request: ").
+		SetLabelColor(tcell.ColorMediumPurple).
+		SetFieldWidth(0).
+		SetDoneFunc(func(key tcell.Key) {
+			if key == tcell.KeyEnter {
+				text := taskmgrInput.GetText()
+				if text != "" {
+					_ = messenger.Send(core.Message{
+						ChannelName: "taskmgr-in",
+						Text:        text,
+					})
+					taskmgrInput.SetText("")
+				}
+			}
+		})
+	taskmgrInput.
+		SetFieldBackgroundColor(tcell.ColorBlack).
+		SetFieldTextColor(tcell.ColorMediumPurple).
+		SetBackgroundColor(tcell.ColorBlack)
+	taskmgrInput.SetBorder(true).
+		SetBorderColor(tcell.ColorMediumPurple).
+		SetTitleColor(tcell.ColorMediumPurple).
+		SetTitle(" TASK INPUT ")
+	taskmgrFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(taskmgrView, 0, 1, false).
+		AddItem(taskmgrInput, 3, 1, true)
+	grid.AddItem(taskmgrFlex, 1, 2, 1, 2, 0, 0, false)
 
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(grid, 0, 1, true)
 
-	app.SetRoot(mainFlex, true)
+	app.SetRoot(mainFlex, true).SetFocus(taskmgrInput)
 
 	hosts := make(map[string]*hostStatus)
 	temps := make(map[string]*tempStatus)
