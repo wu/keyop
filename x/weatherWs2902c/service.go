@@ -212,6 +212,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			ServiceType: svc.Cfg.Type,
 			MetricName:  intTempMetricName,
 			Metric:      data.InTemp,
+			Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, data.InTemp),
 		}
 		if err := messenger.Send(tempInMsg); err != nil {
 			logger.Error("weatherWs2902c: failed to send inTemp message", "error", err)
@@ -229,6 +230,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 			ServiceType: svc.Cfg.Type,
 			MetricName:  outTempMetricName,
 			Metric:      data.OutTemp,
+			Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, data.OutTemp),
 		}
 		if err := messenger.Send(tempOutMsg); err != nil {
 			logger.Error("weatherWs2902c: failed to send outTemp message", "error", err)
