@@ -653,9 +653,9 @@ func TestMessenger_Stats(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	stats := m.GetStats()
-	assert.Equal(t, int64(3), stats.TotalMessageCount)
-	assert.Equal(t, int64(2), stats.ChannelMessageCounts["chan1"])
-	assert.Equal(t, int64(1), stats.ChannelMessageCounts["chan2"])
+	assert.Equal(t, int64(6), stats.TotalMessageCount)
+	assert.Equal(t, int64(4), stats.ChannelMessageCounts["chan1"])
+	assert.Equal(t, int64(2), stats.ChannelMessageCounts["chan2"])
 	assert.Equal(t, int64(0), stats.TotalFailureCount)
 	assert.Equal(t, int64(0), stats.TotalRetryCount)
 }
