@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"keyop/core"
 	"keyop/util"
 	"net/http"
@@ -261,6 +262,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 	//goland:noinspection GoUnhandledErrorResult
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Error("failed to post message to HTTP endpoint", "url", url, "status", resp.Status, "body", string(body))
+		return fmt.Errorf("httpPostClient: failed to post message: %s", resp.Status)
+	}
 
 	logger.Debug("successfully posted message to HTTP endpoint", "url", url, "status", resp.Status)
 

@@ -21,6 +21,7 @@ type Service struct {
 	HighWaterMark int
 	LowWaterMark  int
 	Guidelines    string
+	Stream        bool
 	Messages      []Message
 	Client        *Client
 	Mu            sync.Mutex
@@ -52,6 +53,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		Timeout:       60 * time.Second,
 		HighWaterMark: 20,
 		LowWaterMark:  10,
+		Stream:        true,
 	}
 
 	if host, ok := cfg.Config["host"].(string); ok {
@@ -80,8 +82,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if guidelines, ok := cfg.Config["guidelines"].(string); ok {
 		svc.Guidelines = guidelines
 	}
+	if stream, ok := cfg.Config["stream"].(bool); ok {
+		svc.Stream = stream
+	}
 
-	svc.Client = NewClient(svc.Host, svc.Port, svc.Timeout)
+	svc.Client = NewClient(svc.Host, svc.Port, svc.Timeout, svc.Stream)
 
 	return svc
 }
@@ -148,8 +153,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return nil
 	}
 
+	timestamp := msg.Timestamp.Format("2006-01-02 3:04pm")
 	svc.Mu.Lock()
-	svc.Messages = append(svc.Messages, Message{Role: "user", Content: msg.Text})
+	svc.Messages = append(svc.Messages, Message{Role: "user", Content: timestamp + " " + msg.Text})
 
 	pub, ok := svc.Cfg.Pubs["responses"]
 	if !ok {
@@ -221,7 +227,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	var batch strings.Builder
 	charCount := 0
 
-	ctx, cancel := context.WithTimeout(context.Background(), svc.Timeout)
+	ctx, cancel := context.WithTimeout(svc.Deps.MustGetContext(), svc.Timeout)
 	defer cancel()
 
 	updatedMessages, err := svc.Client.Chat(ctx, svc.Model, messages, func(content string) error {

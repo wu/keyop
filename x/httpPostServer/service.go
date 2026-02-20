@@ -207,9 +207,9 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Debug("received json message", "message", msg)
-	if msg.ChannelName == "" || !alphanumeric.MatchString(msg.ChannelName) {
-		logger.Info("Missing or invalid ChannelName")
-		http.Error(w, "Missing or invalid ChannelName", http.StatusBadRequest)
+	if msg.ChannelName == "" {
+		logger.Error("httpPostServer: missing ChannelName", "message", msg)
+		http.Error(w, "Missing ChannelName", http.StatusBadRequest)
 		return
 	}
 

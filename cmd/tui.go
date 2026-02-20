@@ -131,6 +131,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 			"tempSub":      {Name: statusChannel},
 			"errorSub":     {Name: errorChannel},
 			"alertSub":     {Name: alertChannel},
+			"taskmgrSub":   {Name: "taskmgr-out"},
 		},
 		Config: map[string]interface{}{
 			"hostname": wsHost,
@@ -173,12 +174,23 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 
 	grid := tview.NewGrid().
 		SetRows(0, 0).
-		SetColumns(0, 0).
+		SetColumns(0, 0, 0, 0).
 		SetBorders(false).
 		AddItem(hbTable, 0, 3, 1, 1, 0, 0, false).
 		AddItem(tempTable, 0, 0, 1, 1, 0, 0, false).
 		AddItem(alertTable, 0, 1, 1, 2, 0, 0, false).
-		AddItem(errorTable, 1, 0, 1, 4, 0, 0, false)
+		AddItem(errorTable, 1, 0, 1, 2, 0, 0, false)
+
+	taskmgrView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWordWrap(true).
+		SetChangedFunc(func() {
+			app.Draw()
+		})
+	taskmgrView.SetBorder(true).SetTitle(" TASK MANAGER ")
+
+	grid.AddItem(taskmgrView, 1, 2, 1, 2, 0, 0, false)
 
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(grid, 0, 1, true)
@@ -248,6 +260,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	_ = messenger.SeekToEnd(statusChannel, "monitorTUI_Temp")
 	_ = messenger.SeekToEnd(errorChannel, "monitorTUI_Error")
 	_ = messenger.SeekToEnd(alertChannel, "monitorTUI_Alert")
+	_ = messenger.SeekToEnd("taskmgr-out", "monitorTUI_Taskmgr")
 
 	// Subscribe to heartbeats
 	err = messenger.Subscribe(ctx, "monitorTUI_HB", hbChannel, "monitor", "monitor", 0, func(msg core.Message) error {
@@ -339,6 +352,17 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		if len(alerts) > 10 {
 			alerts = alerts[:10]
 		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Subscribe to task manager output
+	err = messenger.Subscribe(ctx, "monitorTUI_Taskmgr", "taskmgr-out", "monitor", "monitor", 0, func(msg core.Message) error {
+		app.QueueUpdateDraw(func() {
+			taskmgrView.SetText(msg.Text)
+		})
 		return nil
 	})
 	if err != nil {

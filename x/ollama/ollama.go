@@ -33,13 +33,15 @@ type Client struct {
 	Host    string
 	Port    int
 	Timeout time.Duration
+	Stream  bool
 }
 
-func NewClient(host string, port int, timeout time.Duration) *Client {
+func NewClient(host string, port int, timeout time.Duration, stream bool) *Client {
 	return &Client{
 		Host:    host,
 		Port:    port,
 		Timeout: timeout,
+		Stream:  stream,
 	}
 }
 
@@ -49,7 +51,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 	reqBody, err := json.Marshal(ChatRequest{
 		Model:    model,
 		Messages: messages,
-		Stream:   true,
+		Stream:   c.Stream,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -72,31 +74,48 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 		return nil, fmt.Errorf("api returned status %d", resp.StatusCode)
 	}
 
+	if !c.Stream {
+		var chatResp ChatResponse
+		if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+			return nil, fmt.Errorf("failed to decode non-streaming response: %w", err)
+		}
+
+		fullResponse := chatResp.Message.Content
+		if onResponse != nil {
+			if err := onResponse(fullResponse); err != nil {
+				return nil, err
+			}
+		}
+		updatedMessages := append(messages, Message{Role: "assistant", Content: fullResponse})
+		return updatedMessages, nil
+	}
+
 	reader := bufio.NewReader(resp.Body)
 	var fullResponse string
 	for {
 		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
+		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("error reading stream: %w", err)
 		}
 
-		var chatResp ChatResponse
-		if err := json.Unmarshal(line, &chatResp); err != nil {
-			continue
-		}
+		if len(line) > 0 {
+			var chatResp ChatResponse
+			if err := json.Unmarshal(line, &chatResp); err == nil {
+				content := chatResp.Message.Content
+				fullResponse += content
+				if onResponse != nil {
+					if err := onResponse(content); err != nil {
+						return nil, err
+					}
+				}
 
-		content := chatResp.Message.Content
-		fullResponse += content
-		if onResponse != nil {
-			if err := onResponse(content); err != nil {
-				return nil, err
+				if chatResp.Done {
+					break
+				}
 			}
 		}
 
-		if chatResp.Done {
+		if err == io.EOF {
 			break
 		}
 	}
