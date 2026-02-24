@@ -113,7 +113,11 @@ func (svc *Service) getLinuxCpuStats() (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	lines := strings.Split(string(buf[:n]), "\n")
+	return parseLinuxCpuStats(string(buf[:n]))
+}
+
+func parseLinuxCpuStats(content string) (uint64, uint64, error) {
+	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "cpu ") {
 			fields := strings.Fields(line)

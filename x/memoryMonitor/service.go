@@ -121,8 +121,12 @@ func (svc *Service) getLinuxMemUsage() (float64, error) {
 		return 0, err
 	}
 
+	return parseMeminfo(string(buf[:n]))
+}
+
+func parseMeminfo(content string) (float64, error) {
 	var memTotal, memAvailable float64
-	lines := strings.Split(string(buf[:n]), "\n")
+	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
