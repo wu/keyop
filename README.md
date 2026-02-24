@@ -17,3 +17,31 @@ Project Goals
 * Data Privacy - you own your data, choose what you share.
 
 Join the project to help make event-driven intelligence accessible to everyone!
+
+## Build
+
+Build the main binaries (no plugins):
+
+```zsh
+make build
+```
+
+Build plugins using the default plugin list:
+
+```zsh
+make plugins
+```
+
+Build only specific plugins:
+
+```zsh
+make build-plugins PLUGINS="rgbMatrix helloWorldPlugin"
+```
+
+Build the main binaries and also build specific plugins:
+
+```zsh
+make build PLUGINS="rgbMatrix helloWorldPlugin"
+```
+
+Note: The `rgbMatrix` plugin only builds on Raspberry Pi (Linux on ARM).

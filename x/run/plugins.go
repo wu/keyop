@@ -57,6 +57,13 @@ func LoadPlugins(deps core.Dependencies) error {
 		}
 
 		logger.Info("Loading plugin", "name", p.Name, "path", p.Path)
+		if _, statErr := os.Stat(p.Path); statErr != nil {
+			if os.IsNotExist(statErr) {
+				logger.Error("Plugin file not found, skipping", "name", p.Name, "path", p.Path)
+				continue
+			}
+			return fmt.Errorf("error stating plugin file %s: %w", p.Path, statErr)
+		}
 		if err := loadPlugin(p, deps); err != nil {
 			logger.Error("Failed to load plugin", "name", p.Name, "error", err)
 			return err
