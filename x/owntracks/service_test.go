@@ -95,12 +95,11 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 	deps := testDeps()
 	defer deps.MustGetCancel()()
 
-	port := 8879
 	cfg := core.ServiceConfig{
 		Name: "test-owntracks",
 		Type: "owntracks",
 		Config: map[string]interface{}{
-			"port": port,
+			"port": 0,
 		},
 		Pubs: map[string]core.ChannelInfo{
 			"owntracks": {Name: "owntracks"},
@@ -115,8 +114,8 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 	err := svc.Initialize()
 	assert.NoError(t, err)
 
-	// Give the server a moment to start
-	time.Sleep(100 * time.Millisecond)
+	port := svc.(*Service).Port
+	assert.NotZero(t, port)
 
 	// Send an OwnTracks JSON message
 	testData := map[string]interface{}{
@@ -126,14 +125,26 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 		"tid":   "ne",
 	}
 	body, _ := json.Marshal(testData)
-	resp, err := http.Post(
-		fmt.Sprintf("http://localhost:%d/", port),
-		"application/json",
-		bytes.NewBuffer(body),
-	)
 
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var resp *http.Response
+	var reqErr error
+	for i := 0; i < 10; i++ {
+		resp, reqErr = http.Post(
+			fmt.Sprintf("http://localhost:%d/", port),
+			"application/json",
+			bytes.NewBuffer(body),
+		)
+		if reqErr == nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	assert.NoError(t, reqErr)
+	if resp != nil {
+		_ = resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	}
 }
 
 func TestService_ServeHTTP(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"keyop/core"
 	"keyop/util"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -84,10 +85,26 @@ func (svc *Service) Initialize() error {
 	mux.HandleFunc("/", svc.ServeHTTP)
 
 	addr := fmt.Sprintf(":%d", svc.Port)
-	logger.Info("starting owntracks http server", "addr", addr)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.Error("failed to start owntracks http listener", "error", err, "addr", addr)
+		return err
+	}
+
+	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok {
+		svc.Port = tcpAddr.Port
+	}
+
+	logger.Info("starting owntracks http server", "addr", ln.Addr().String())
+
+	ctx := svc.Deps.MustGetContext()
+	go func() {
+		<-ctx.Done()
+		_ = ln.Close()
+	}()
 
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := http.Serve(ln, mux); err != nil {
 			logger.Error("owntracks http server failed", "error", err)
 		}
 	}()
