@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: all build build-main build-plugins plugins clean clean-main clean-plugins
+.PHONY: all build build-main build-plugins plugins clean clean-main clean-plugins build-reminders-fetcher clean-reminders-fetcher build-release
 
 OUTPUT_DIR := output
 
@@ -64,7 +64,26 @@ build-plugins:
 plugins: PLUGINS=$(DEFAULT_PLUGINS)
 plugins: build-plugins
 
-clean: clean-main clean-plugins
+# Build the Swift reminders_fetcher helper only on macOS
+build-reminders-fetcher:
+	@if [ "$(shell uname -s)" = "Darwin" ]; then \
+		echo "Building reminders_fetcher (macOS only)"; \
+		swiftc -o x/macosReminders/cmd/reminders_fetcher/reminders_fetcher x/macosReminders/cmd/reminders_fetcher/main.swift; \
+	else \
+		echo "Skipping reminders_fetcher build: not macOS"; \
+	fi
+
+# Build release artifacts and package the macOS helper into $(OUTPUT_DIR)
+build-release: build-main build-reminders-fetcher
+	@if [ "$(shell uname -s)" = "Darwin" ]; then \
+		echo "Packaging reminders_fetcher into $(OUTPUT_DIR)"; \
+		mkdir -p $(OUTPUT_DIR); \
+		cp x/macosReminders/cmd/reminders_fetcher/reminders_fetcher $(OUTPUT_DIR)/reminders_fetcher || true; \
+	else \
+		echo "Skipping packaging helper: not macOS"; \
+	fi
+
+clean: clean-main clean-plugins clean-reminders-fetcher
 
 clean-main:
 	rm -f $(MAIN_TARGETS)
@@ -76,3 +95,6 @@ clean-plugins:
 		$(MAKE) -C plugins/$$p clean; \
 	done
 
+clean-reminders-fetcher:
+	@echo "Removing reminders_fetcher binary if present"; \
+	rm -f x/macosReminders/cmd/reminders_fetcher/reminders_fetcher

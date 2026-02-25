@@ -17,6 +17,7 @@ import (
 	"keyop/x/macosBluetoothBattery"
 	"keyop/x/macosMessages"
 	"keyop/x/macosNotes"
+	"keyop/x/macosReminders"
 	"keyop/x/memoryMonitor"
 	"keyop/x/messengerStats"
 	"keyop/x/metricsMonitor"
@@ -102,6 +103,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"macosNotes": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return macosNotes.NewService(deps, cfg)
+	},
+	"macosReminders": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return macosReminders.NewService(deps, cfg)
 	},
 	"owntracks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return owntracks.NewService(deps, cfg)
