@@ -14,6 +14,7 @@ import (
 	"keyop/x/idleMonitorMacos"
 	"keyop/x/kodi"
 	"keyop/x/logManager"
+	"keyop/x/macosBluetoothBattery"
 	"keyop/x/macosMessages"
 	"keyop/x/macosNotes"
 	"keyop/x/memoryMonitor"
@@ -44,6 +45,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"aurora": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return aurora.NewService(deps, cfg)
+	},
+	"macosBluetoothBattery": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return macosBluetoothBattery.NewService(deps, cfg)
 	},
 	"condition": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return condition.NewService(deps, cfg)
