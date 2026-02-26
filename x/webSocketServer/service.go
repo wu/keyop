@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"keyop/core"
+	wsp "keyop/x/webSocketProtocol"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -16,20 +17,38 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	defaultBatchSize = 20
+)
+
+// Aliases so internal code keeps reading naturally.
+const (
+	protocolVersion  = wsp.ProtocolVersion
+	pingInterval     = wsp.PingInterval
+	pongTimeout      = wsp.PongTimeout
+	handshakeTimeout = wsp.HandshakeTimeout
+	ackTimeout       = wsp.AckTimeout
+)
+
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
-	Port int
+	Deps      core.Dependencies
+	Cfg       core.ServiceConfig
+	Port      int
+	BatchSize int
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps: deps,
-		Cfg:  cfg,
+		Deps:      deps,
+		Cfg:       cfg,
+		BatchSize: defaultBatchSize,
 	}
 
 	if port, ok := cfg.Config["port"].(int); ok {
 		svc.Port = port
+	}
+	if bs, ok := cfg.Config["batch_size"].(int); ok && bs > 0 {
+		svc.BatchSize = bs
 	}
 
 	return svc
@@ -125,13 +144,96 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
-type wsMessage struct {
-	Type     string       `json:"type"`
+// BatchItem holds a single message along with its queue position metadata.
+type BatchItem struct {
 	Queue    string       `json:"queue,omitempty"`
-	Channels []string     `json:"channels,omitempty"`
 	FileName string       `json:"fileName,omitempty"`
 	Offset   int64        `json:"offset,omitempty"`
 	Payload  core.Message `json:"payload,omitempty"`
+}
+
+// wsCapabilities describes optional protocol features.
+type wsCapabilities struct {
+	Batch bool `json:"batch"`
+}
+
+// wsHeartbeat carries ping/pong timing parameters in the welcome message.
+type wsHeartbeat struct {
+	PingIntervalMs int `json:"pingIntervalMs"`
+	PongTimeoutMs  int `json:"pongTimeoutMs"`
+}
+
+// wsMessage is the unified protocol v=1 wire format.
+type wsMessage struct {
+	V            int             `json:"v"`
+	Type         string          `json:"type"`
+	ClientID     string          `json:"clientId,omitempty"`
+	ServerID     string          `json:"serverId,omitempty"`
+	Capabilities *wsCapabilities `json:"capabilities,omitempty"`
+	Heartbeat    *wsHeartbeat    `json:"heartbeat,omitempty"`
+	// error frame
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message,omitempty"`
+	ExpectedV int    `json:"expectedV,omitempty"`
+	GotV      int    `json:"gotV,omitempty"`
+	// resume / batch items
+	Queue    string `json:"queue,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	Offset   int64  `json:"offset,omitempty"`
+	// subscribe
+	Channels []string `json:"channels,omitempty"`
+	// batch / ack
+	BatchID string      `json:"batchId,omitempty"`
+	Items   []BatchItem `json:"items,omitempty"`
+	// legacy single-payload (kept for fallback only)
+	Payload core.Message `json:"payload,omitempty"`
+}
+
+// pendingAck is a waiter for a single in-flight server→client batch.
+type pendingAck struct {
+	done chan struct{}
+}
+
+// connWriter serialises all websocket writes through a single mutex.
+type connWriter struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func (w *connWriter) writeJSON(v interface{}) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteJSON(v)
+}
+
+func (w *connWriter) writePing() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteMessage(websocket.PingMessage, nil)
+}
+
+func (w *connWriter) close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.conn.Close()
+}
+
+// flushPending closes all in-flight pending-ack done channels so that any goroutine
+// waiting in sendBatchAndWaitAck unblocks immediately when the connection is torn down.
+// It must be called with pendingMu held.
+//
+// Deleting map keys during a range loop is intentional and safe in Go (spec §For range).
+// The select guards against a double-close in case the ACK read-loop already closed the
+// channel for this entry before the deferred flush ran.
+func flushPending(pending map[string]*pendingAck) {
+	for id, w := range pending {
+		select {
+		case <-w.done: // already closed — skip
+		default:
+			close(w.done)
+		}
+		delete(pending, id)
+	}
 }
 
 func (svc *Service) handleConnection(conn *websocket.Conn) {
@@ -144,21 +246,120 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	ctx, cancel := context.WithCancel(svc.Deps.MustGetContext())
 	defer cancel()
 
-	var mu sync.Mutex
-	ackChan := make(chan struct{})
+	cw := &connWriter{conn: conn}
+
+	// ── Handshake ─────────────────────────────────────────────────────────────
+	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		logger.Error("webSocketServer: handshake read failed", "error", err)
+		return
+	}
+	conn.SetReadDeadline(time.Time{})
+
+	var hello wsMessage
+	if err := json.Unmarshal(raw, &hello); err != nil || hello.Type != "hello" {
+		logger.Error("webSocketServer: expected hello", "raw", string(raw))
+		_ = cw.writeJSON(wsMessage{
+			V:       protocolVersion,
+			Type:    "error",
+			Code:    wsp.CodeBadHandshake,
+			Message: wsp.BadHandshakeMsg,
+		})
+		return
+	}
+	if hello.V != protocolVersion {
+		_ = cw.writeJSON(wsMessage{
+			V:         protocolVersion,
+			Type:      "error",
+			Code:      wsp.CodeUnsupportedVersion,
+			ExpectedV: protocolVersion,
+			GotV:      hello.V,
+			Message:   wsp.UnsupportedVersionMsg(protocolVersion, hello.V),
+		})
+		return
+	}
+
+	serverID := uuid.New().String()
+	if err := cw.writeJSON(wsMessage{
+		V:            protocolVersion,
+		Type:         "welcome",
+		ServerID:     serverID,
+		Capabilities: &wsCapabilities{Batch: true},
+		Heartbeat: &wsHeartbeat{
+			PingIntervalMs: int(pingInterval.Milliseconds()),
+			PongTimeoutMs:  int(pongTimeout.Milliseconds()),
+		},
+	}); err != nil {
+		logger.Error("webSocketServer: failed to send welcome", "error", err)
+		return
+	}
+
+	// ── Ping / Pong deadlines ──────────────────────────────────────────────────
+	conn.SetReadDeadline(time.Now().Add(pongTimeout))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongTimeout))
+		return nil
+	})
+
+	go func() {
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := cw.writePing(); err != nil {
+					logger.Error("webSocketServer: ping failed", "error", err)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+
+	// ── Pending-ack registry (server→client batches) ───────────────────────────
+	pendingMu := sync.Mutex{}
+	pending := make(map[string]*pendingAck)
 
 	readerName := "ws_" + uuid.New().String()
-	logger.Debug("webSocketServer: starting connection loop", "readerName", readerName)
+	logger.Debug("webSocketServer: starting connection loop", "readerName", readerName, "clientId", hello.ClientID)
 
 	activeSubs := make(map[string]context.CancelFunc)
 	activeSubsMu := sync.Mutex{}
+	resumesMu := sync.Mutex{}
+	resumes := make(map[string]wsMessage)
 
-	// Receiver loop for ACKs, Resume, and Subscribe
+	clientBatchChan := make(chan wsMessage, 20)
+
+	// Client→server batch processor
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-clientBatchChan:
+				failed := false
+				for _, item := range msg.Items {
+					if err := messenger.Send(item.Payload); err != nil {
+						logger.Error("webSocketServer: failed to forward batched message from client", "error", err)
+						failed = true
+						break
+					}
+				}
+				if !failed && msg.BatchID != "" {
+					_ = cw.writeJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID, Queue: msg.Queue})
+				}
+			}
+		}
+	}()
+
+	// Read loop
 	msgChan := make(chan wsMessage, 20)
 	go func() {
-		defer cancel() // Cancel context if reader loop exits
+		defer cancel()
 		for {
-			logger.Debug("webSocketServer: waiting for message")
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				return
@@ -168,18 +369,43 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			if err := json.Unmarshal(message, &msg); err != nil {
 				continue
 			}
-
-			if msg.Type == "ack" {
+			// Enforce protocol version on every post-handshake frame.
+			if msg.V != protocolVersion {
+				logger.Error("webSocketServer: version mismatch on frame", "type", msg.Type, "v", msg.V)
+				_ = cw.writeJSON(wsMessage{
+					V:         protocolVersion,
+					Type:      "error",
+					Code:      wsp.CodeUnsupportedVersion,
+					ExpectedV: protocolVersion,
+					GotV:      msg.V,
+					Message:   wsp.UnsupportedVersionMsg(protocolVersion, msg.V),
+				})
+				cw.close()
+				return
+			}
+			switch msg.Type {
+			case "ack":
+				if msg.BatchID != "" {
+					pendingMu.Lock()
+					if w, ok := pending[msg.BatchID]; ok {
+						// Guard against a race where flushPending already closed this
+						// channel (e.g. context cancelled concurrently with an ack).
+						select {
+						case <-w.done: // already closed — skip
+						default:
+							close(w.done)
+						}
+						delete(pending, msg.BatchID)
+					}
+					pendingMu.Unlock()
+				}
+			case "batch":
 				select {
-				case ackChan <- struct{}{}:
+				case clientBatchChan <- msg:
 				case <-ctx.Done():
 					return
 				}
-			} else if msg.Type == "message" {
-				if err := messenger.Send(msg.Payload); err != nil {
-					logger.Error("webSocketServer: failed to forward message from client", "error", err)
-				}
-			} else {
+			default:
 				select {
 				case msgChan <- msg:
 				case <-ctx.Done():
@@ -189,33 +415,35 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		}
 	}()
 
-	resumesMu := sync.Mutex{}
-	resumes := make(map[string]wsMessage)
-	lastPing := time.Now()
+	// Flush all pending ack waiters when the connection closes so that batch-sender
+	// goroutines don't leak.
+	defer func() {
+		pendingMu.Lock()
+		flushPending(pending)
+		pendingMu.Unlock()
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg := <-msgChan:
-			if msg.Type == "resume" {
+			switch msg.Type {
+			case "resume":
 				resumesMu.Lock()
 				resumes[msg.Queue] = msg
 				resumesMu.Unlock()
 				logger.Debug("webSocketServer: received resume", "queue", msg.Queue, "file", msg.FileName, "offset", msg.Offset)
-			} else if msg.Type == "subscribe" {
-				// Process subscribe
-				subMsg := msg
 
+			case "subscribe":
 				var channelsToSubscribe []core.ChannelInfo
-				for _, chName := range subMsg.Channels {
+				for _, chName := range msg.Channels {
 					if chName != "" {
 						channelsToSubscribe = append(channelsToSubscribe, core.ChannelInfo{Name: chName})
 					}
 				}
 
 				activeSubsMu.Lock()
-				// Stop channels no longer requested
 				for chName, cancelSub := range activeSubs {
 					found := false
 					for _, sub := range channelsToSubscribe {
@@ -230,91 +458,130 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 					}
 				}
 
-				// Start new channels
 				for _, sub := range channelsToSubscribe {
 					if _, active := activeSubs[sub.Name]; !active {
 						subCtx, subCancel := context.WithCancel(ctx)
 						activeSubs[sub.Name] = subCancel
 
-						go func(s core.ChannelInfo, sCtx context.Context, sCancel context.CancelFunc) {
-							// Handle resume if provided for this queue
+						go func(s core.ChannelInfo, sCtx context.Context) {
 							resumesMu.Lock()
 							rm, ok := resumes[s.Name]
 							if ok {
-								delete(resumes, s.Name) // Use it once
+								delete(resumes, s.Name)
 							}
 							resumesMu.Unlock()
 
 							if ok && rm.FileName != "" {
 								logger.Debug("webSocketServer: resuming subscription", "channel", s.Name, "file", rm.FileName, "offset", rm.Offset)
-								// Check if the reader already has THIS state or LATER.
-								// Since we use ephemeral reader name for each connection, it should be empty initially.
-								err := messenger.SetReaderState(s.Name, readerName, rm.FileName, rm.Offset)
-								if err != nil {
+								if err := messenger.SetReaderState(s.Name, readerName, rm.FileName, rm.Offset); err != nil {
 									logger.Error("webSocketServer: failed to set reader state", "error", err)
 								}
-								// IMPORTANT: When resuming, SubscribeExtended will start reading FROM the given offset.
-								// If the offset was the position of a message that was ALREADY processed but NOT acknowledged,
-								// it will be sent again. This is "at least once" delivery.
 							} else {
-								// start from the end when no resume is provided:
 								logger.Debug("webSocketServer: seeking to end for new subscription", "channel", s.Name)
-								err := messenger.SeekToEnd(s.Name, readerName)
-								if err != nil {
+								if err := messenger.SeekToEnd(s.Name, readerName); err != nil {
 									logger.Error("webSocketServer: failed to seek to end", "channel", s.Name, "error", err)
 								}
 							}
 
+							batchChan := make(chan BatchItem, svc.BatchSize*2)
+
+							go func() {
+								for {
+									var item BatchItem
+									select {
+									case <-sCtx.Done():
+										return
+									case item = <-batchChan:
+									}
+
+									batch := []BatchItem{item}
+									for len(batch) < svc.BatchSize {
+										select {
+										case next := <-batchChan:
+											batch = append(batch, next)
+										default:
+											goto send
+										}
+									}
+								send:
+									batchID := uuid.New().String()
+									if err := svc.sendBatchAndWaitAck(sCtx, cw, &pendingMu, pending, batchID, s.Name, batch); err != nil {
+										if err != context.Canceled {
+											logger.Error("webSocketServer: batch send failed", "channel", s.Name, "error", err)
+										}
+										return
+									}
+								}
+							}()
+
 							err := messenger.SubscribeExtended(sCtx, readerName, s.Name, svc.Cfg.Type, svc.Cfg.Name, s.MaxAge, func(msg core.Message, fileName string, offset int64) error {
-								logger.Debug("webSocketServer: sending message", "channel", s.Name, "uuid", msg.Uuid)
-								return svc.sendAndWaitAck(sCtx, conn, &mu, s.Name, fileName, offset, msg, ackChan)
+								logger.Debug("webSocketServer: queuing message for batch", "channel", s.Name, "uuid", msg.Uuid)
+								select {
+								case batchChan <- BatchItem{
+									Queue:    s.Name,
+									FileName: fileName,
+									Offset:   offset,
+									Payload:  msg,
+								}:
+									return nil
+								case <-sCtx.Done():
+									return sCtx.Err()
+								}
 							})
 							if err != nil && err != context.Canceled {
 								logger.Error("webSocketServer: subscribe failed", "channel", s.Name, "error", err)
 							}
-						}(sub, subCtx, subCancel)
+						}(sub, subCtx)
 					}
 				}
 				activeSubsMu.Unlock()
-			}
-
-		case <-time.After(1 * time.Second):
-			// Ping connection every 30 seconds
-			if time.Since(lastPing) > 30*time.Second {
-				mu.Lock()
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					mu.Unlock()
-					return
-				}
-				mu.Unlock()
-				lastPing = time.Now()
 			}
 		}
 	}
 }
 
-func (svc *Service) sendAndWaitAck(ctx context.Context, conn *websocket.Conn, mu *sync.Mutex, queueName string, fileName string, offset int64, msg core.Message, ackChan chan struct{}) error {
-	wsMsg := wsMessage{
-		Type:     "message",
-		Queue:    queueName,
-		FileName: fileName,
-		Offset:   offset,
-		Payload:  msg,
-	}
+// sendBatchAndWaitAck sends a batch to the client and waits for the correlated ack.
+// On timeout it closes the connection to force reconnect/resume (at-least-once semantics).
+func (svc *Service) sendBatchAndWaitAck(
+	ctx context.Context,
+	cw *connWriter,
+	pendingMu *sync.Mutex,
+	pending map[string]*pendingAck,
+	batchID string,
+	queue string,
+	batch []BatchItem,
+) error {
+	waiter := &pendingAck{done: make(chan struct{})}
+	pendingMu.Lock()
+	pending[batchID] = waiter
+	pendingMu.Unlock()
 
-	mu.Lock()
-	err := conn.WriteJSON(wsMsg)
-	mu.Unlock()
-	if err != nil {
+	if err := cw.writeJSON(wsMessage{
+		V:       protocolVersion,
+		Type:    "batch",
+		BatchID: batchID,
+		Queue:   queue,
+		Items:   batch,
+	}); err != nil {
+		pendingMu.Lock()
+		delete(pending, batchID)
+		pendingMu.Unlock()
 		return err
 	}
 
 	select {
-	case <-ackChan:
+	case <-waiter.done:
 		return nil
-	case <-time.After(60 * time.Second):
-		return fmt.Errorf("ack timeout for message %s on channel %s", msg.Uuid, queueName)
+	case <-time.After(ackTimeout):
+		pendingMu.Lock()
+		delete(pending, batchID)
+		pendingMu.Unlock()
+		cw.close()
+		return fmt.Errorf("ack timeout for batchId %s (%d messages)", batchID, len(batch))
 	case <-ctx.Done():
+		pendingMu.Lock()
+		delete(pending, batchID)
+		pendingMu.Unlock()
 		return ctx.Err()
 	}
 }
