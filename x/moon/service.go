@@ -3,7 +3,6 @@ package moon
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"sync"
 	"time"
 
@@ -27,9 +26,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "alerts"}, logger)
-	return errs
+	return nil
 }
 
 func (svc *Service) Initialize() error {
@@ -73,9 +70,10 @@ func (svc *Service) Check() error {
 	// Send event message with details
 	eventMsg := core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "moon_phase",
 		Text:        fmt.Sprintf("Current moon phase: %s (%.2f)", phaseName, phase),
 		Summary:     fmt.Sprintf("Moon: %s", phaseName),
 		Data: map[string]interface{}{
@@ -91,9 +89,10 @@ func (svc *Service) Check() error {
 	if phaseName != lastPhaseName {
 		alertMsg := core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "moon_phase_change",
 			Text:        fmt.Sprintf("The moon is now in the %s phase", phaseName),
 			Summary:     fmt.Sprintf("Moon phase: %s", phaseName),
 		}

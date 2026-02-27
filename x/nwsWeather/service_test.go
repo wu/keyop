@@ -160,7 +160,7 @@ func TestNwsWeatherService(t *testing.T) {
 		defer messenger.mu.Unlock()
 		assert.Equal(t, 1, len(messenger.messages))
 		msg := messenger.messages[0]
-		assert.Equal(t, "weather", msg.ChannelName)
+		assert.Equal(t, "test-weather", msg.ChannelName)
 		assert.Contains(t, msg.Text, "Mostly cloudy")
 		assert.Contains(t, msg.Summary, "Mostly Cloudy, 28°F")
 	})

@@ -45,8 +45,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "alerts"}, logger)
-	errs = append(errs, util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)...)
+	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)
 
 	if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
 		errs = append(errs, fmt.Errorf("sun: lat not set or not a float in config"))
@@ -147,9 +146,10 @@ func (svc *Service) Check() error {
 	messenger := svc.Deps.MustGetMessenger()
 
 	eventMsg := core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "sun_check",
 		Text:        fmt.Sprintf("Next sun event: %s at %s", nextEventName, nextEventTime.Format("15:04")),
 		Summary:     fmt.Sprintf("Next: %s %s", nextEventName, nextEventTime.Format("15:04")),
 		Data:        events,
@@ -185,9 +185,10 @@ func (svc *Service) scheduleAlerts() {
 				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
 				timer := time.AfterFunc(duration, func() {
 					messenger.Send(core.Message{
-						ChannelName: svc.Cfg.Pubs["alerts"].Name,
+						ChannelName: svc.Cfg.Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,
+						Event:       "sun_event",
 						Text:        fmt.Sprintf("Sun event: %s", name),
 						Summary:     name,
 					})

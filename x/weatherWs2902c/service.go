@@ -3,7 +3,6 @@ package weatherWs2902c
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -66,10 +65,6 @@ type Service struct {
 	Cfg              core.ServiceConfig
 	Port             int
 	FieldMetricNames map[string]string
-	WeatherChan      core.ChannelInfo
-	MetricsChan      core.ChannelInfo
-	TempChan         core.ChannelInfo
-	RainChan         core.ChannelInfo
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -99,33 +94,14 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.Port = int(portFloat)
 	}
 
-	if weatherChan, ok := cfg.Pubs["weather"]; ok {
-		svc.WeatherChan = weatherChan
-	}
-	if metricsChan, ok := cfg.Pubs["metrics"]; ok {
-		svc.MetricsChan = metricsChan
-	}
-	if tempChan, ok := cfg.Pubs["temp"]; ok {
-		svc.TempChan = tempChan
-	}
-	if rainChan, ok := cfg.Pubs["rain"]; ok {
-		svc.RainChan = rainChan
-	}
-
 	return svc
 }
 
 func (svc *Service) ValidateConfig() []error {
 	var errs []error
-	logger := svc.Deps.MustGetLogger()
 
 	if svc.Port == 0 {
 		errs = append(errs, fmt.Errorf("weatherWs2902c: port is required in config"))
-	}
-
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"weather", "metrics", "temp", "rain"}, logger)
-	if len(pubErrs) > 0 {
-		errs = append(errs, pubErrs...)
 	}
 
 	if overrides, ok := svc.Cfg.Config["fieldMetricNames"].(map[string]interface{}); ok {
@@ -191,9 +167,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 
 	msg := core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.WeatherChan.Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "weather_data",
 		Data:        data,
 	}
 
@@ -207,9 +184,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tempInMsg := core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.TempChan.Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name + "-intemp",
 			ServiceType: svc.Cfg.Type,
+			Event:       "temp_metric",
 			MetricName:  intTempMetricName,
 			Metric:      data.InTemp,
 			Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, data.InTemp),
@@ -226,9 +204,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tempOutMsg := core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.TempChan.Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name + "-outtemp",
 			ServiceType: svc.Cfg.Type,
+			Event:       "temp_metric",
 			MetricName:  outTempMetricName,
 			Metric:      data.OutTemp,
 			Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, data.OutTemp),
@@ -245,9 +224,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 	} else {
 		rainOutMsg := core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.RainChan.Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name + "-rain",
 			ServiceType: svc.Cfg.Type,
+			Event:       "rain_metric",
 			MetricName:  rainRateMetricName,
 			Metric:      data.Rainratein,
 		}
@@ -275,9 +255,10 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 
 			metricMsg := core.Message{
 				Correlation: correlationId,
-				ChannelName: svc.MetricsChan.Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
+				Event:       fmt.Sprintf("weather_metric_%s", fieldName),
 				MetricName:  metricName,
 			}
 

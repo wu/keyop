@@ -47,28 +47,12 @@ func TestService_ValidateConfig(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "valid config",
-			pubs: map[string]core.ChannelInfo{
-				"alerts": {Name: "alerts-channel"},
-			},
-			config: map[string]interface{}{
-				"token": "fake-token",
-			},
+			name:        "valid config",
+			config:      map[string]interface{}{"token": "fake-token"},
 			expectError: false,
 		},
 		{
-			name: "missing alerts pub",
-			pubs: map[string]core.ChannelInfo{},
-			config: map[string]interface{}{
-				"token": "fake-token",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing token",
-			pubs: map[string]core.ChannelInfo{
-				"alerts": {Name: "alerts-channel"},
-			},
+			name:        "missing token",
 			config:      map[string]interface{}{},
 			expectError: true,
 		},
@@ -96,7 +80,7 @@ func TestService_Check(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	var capturedMessages []core.Message
-	err := messenger.Subscribe(context.Background(), "test", "alerts-channel", "githubNotification", "test", 0, func(msg core.Message) error {
+	err := messenger.Subscribe(context.Background(), "test", "githubNotification-test", "githubNotification", "test", 0, func(msg core.Message) error {
 		capturedMessages = append(capturedMessages, msg)
 		return nil
 	})

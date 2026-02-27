@@ -3,7 +3,6 @@ package macosNotes
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"runtime"
 	"strings"
 )
@@ -24,7 +23,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
+	var errs []error
 
 	noteName, _ := svc.Cfg.Config["note_name"].(string)
 	if noteName == "" {
@@ -72,9 +71,10 @@ func (svc *Service) Check() error {
 	}
 
 	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "note_content",
 		Text:        content,
 	})
 	if err != nil {

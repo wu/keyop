@@ -139,7 +139,7 @@ func (p *RGBMatrixPlugin) Check() error {
 	ctx := p.deps.MustGetContext()
 	messenger := p.deps.MustGetMessenger()
 
-	err := messenger.Subscribe(ctx, "rgbMatrix", "status", "plugin", "rgbMatrix", 0, func(msg core.Message) error {
+	err := messenger.Subscribe(ctx, "rgbMatrix", "status-shared", "plugin", "rgbMatrix", 0, func(msg core.Message) error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 

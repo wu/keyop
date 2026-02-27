@@ -3,7 +3,6 @@ package pingMonitor
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"regexp"
 	"strconv"
 
@@ -24,16 +23,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
 	var errs []error
-
-	errs = append(errs, util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"status", "metrics"}, logger)...)
 
 	host, _ := svc.Cfg.Config["host"].(string)
 	if host == "" {
-		err := fmt.Errorf("host is required in pingMonitor config")
-		logger.Error(err.Error())
-		errs = append(errs, err)
+		errs = append(errs, fmt.Errorf("host is required in pingMonitor config"))
 	}
 
 	return errs
@@ -70,9 +64,10 @@ func (svc *Service) Check() error {
 
 		alertErr := messenger.Send(core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.Cfg.Pubs["status"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "ping_status",
 			Status:      "critical",
 			Text:        fmt.Sprintf("host %s is unreachable", host),
 		})
@@ -87,9 +82,10 @@ func (svc *Service) Check() error {
 
 		eventErr := messenger.Send(core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.Cfg.Pubs["status"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "ping_status",
 			Status:      "ok",
 			Text:        fmt.Sprintf("Ping to %s was successful. Time: %s", host, pingTime),
 		})
@@ -106,9 +102,10 @@ func (svc *Service) Check() error {
 				}
 				metricErr := messenger.Send(core.Message{
 					Correlation: correlationId,
-					ChannelName: svc.Cfg.Pubs["metrics"].Name,
+					ChannelName: svc.Cfg.Name,
 					ServiceName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
+					Event:       "ping_metric",
 					MetricName:  metricName,
 					Metric:      floatTime,
 					Status:      "ok",

@@ -119,7 +119,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	// Verify event and metrics
-	assertMessage(t, messenger.messages, "events_channel", "active")
+	assertMessage(t, messenger.messages, "idle_test", "active")
 	assertEventData(t, messenger.messages, 0, true) // active duration might be small but > 0
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 0)
 
@@ -134,7 +134,7 @@ func TestCheck(t *testing.T) {
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 5)
 	// No alert should be sent
 	for _, msg := range messenger.messages {
-		if msg.ChannelName == "alerts_channel" {
+		if msg.Event == "idle_alert" || msg.Event == "active_alert" {
 			t.Errorf("Unexpected alert sent")
 		}
 	}
@@ -147,7 +147,7 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMessage(t, messenger.messages, "alerts_channel", "idle")
+	assertMessage(t, messenger.messages, "idle_test", "idle")
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 15)
 
 	// Verify state saved
@@ -171,7 +171,7 @@ func TestCheck(t *testing.T) {
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 20)
 	// No new alert
 	for _, msg := range messenger.messages {
-		if msg.ChannelName == "alerts_channel" {
+		if msg.Event == "idle_alert" {
 			t.Errorf("Unexpected alert sent while already idle")
 		}
 	}
@@ -184,7 +184,7 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMessage(t, messenger.messages, "alerts_channel", "active")
+	assertMessage(t, messenger.messages, "idle_test", "active")
 	assertMetric(t, messenger.messages, "idle_test.idle_duration", 0)
 
 	// Verify state saved
@@ -209,7 +209,7 @@ func TestCheck(t *testing.T) {
 	}
 	// Should not trigger transition alert if it was already active in state
 	for _, msg := range messenger.messages {
-		if msg.ChannelName == "alerts_channel" {
+		if msg.Event == "active_alert" {
 			t.Errorf("Unexpected alert sent after initialization from state")
 		}
 	}
@@ -318,7 +318,7 @@ func assertEventData(t *testing.T, messages []core.Message, idleSeconds float64,
 	t.Helper()
 	found := false
 	for _, msg := range messages {
-		if msg.ChannelName == "events_channel" {
+		if msg.Event == "status_update" {
 			data, ok := msg.Data.(map[string]interface{})
 			if !ok {
 				continue

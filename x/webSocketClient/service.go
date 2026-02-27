@@ -330,6 +330,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		logger.Error("webSocketClient: failed to send hello", "error", err)
 		return
 	}
+	logger.Debug("webSocketClient: sent hello", "clientId", clientID)
 
 	conn.SetReadDeadline(time.Now().Add(welcomeTimeout))
 	_, raw, err := conn.ReadMessage()
@@ -354,6 +355,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		logger.Error("webSocketClient: unexpected welcome", "type", welcome.Type, "v", welcome.V)
 		return
 	}
+	logger.Debug("webSocketClient: received welcome", "serverId", welcome.ServerID)
 	logger.Debug("webSocketClient: handshake complete", "serverId", welcome.ServerID)
 
 	// ── Ping / Pong deadlines ─────────────────────────────────────────────────
@@ -403,13 +405,20 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	// ── Send initial subscribe ────────────────────────────────────────────────
 	var initialChannels []string
 	for _, sub := range svc.Cfg.Subs {
-		initialChannels = append(initialChannels, sub.Name)
+		remoteName := sub.Remote
+		if remoteName == "" {
+			remoteName = sub.Name
+		}
+		initialChannels = append(initialChannels, remoteName)
 	}
-	if err := cw.writeJSON(wsMessage{
+	// Log the subscribe message so BAD_HANDSHAKE can be correlated with server response.
+	subMsg := wsMessage{
 		V:        protocolVersion,
 		Type:     "subscribe",
 		Channels: initialChannels,
-	}); err != nil {
+	}
+	logger.Info("webSocketClient: sending initial subscribe message", "message", subMsg)
+	if err := cw.writeJSON(subMsg); err != nil {
 		logger.Error("webSocketClient: failed to send initial subscribe", "error", err)
 		return
 	}
@@ -420,6 +429,16 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		hostname = "unknown"
 	}
 	selfID := fmt.Sprintf("%s:%s:%s", hostname, svc.Cfg.Type, svc.Cfg.Name)
+
+	// Build a remote→local channel name map for inbound sub messages.
+	// When a sub has a Remote name the server delivers on that name; we remap
+	// it back to the local Name before forwarding into the local messenger.
+	remoteToLocal := make(map[string]string)
+	for _, sub := range svc.Cfg.Subs {
+		if sub.Remote != "" {
+			remoteToLocal[sub.Remote] = sub.Name
+		}
+	}
 
 	// ── Start outbound publishing goroutines ──────────────────────────────────
 	for _, pub := range svc.Cfg.Pubs {
@@ -526,6 +545,10 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 					logger.Debug("webSocketClient: skipping message from route_loop_skip_host", "uuid", m.Uuid, "hostname", m.Hostname)
 					return nil
 				}
+				// Rewrite channel name to the configured remote name before forwarding.
+				if p.Remote != "" {
+					m.ChannelName = p.Remote
+				}
 				done := make(chan error, 1)
 				select {
 				case batchChan <- BatchItem{Payload: m, doneCh: done}:
@@ -619,6 +642,10 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 					continue
 				}
 				item.Payload.Route = append(item.Payload.Route, selfID)
+				// Remap remote channel name to local channel name if configured.
+				if localName, ok := remoteToLocal[item.Payload.ChannelName]; ok {
+					item.Payload.ChannelName = localName
+				}
 				if err := messenger.Send(item.Payload); err != nil {
 					logger.Error("webSocketClient: failed to forward batched message", "error", err)
 					failed = true

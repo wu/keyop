@@ -17,15 +17,13 @@ func (l *testLogger) Warn(msg string, kv ...interface{})  { l.t.Logf("WARN: %s %
 func (l *testLogger) Error(msg string, kv ...interface{}) { l.t.Logf("ERROR: %s %v", msg, kv) }
 
 func TestValidateConfig_MissingPubs(t *testing.T) {
-	// Build a minimal ServiceConfig without pubs
+	// Build a minimal ServiceConfig - pubs no longer required
 	cfg := core.ServiceConfig{
 		Name:   "test",
 		Type:   "macosReminders",
-		Pubs:   nil,
 		Config: map[string]interface{}{},
 	}
 
-	// create minimal dependencies with a fake messenger and logger
 	fm := &core.FakeMessenger{}
 	lg := &testLogger{t: t}
 	deps := core.Dependencies{}
@@ -34,8 +32,8 @@ func TestValidateConfig_MissingPubs(t *testing.T) {
 
 	svc := &Service{Cfg: cfg, Deps: deps}
 	err := svc.ValidateConfig()
-	if len(err) == 0 {
-		t.Fatal("expected validation errors when pubs missing")
+	if len(err) != 0 {
+		t.Fatalf("expected no validation errors, got %v", err)
 	}
 }
 
@@ -49,7 +47,6 @@ func TestParseLineAndSend(t *testing.T) {
 	cfg := core.ServiceConfig{
 		Name:   "test",
 		Type:   "macosReminders",
-		Pubs:   map[string]core.ChannelInfo{"tasks": {Name: "tasks"}},
 		Config: map[string]interface{}{},
 	}
 
@@ -80,9 +77,10 @@ func TestParseLineAndSend(t *testing.T) {
 	}
 
 	msg := core.Message{
-		ChannelName: cfg.Pubs["tasks"].Name,
+		ChannelName: cfg.Name,
 		ServiceName: cfg.Name,
 		ServiceType: cfg.Type,
+		Event:       "reminder_created",
 		Summary:     title,
 		Text:        notes,
 	}

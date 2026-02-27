@@ -3,7 +3,6 @@ package process
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"os"
 	"os/exec"
 	"syscall"
@@ -32,7 +31,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"errors", "events"}, logger)
+	var errs []error
 
 	if _, ok := svc.Cfg.Config["command"].(string); !ok {
 		err := fmt.Errorf("config field 'command' is required and must be a string")
@@ -127,9 +126,10 @@ func (svc *Service) Check() error {
 	logger.Debug("process check", "data", event)
 
 	return messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "process_status",
 		Text:        fmt.Sprintf("process %s: pid %d, status %s", svc.Cfg.Name, event.Pid, event.Status),
 		Data:        event,
 	})

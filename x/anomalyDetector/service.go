@@ -66,11 +66,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"metrics"}, logger)
-	if _, ok := svc.Cfg.Pubs["status"]; !ok {
-		errs = append(errs, fmt.Errorf("anomalyDetector: required pubs channel 'status' is missing"))
-	}
-	return errs
+	return util.ValidateConfig("subs", svc.Cfg.Subs, []string{"metrics"}, logger)
 }
 
 func (svc *Service) Initialize() error {
@@ -148,8 +144,9 @@ func (svc *Service) reportAnomalyStatus(msg core.Message, mse float64, status st
 	messenger := svc.Deps.MustGetMessenger()
 
 	newMessage := core.Message{
-		ChannelName: svc.Cfg.Pubs["status"].Name,
+		ChannelName: svc.Cfg.Name,
 		Correlation: msg.Uuid,
+		Event:       "anomaly_status",
 		MetricName:  msg.MetricName + "-anomaly",
 		Metric:      msg.Metric,
 		Timestamp:   msg.Timestamp,

@@ -73,10 +73,10 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 
 	cmd.Flags().IntVarP(&wsPort, "port", "p", 8080, "WebSocket server port")
 	cmd.Flags().StringVarP(&wsHost, "host", "H", "localhost", "WebSocket server host")
-	cmd.Flags().StringVarP(&hbChannel, "heartbeat-channel", "c", "heartbeat", "Heartbeat channel to subscribe to")
-	cmd.Flags().StringVarP(&statusChannel, "status-channel", "s", "status", "Status channel to subscribe to")
-	cmd.Flags().StringVarP(&errorChannel, "error-channel", "e", "errors", "Error channel to subscribe to")
-	cmd.Flags().StringVarP(&alertChannel, "alert-channel", "a", "alerts", "Alert channel to subscribe to")
+	cmd.Flags().StringVarP(&hbChannel, "heartbeat-channel", "c", "heartbeat-shared", "Heartbeat channel to subscribe to")
+	cmd.Flags().StringVarP(&statusChannel, "status-channel", "s", "status-shared", "Status channel to subscribe to")
+	cmd.Flags().StringVarP(&errorChannel, "error-channel", "e", "errors-shared", "Error channel to subscribe to")
+	cmd.Flags().StringVarP(&alertChannel, "alert-channel", "a", "alerts-shared", "Alert channel to subscribe to")
 
 	return cmd
 }
@@ -108,19 +108,24 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	persistentDataDir := filepath.Join(home, ".keyop", "monitor_state")
 	deps.SetStateStore(core.NewFileStateStore(persistentDataDir, osProvider))
 
-	logDir := filepath.Join(tempDir, "logs")
-	if err := osProvider.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
+	// Write TUI logs to persistent ~/.keyop/data so users can inspect logs across runs.
+	// Keep logs for the TUI under ~/.keyop/data/ to match the user's expectations.
+	// Use ~/.keyop/logs for persistent logs (user requested location)
+	persistentLogDir := filepath.Join(home, ".keyop", "logs")
+	if err := osProvider.MkdirAll(persistentLogDir, 0755); err != nil {
+		return fmt.Errorf("failed to create persistent log directory: %w", err)
 	}
 
 	logFileName := "keyop-tui." + time.Now().Format("20060102") + ".log"
-	logFilePath := filepath.Join(logDir, logFileName)
+	logFilePath := filepath.Join(persistentLogDir, logFileName)
 	f, err := osProvider.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 	logger := slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	deps.SetLogger(logger)
+	// Write a definitive startup marker so users can tell which binary produced the log.
+	logger.Info("tui: logger initialized", "pid", os.Getpid(), "logPath", logFilePath, "time", time.Now().Format(time.RFC3339))
 
 	// Initialize WebSocket client to receive heartbeats and temperatures
 	wsCfg := core.ServiceConfig{

@@ -48,31 +48,24 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	var mu sync.Mutex
-	got := map[string][]core.Message{}
+	var heaterMsgs []core.Message
+	var coolerMsgs []core.Message
 
-	// subscribe to heater and cooler channels to capture what thermostat sends
-	capture := func(ch string) {
-		_ = messenger.Subscribe(context.Background(), "test", ch, "thermostat", "test", 0, func(m core.Message) error {
-
-			mu.Lock()
-			defer mu.Unlock()
-			got[ch] = append(got[ch], m)
-			return nil
-		})
-	}
-
-	heaterCh := "heater-topic"
-	coolerCh := "cooler-topic"
-	capture(heaterCh)
-	capture(coolerCh)
+	// subscribe to the service name channel and filter by Event
+	_ = messenger.Subscribe(context.Background(), "test", "thermo", "thermostat", "test", 0, func(m core.Message) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if m.Event == "heater_state" {
+			heaterMsgs = append(heaterMsgs, m)
+		} else if m.Event == "cooler_state" {
+			coolerMsgs = append(coolerMsgs, m)
+		}
+		return nil
+	})
 
 	cfg := core.ServiceConfig{
 		Name: "thermo",
 		Type: "thermostat",
-		Pubs: map[string]core.ChannelInfo{
-			"heater": {Name: heaterCh},
-			"cooler": {Name: coolerCh},
-		},
 		Subs: map[string]core.ChannelInfo{
 			"temp": {Name: "temp-topic"},
 		},
@@ -96,18 +89,14 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	// Wait for processing
 	time.Sleep(1 * time.Second)
 
-	// Assertions: thermostat should publish to both heater and cooler
 	mu.Lock()
 	defer mu.Unlock()
 
-	require.Contains(t, got, heaterCh)
-	assert.Len(t, got[heaterCh], 1)
-	m := got[heaterCh][0]
+	require.NotEmpty(t, heaterMsgs)
+	m := heaterMsgs[0]
 	assert.Equal(t, "thermo", m.ServiceName)
 	assert.Equal(t, "thermostat", m.ServiceType)
 	assert.Equal(t, "OFF", m.State) // heater should be OFF at 80
-
-	t.Logf("Heater message: %+v\n", m)
 
 	data, ok := m.Data.(map[string]interface{})
 	if !ok {
@@ -116,9 +105,8 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	assert.Equal(t, 80.0, data["temp"])
 	assert.Equal(t, "OFF", data["heaterTargetState"])
 
-	require.Contains(t, got, coolerCh)
-	assert.Len(t, got[coolerCh], 1)
-	m_cool := got[coolerCh][0]
+	require.NotEmpty(t, coolerMsgs)
+	m_cool := coolerMsgs[0]
 	assert.Equal(t, "thermo", m_cool.ServiceName)
 	assert.Equal(t, "thermostat", m_cool.ServiceType)
 	assert.Equal(t, "ON", m_cool.State) // cooler should be ON at 80
@@ -127,7 +115,6 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected type not matched in data, got %T", m_cool.Data)
 	}
-
 	assert.Equal(t, 80.0, data_cool["temp"])
 	assert.Equal(t, "ON", data_cool["coolerTargetState"])
 }
@@ -136,10 +123,15 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
-	// capture only heater channel
+	// capture heater_state events from service name channel
 	var gotHeater []core.Message
-	subErr := messenger.Subscribe(context.Background(), "test", "heater-topic", "thermostat", "test", 0, func(m core.Message) error {
-		gotHeater = append(gotHeater, m)
+	var mu sync.Mutex
+	subErr := messenger.Subscribe(context.Background(), "test", "thermo", "thermostat", "test", 0, func(m core.Message) error {
+		if m.Event == "heater_state" {
+			mu.Lock()
+			gotHeater = append(gotHeater, m)
+			mu.Unlock()
+		}
 		return nil
 	})
 	assert.NoError(t, subErr)
@@ -147,10 +139,6 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	cfg := core.ServiceConfig{
 		Name: "thermo",
 		Type: "thermostat",
-		Pubs: map[string]core.ChannelInfo{
-			"heater": {Name: "heater-topic"},
-			// cooler intentionally missing
-		},
 		Subs: map[string]core.ChannelInfo{
 			"temp": {Name: "temp-topic"},
 		},
@@ -171,6 +159,8 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	// Wait for processing
 	time.Sleep(1 * time.Second)
 
+	mu.Lock()
+	defer mu.Unlock()
 	require.NotEmpty(t, gotHeater)
 	assert.Equal(t, "ON", gotHeater[0].State)
 }
@@ -186,12 +176,6 @@ func TestValidateConfig(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Name: "thermo",
 			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
 			Subs: map[string]core.ChannelInfo{
 				"temp": {Name: "temp"},
 			},
@@ -202,30 +186,10 @@ func TestValidateConfig(t *testing.T) {
 		assert.Empty(t, errs)
 	})
 
-	t.Run("missing pubs", func(t *testing.T) {
+	t.Run("missing subs", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Name:   "thermo",
 			Type:   "thermostat",
-			Pubs:   map[string]core.ChannelInfo{},
-			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
-			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.NotEmpty(t, errs)
-		assert.ErrorContains(t, errs[0], "required pubs channel 'events' is missing")
-	})
-
-	t.Run("missing subs", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Name: "thermo",
-			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
 			Subs:   map[string]core.ChannelInfo{},
 			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0},
 		}
@@ -237,14 +201,8 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("missing minTemp", func(t *testing.T) {
 		cfg := core.ServiceConfig{
-			Name: "thermo",
-			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
+			Name:   "thermo",
+			Type:   "thermostat",
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"maxTemp": 30.0},
 		}
@@ -256,14 +214,8 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("missing maxTemp", func(t *testing.T) {
 		cfg := core.ServiceConfig{
-			Name: "thermo",
-			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
+			Name:   "thermo",
+			Type:   "thermostat",
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 10.0},
 		}
@@ -275,14 +227,8 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("minTemp >= maxTemp", func(t *testing.T) {
 		cfg := core.ServiceConfig{
-			Name: "thermo",
-			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
+			Name:   "thermo",
+			Type:   "thermostat",
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 30.0, "maxTemp": 10.0, "mode": "auto"},
 		}
@@ -294,21 +240,14 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("invalid mode", func(t *testing.T) {
 		cfg := core.ServiceConfig{
-			Name: "thermo",
-			Type: "thermostat",
-			Pubs: map[string]core.ChannelInfo{
-				"events": {Name: "events"},
-				"heater": {Name: "heater"},
-				"cooler": {Name: "cooler"},
-				"errors": {Name: "errors"},
-			},
+			Name:   "thermo",
+			Type:   "thermostat",
 			Subs:   map[string]core.ChannelInfo{"temp": {Name: "temp"}},
 			Config: map[string]any{"minTemp": 10.0, "maxTemp": 30.0, "mode": "banana"},
 		}
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
-
 		assert.Contains(t, errs[len(errs)-1].Error(), "invalid mode")
 		assert.Contains(t, errs[len(errs)-1].Error(), "banana")
 		assert.Contains(t, errs[len(errs)-1].Error(), "thermostat")

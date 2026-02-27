@@ -50,11 +50,7 @@ func Test_temp_success(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "aa bb cc YES\nxyz t=23125\n")
 
 	cfg := core.ServiceConfig{
-		Pubs: map[string]core.ChannelInfo{
-			"events":  {Name: "temp"},
-			"metrics": {Name: "metrics"},
-			"errors":  {Name: "errors"},
-		},
+		Name: "temp_sensor",
 		Config: map[string]interface{}{
 			"devicePath": p,
 		},
@@ -65,7 +61,6 @@ func Test_temp_success(t *testing.T) {
 	err := svc.Initialize()
 	assert.NoError(t, err)
 
-	// Validate config with correct pubs
 	got, err := svc.temp()
 	assert.NoError(t, err)
 	assert.Empty(t, got.Error)
@@ -81,11 +76,7 @@ func Test_temp_read_error(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "does-not-exist")
 
 	cfg := core.ServiceConfig{
-		Pubs: map[string]core.ChannelInfo{
-			"events":  {Name: "events"},
-			"metrics": {Name: "metrics"},
-			"errors":  {Name: "errors"},
-		},
+		Name: "temp_sensor",
 		Config: map[string]interface{}{
 			"devicePath": p,
 		},
@@ -102,11 +93,7 @@ func Test_temp_empty_content(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "")
 
 	cfg := core.ServiceConfig{
-		Pubs: map[string]core.ChannelInfo{
-			"events":  {Name: "events"},
-			"metrics": {Name: "metrics"},
-			"errors":  {Name: "errors"},
-		},
+		Name: "temp_sensor",
 		Config: map[string]interface{}{
 			"devicePath": p,
 		},
@@ -123,11 +110,7 @@ func Test_temp_bad_integer(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "crc YES\nvalue t=abc\n")
 
 	cfg := core.ServiceConfig{
-		Pubs: map[string]core.ChannelInfo{
-			"events":  {Name: "events"},
-			"metrics": {Name: "metrics"},
-			"errors":  {Name: "errors"},
-		},
+		Name: "temp_sensor",
 		Config: map[string]interface{}{
 			"devicePath": p,
 		},
@@ -145,11 +128,7 @@ func Test_temp_max_temp_exceeded(t *testing.T) {
 	p := writeTempFile(t, dir, "w1_slave", "aa bb cc YES\nxyz t=100000\n")
 
 	cfg := core.ServiceConfig{
-		Pubs: map[string]core.ChannelInfo{
-			"events":  {Name: "temp"},
-			"metrics": {Name: "metrics"},
-			"errors":  {Name: "errors"},
-		},
+		Name: "temp_sensor",
 		Config: map[string]interface{}{
 			"devicePath": p,
 			"maxTemp":    float64(100), // Max 100F

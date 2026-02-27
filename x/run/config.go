@@ -27,6 +27,7 @@ type serviceConfigYaml struct {
 
 type eventChannelYaml struct {
 	Name        string `yaml:"name"`
+	Remote      string `yaml:"remote"`
 	Description string `yaml:"description"`
 	MaxAge      string `yaml:"max_age"`
 }
@@ -142,6 +143,7 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			}
 			pubs[key] = core.ChannelInfo{
 				Name:        value.Name,
+				Remote:      value.Remote,
 				Description: value.Description,
 				MaxAge:      maxAge,
 			}
@@ -159,6 +161,7 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			}
 			subs[key] = core.ChannelInfo{
 				Name:        value.Name,
+				Remote:      value.Remote,
 				Description: value.Description,
 				MaxAge:      maxAge,
 			}

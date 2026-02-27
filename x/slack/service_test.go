@@ -59,7 +59,6 @@ func TestService_ValidateConfig(t *testing.T) {
 	}{
 		{
 			name: "valid config",
-			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token":     "xoxb-test",
@@ -71,7 +70,6 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing appToken",
-			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token":     "xoxb-test",
@@ -81,7 +79,6 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing token",
-			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"channelID": "C12345",
@@ -90,20 +87,9 @@ func TestService_ValidateConfig(t *testing.T) {
 		},
 		{
 			name: "missing channelID",
-			pubs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
 			config: map[string]interface{}{
 				"token": "xoxb-test",
-			},
-			expectError: true,
-		},
-		{
-			name: "missing pubs",
-			pubs: map[string]core.ChannelInfo{},
-			subs: map[string]core.ChannelInfo{"events": {Name: "a"}},
-			config: map[string]interface{}{
-				"token":     "xoxb-test",
-				"channelID": "C12345",
 			},
 			expectError: true,
 		},
@@ -267,7 +253,6 @@ func TestService_Check(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",
-		Pubs: map[string]core.ChannelInfo{"events": {Name: "events-ch"}},
 		Config: map[string]interface{}{
 			"token":     "xoxb-test",
 			"appToken":  "xapp-test",
@@ -281,7 +266,7 @@ func TestService_Check(t *testing.T) {
 
 	receivedMessage := make(chan string, 1)
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe(context.Background(), "test-subscriber", "events-ch", "slack", "test", 0, func(msg core.Message) error {
+	messenger.Subscribe(context.Background(), "test-subscriber", "slack-test", "slack", "test", 0, func(msg core.Message) error {
 		receivedMessage <- msg.Text
 		return nil
 	})

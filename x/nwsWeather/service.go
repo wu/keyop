@@ -42,8 +42,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
-	errs = append(errs, util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)...)
+	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)
 
 	if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
 		errs = append(errs, fmt.Errorf("nwsWeather: lat not set or not a float in config"))
@@ -205,9 +204,10 @@ func (svc *Service) Check() error {
 
 	messenger := svc.Deps.MustGetMessenger()
 	msg := core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "weather_forecast",
 		Text:        fmt.Sprintf("%v", currentPeriod["detailedForecast"]),
 		Summary:     fmt.Sprintf("Weather: %v, %v°%v", currentPeriod["shortForecast"], currentPeriod["temperature"], currentPeriod["temperatureUnit"]),
 		Data:        currentPeriod,

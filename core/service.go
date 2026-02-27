@@ -26,6 +26,7 @@ type ServiceConfig struct {
 
 type ChannelInfo struct {
 	Name        string
+	Remote      string // optional: channel name to use on the remote server; defaults to Name
 	Description string
 	MaxAge      time.Duration
 }

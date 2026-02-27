@@ -62,8 +62,7 @@ func TestService_ValidateConfig(t *testing.T) {
 			pubs: map[string]core.ChannelInfo{
 				"events": {Name: "events-topic"},
 				"alerts": {Name: "alerts-topic"},
-			},
-			subs: map[string]core.ChannelInfo{
+			}, subs: map[string]core.ChannelInfo{
 				"gps": {Name: "gps-topic"},
 			},
 			expectError: false,
@@ -134,20 +133,18 @@ func TestService_Check(t *testing.T) {
 	svc := NewService(deps, cfg).(*Service)
 	svc.apiURL = server.URL
 
-	var receivedEvents []core.Message
+	var receivedChecks []core.Message
 	var receivedAlerts []core.Message
 	var mu sync.Mutex
 
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe(context.Background(), "test", "events", "aurora", "aurora", 0, func(msg core.Message) error {
+	messenger.Subscribe(context.Background(), "test", "aurora", "aurora", "aurora", 0, func(msg core.Message) error {
 		mu.Lock()
-		receivedEvents = append(receivedEvents, msg)
-		mu.Unlock()
-		return nil
-	})
-	messenger.Subscribe(context.Background(), "test", "alerts", "aurora", "aurora", 0, func(msg core.Message) error {
-		mu.Lock()
-		receivedAlerts = append(receivedAlerts, msg)
+		if msg.Event == "aurora_check" {
+			receivedChecks = append(receivedChecks, msg)
+		} else if msg.Event == "aurora_alert" {
+			receivedAlerts = append(receivedAlerts, msg)
+		}
 		mu.Unlock()
 		return nil
 	})
@@ -160,8 +157,8 @@ func TestService_Check(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	assert.Len(t, receivedEvents, 1)
-	assert.Equal(t, "Aurora: 10%", receivedEvents[0].Summary)
+	assert.Len(t, receivedChecks, 1)
+	assert.Equal(t, "Aurora: 10%", receivedChecks[0].Summary)
 	assert.Len(t, receivedAlerts, 1)
 	assert.Equal(t, "Aurora Alert: 10%", receivedAlerts[0].Summary)
 }

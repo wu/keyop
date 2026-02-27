@@ -98,9 +98,9 @@ func TestSunService(t *testing.T) {
 		assert.NotEmpty(t, messenger.messages)
 
 		var eventMsg *core.Message
-		for _, m := range messenger.messages {
-			if m.ChannelName == "events" {
-				eventMsg = &m
+		for i, m := range messenger.messages {
+			if m.Event == "sun_check" {
+				eventMsg = &messenger.messages[i]
 				break
 			}
 		}

@@ -102,11 +102,6 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, fmt.Errorf("ollama: port not set in config"))
 	}
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"responses"}, logger)
-	if len(pubErrs) > 0 {
-		errs = append(errs, pubErrs...)
-	}
-
 	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"requests"}, logger)
 	if len(subErrs) > 0 {
 		errs = append(errs, subErrs...)
@@ -157,18 +152,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	svc.Mu.Lock()
 	svc.Messages = append(svc.Messages, Message{Role: "user", Content: timestamp + " " + msg.Text})
 
-	pub, ok := svc.Cfg.Pubs["responses"]
-	if !ok {
-		svc.Mu.Unlock()
-		return fmt.Errorf("ollama: responses publication not found")
-	}
+	channelName := svc.Cfg.Name
 
 	// Check if history needs summarization
 	if len(svc.Messages) >= svc.HighWaterMark {
 		logger.Info("ollama: history high water mark reached, summarizing", "highWaterMark", svc.HighWaterMark, "lowWaterMark", svc.LowWaterMark)
 
 		// Send notification that summarization is happening
-		svc.sendBatch(messenger, pub.Name, fmt.Sprintf("Summarizing conversation history for %s...", svc.Cfg.Name))
+		svc.sendBatch(messenger, channelName, fmt.Sprintf("Summarizing conversation history for %s...", svc.Cfg.Name))
 
 		// Adjust summarization if guidelines are present (keep guidelines, summarize after them)
 		hasGuidelines := len(svc.Messages) > 0 && svc.Messages[0].Role == "system"
@@ -235,7 +226,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		charCount += len(content)
 
 		if charCount >= svc.BatchSize {
-			svc.sendBatch(messenger, pub.Name, batch.String())
+			svc.sendBatch(messenger, channelName, batch.String())
 			batch.Reset()
 			charCount = 0
 		}
@@ -247,7 +238,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 
 	if batch.Len() > 0 {
-		svc.sendBatch(messenger, pub.Name, batch.String())
+		svc.sendBatch(messenger, channelName, batch.String())
 	}
 
 	// Update history (remove assistant message added by Client.Chat before saving,
@@ -268,8 +259,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 func (svc *Service) sendBatch(messenger core.MessengerApi, channelName string, content string) {
 	respMsg := core.Message{
 		ChannelName: channelName,
+		Event:       "response",
 		Text:        content,
-		ServiceType: "ollama",
+		ServiceType: svc.Cfg.Type,
 		ServiceName: svc.Cfg.Name,
 	}
 	_ = messenger.Send(respMsg)

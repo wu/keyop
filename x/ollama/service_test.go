@@ -77,28 +77,11 @@ func TestService_ValidateConfig(t *testing.T) {
 			subs: map[string]core.ChannelInfo{
 				"requests": {Name: "ollama-req"},
 			},
-			pubs: map[string]core.ChannelInfo{
-				"responses": {Name: "ollama-resp"},
-			},
 			expectError: false,
 		},
 		{
 			name: "missing host",
 			config: map[string]interface{}{
-				"port": 11434,
-			},
-			subs: map[string]core.ChannelInfo{
-				"requests": {Name: "ollama-req"},
-			},
-			pubs: map[string]core.ChannelInfo{
-				"responses": {Name: "ollama-resp"},
-			},
-			expectError: true,
-		},
-		{
-			name: "missing responses pub",
-			config: map[string]interface{}{
-				"host": "localhost",
 				"port": 11434,
 			},
 			subs: map[string]core.ChannelInfo{
@@ -166,7 +149,7 @@ func TestService_ChatAndBatch(t *testing.T) {
 	svc := NewService(deps, cfg).(*Service)
 
 	received := make(chan core.Message, 10)
-	_ = messenger.Subscribe(context.Background(), "test", "ollama-resp", "ollama", "ollama", 0, func(m core.Message) error {
+	_ = messenger.Subscribe(context.Background(), "test", "ollama", "ollama", "ollama", 0, func(m core.Message) error {
 		received <- m
 		return nil
 	})
@@ -304,7 +287,7 @@ func TestService_ConfigParameters(t *testing.T) {
 	assert.Equal(t, "You are a helpful assistant.", svc.Guidelines)
 
 	received := make(chan core.Message, 10)
-	_ = messenger.Subscribe(context.Background(), "test", "ollama-resp", "ollama", "ollama", 0, func(m core.Message) error {
+	_ = messenger.Subscribe(context.Background(), "test", "ollama-test", "ollama", "ollama", 0, func(m core.Message) error {
 		received <- m
 		return nil
 	})

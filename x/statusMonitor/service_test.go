@@ -53,19 +53,11 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name:        "valid config",
 			subs:        map[string]core.ChannelInfo{"status": {Name: "status"}},
-			pubs:        map[string]core.ChannelInfo{"alerts": {Name: "alerts"}},
 			expectError: false,
 		},
 		{
 			name:        "missing status sub",
 			subs:        map[string]core.ChannelInfo{},
-			pubs:        map[string]core.ChannelInfo{"alerts": {Name: "alerts"}},
-			expectError: true,
-		},
-		{
-			name:        "missing alerts pub",
-			subs:        map[string]core.ChannelInfo{"status": {Name: "status"}},
-			pubs:        map[string]core.ChannelInfo{},
 			expectError: true,
 		},
 	}
@@ -95,9 +87,6 @@ func TestService_Workflow(t *testing.T) {
 		Subs: map[string]core.ChannelInfo{
 			"status": {Name: "status-chan", MaxAge: 0},
 		},
-		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
-		},
 	}
 
 	svc := NewService(deps, cfg)
@@ -107,7 +96,7 @@ func TestService_Workflow(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "monitor", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -210,9 +199,6 @@ func TestService_NotificationDelay(t *testing.T) {
 		Subs: map[string]core.ChannelInfo{
 			"status": {Name: "status-chan", MaxAge: 0},
 		},
-		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
-		},
 		Config: map[string]interface{}{
 			"notificationDelay": "1s",
 		},
@@ -225,7 +211,7 @@ func TestService_NotificationDelay(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "monitor", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -303,9 +289,6 @@ func TestService_NotificationDelayRecovery(t *testing.T) {
 		Subs: map[string]core.ChannelInfo{
 			"status": {Name: "status-chan", MaxAge: 0},
 		},
-		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
-		},
 		Config: map[string]interface{}{
 			"notificationDelay": "1s",
 		},
@@ -318,7 +301,7 @@ func TestService_NotificationDelayRecovery(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 
 	alertMsgs := make(chan core.Message, 10)
-	err = messenger.Subscribe(context.Background(), "test-listener", "alerts-chan", "statusMonitor", "test", 0, func(msg core.Message) error {
+	err = messenger.Subscribe(context.Background(), "test-listener", "monitor", "statusMonitor", "test", 0, func(msg core.Message) error {
 		alertMsgs <- msg
 		return nil
 	})
@@ -362,9 +345,6 @@ func TestService_Persistence(t *testing.T) {
 		Type: "statusMonitor",
 		Subs: map[string]core.ChannelInfo{
 			"status": {Name: "status-chan"},
-		},
-		Pubs: map[string]core.ChannelInfo{
-			"alerts": {Name: "alerts-chan"},
 		},
 	}
 

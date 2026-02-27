@@ -66,32 +66,23 @@ func TestService_MessageHandler(t *testing.T) {
 		Subs: map[string]core.ChannelInfo{
 			"source": {Name: "source-chan"},
 		},
-		Pubs: map[string]core.ChannelInfo{
-			"target": {Name: "target-chan"},
-		},
 		Config: map[string]interface{}{
 			"conditions": []interface{}{
 				map[string]interface{}{
-					"field":    "metric",
-					"operator": "gt",
-					"value":    80,
+					"when": `metric > 80`,
 					"updates": map[string]interface{}{
 						"status":  "critical",
 						"summary": "High metric value detected",
 					},
 				},
 				map[string]interface{}{
-					"field":    "text",
-					"operator": "contains",
-					"value":    "error",
+					"when": `text contains error`,
 					"updates": map[string]interface{}{
 						"status": "error",
 					},
 				},
 				map[string]interface{}{
-					"field":    "status",
-					"operator": "eq",
-					"value":    "ok",
+					"when": `status eq "ok"`,
 					"updates": map[string]interface{}{
 						"summary": "Everything is fine",
 					},
@@ -113,7 +104,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "target-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "condition-svc", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 		assert.Equal(t, "High metric value detected", messenger.SentMessages[0].Summary)
 	})
@@ -131,7 +122,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "target-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "condition-svc", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "error", messenger.SentMessages[0].Status)
 	})
 
@@ -184,14 +175,9 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{"source": {Name: "s"}},
-			Pubs: map[string]core.ChannelInfo{"target": {Name: "t"}},
 			Config: map[string]interface{}{
 				"conditions": []interface{}{
-					map[string]interface{}{
-						"field":    "metric",
-						"operator": "lt",
-						"value":    10,
-					},
+					`metric < 10`,
 				},
 			},
 		}
@@ -205,11 +191,7 @@ func TestService_ValidateConfig(t *testing.T) {
 			Subs: map[string]core.ChannelInfo{"source": {Name: "s"}},
 			Config: map[string]interface{}{
 				"conditions": []interface{}{
-					map[string]interface{}{
-						"field":    "metric",
-						"operator": "invalid",
-						"value":    10,
-					},
+					`metric invalid 10`,
 				},
 			},
 		}
@@ -217,24 +199,5 @@ func TestService_ValidateConfig(t *testing.T) {
 		errs := svc.ValidateConfig()
 		assert.NotEmpty(t, errs)
 		assert.Contains(t, errs[0].Error(), "operator")
-	})
-
-	t.Run("missing target channel", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Subs: map[string]core.ChannelInfo{"source": {Name: "s"}},
-			Config: map[string]interface{}{
-				"conditions": []interface{}{
-					map[string]interface{}{
-						"field":    "metric",
-						"operator": "eq",
-						"value":    10,
-					},
-				},
-			},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.NotEmpty(t, errs)
-		assert.Contains(t, errs[0].Error(), "required pubs channel 'target' is missing")
 	})
 }

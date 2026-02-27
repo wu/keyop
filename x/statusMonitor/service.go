@@ -67,9 +67,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"status"}, logger)
-	errs = append(errs, util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"alerts"}, logger)...)
-	return errs
+	return util.ValidateConfig("subs", svc.Cfg.Subs, []string{"status"}, logger)
 }
 
 func (svc *Service) Initialize() error {
@@ -240,17 +238,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	if shouldAlert {
 		messenger := svc.Deps.MustGetMessenger()
-		alertsChanInfo, ok := svc.Cfg.Pubs["alerts"]
-		if !ok {
-			return fmt.Errorf("alerts publication not configured")
-		}
-		alertsChan := alertsChanInfo.Name
-
 		return messenger.Send(core.Message{
 			Correlation: msg.Uuid,
-			ChannelName: alertsChan,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: msg.ServiceName,
 			ServiceType: msg.ServiceType,
+			Event:       "status_alert",
 			MetricName:  msg.MetricName,
 			Status:      alertStatus,
 			Text:        alertText,

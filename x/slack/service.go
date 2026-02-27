@@ -44,9 +44,6 @@ func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
-	errs = append(errs, pubErrs...)
-
 	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"events"}, logger)
 	errs = append(errs, subErrs...)
 
@@ -405,9 +402,10 @@ func (svc *Service) Check() error {
 				userName := svc.getUserName(m.User)
 
 				err := messenger.Send(core.Message{
-					ChannelName: svc.Cfg.Pubs["events"].Name,
+					ChannelName: svc.Cfg.Name,
 					ServiceName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
+					Event:       "slack_message",
 					Text:        fmt.Sprintf("Slack [#%s] [%s]: %s", channelName, userName, m.Text),
 					Data:        m,
 				})

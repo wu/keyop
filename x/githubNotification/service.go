@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
-	"keyop/util"
 	"net/http"
 	"time"
 )
@@ -31,8 +30,8 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"alerts"}, logger)
 
+	var errs []error
 	token, _ := svc.Cfg.Config["token"].(string)
 	if token == "" {
 		err := fmt.Errorf("githubNotification token is required in config")
@@ -112,9 +111,10 @@ func (svc *Service) Check() error {
 			logger.Info("New GitHub notification found", "title", n.Subject.Title)
 
 			err := messenger.Send(core.Message{
-				ChannelName: svc.Cfg.Pubs["alerts"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
+				Event:       "github_notification",
 				Text:        fmt.Sprintf("GitHub Notification: %s", n.Subject.Title),
 				Data:        n,
 			})

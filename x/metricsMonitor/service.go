@@ -114,11 +114,6 @@ func (svc *Service) ValidateConfig() []error {
 		}
 	}
 
-	// status pub is required to work with statusMonitor
-	if _, ok := svc.Cfg.Pubs["status"]; !ok {
-		errs = append(errs, fmt.Errorf("metricsMonitor: required pubs channel 'status' is missing"))
-	}
-
 	return errs
 }
 
@@ -213,9 +208,10 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	newMessage := core.Message{
 		Correlation: msg.Correlation,
-		ChannelName: svc.Cfg.Pubs["status"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "threshold_status",
 		MetricName:  msg.MetricName,
 		Metric:      msg.Metric,
 		Status:      currentStatus,

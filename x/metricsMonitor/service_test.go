@@ -102,7 +102,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "monitor", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 		assert.Contains(t, messenger.SentMessages[0].Text, "cpu_load")
 
@@ -111,7 +111,7 @@ func TestService_MessageHandler(t *testing.T) {
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 		require.Len(t, messenger.SentMessages, 2)
-		assert.Equal(t, "status-chan", messenger.SentMessages[1].ChannelName)
+		assert.Equal(t, "monitor", messenger.SentMessages[1].ChannelName)
 		assert.Equal(t, "ok", messenger.SentMessages[1].Status)
 	})
 
@@ -129,7 +129,7 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "monitor", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "warning", messenger.SentMessages[0].Status)
 		assert.Contains(t, messenger.SentMessages[0].Text, "temp")
 	})
@@ -147,7 +147,7 @@ func TestService_MessageHandler(t *testing.T) {
 		err := svc.messageHandler(msg)
 		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "status-chan", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "monitor", messenger.SentMessages[0].ChannelName)
 		assert.Equal(t, "ok", messenger.SentMessages[0].Status)
 	})
 
@@ -536,7 +536,6 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
-			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{},
 			},
@@ -549,17 +548,6 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("missing sub", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{},
-			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.NotEmpty(t, errs)
-	})
-
-	t.Run("missing pub", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
-			Pubs: map[string]core.ChannelInfo{},
 		}
 		svc := NewService(deps, cfg)
 		errs := svc.ValidateConfig()
@@ -569,7 +557,6 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("invalid threshold value type", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
-			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{
 					map[string]interface{}{
@@ -590,7 +577,6 @@ func TestService_ValidateConfig(t *testing.T) {
 	t.Run("int threshold values", func(t *testing.T) {
 		cfg := core.ServiceConfig{
 			Subs: map[string]core.ChannelInfo{"metrics": {Name: "m"}},
-			Pubs: map[string]core.ChannelInfo{"status": {Name: "s"}},
 			Config: map[string]interface{}{
 				"thresholds": []interface{}{
 					map[string]interface{}{

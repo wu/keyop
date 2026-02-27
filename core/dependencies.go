@@ -78,3 +78,28 @@ func (d *Dependencies) MustGetMessenger() MessengerApi {
 	}
 	return d.messenger
 }
+
+// Clone returns a shallow copy of Dependencies. This is useful when you want to override
+// a single field (e.g. the messenger) for a specific service without affecting the global deps.
+func (d *Dependencies) Clone() Dependencies {
+	return Dependencies{
+		logger:    d.logger,
+		os:        d.os,
+		messenger: d.messenger,
+		state:     d.state,
+		context:   d.context,
+		cancel:    d.cancel,
+	}
+}
+
+// ParsePreprocessConditions extracts sub_preprocess and pub_preprocess condition lists
+// from a ServiceConfig's Config map.
+func ParsePreprocessConditions(cfg ServiceConfig) (subConditions []ConditionConfig, pubConditions []ConditionConfig) {
+	if raw, ok := cfg.Config["sub_preprocess"].([]interface{}); ok {
+		subConditions = ParseConditions(raw)
+	}
+	if raw, ok := cfg.Config["pub_preprocess"].([]interface{}); ok {
+		pubConditions = ParseConditions(raw)
+	}
+	return
+}

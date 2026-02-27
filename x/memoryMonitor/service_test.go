@@ -387,13 +387,14 @@ func TestValidateConfig_EdgeCases(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	cfg := core.ServiceConfig{
-		Pubs:   map[string]core.ChannelInfo{},
-		Config: map[string]interface{}{},
+		Config: map[string]interface{}{
+			"metric_name": 42, // invalid type — should error
+		},
 	}
 	svc := NewService(deps, cfg)
 	errs := svc.ValidateConfig()
 	if len(errs) == 0 {
-		t.Error("Expected error for missing pubs, got none")
+		t.Error("Expected error for invalid metric_name type, got none")
 	}
 }
 

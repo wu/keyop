@@ -3,7 +3,6 @@ package cpuMonitor
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,7 +26,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"metrics"}, logger)
 
 	cpuMetricName, _ := svc.Cfg.Config["cpu_metric_name"].(string)
 	if cpuMetricName == "" {
@@ -37,7 +35,7 @@ func (svc *Service) ValidateConfig() []error {
 		}
 	}
 
-	return errs
+	return nil
 }
 
 func (svc *Service) Initialize() error {
@@ -85,15 +83,16 @@ func (svc *Service) Check() error {
 	}
 
 	err := messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "cpu_metric",
 		MetricName:  svc.cpuMetricName,
 		Metric:      cpuUsage,
 		Text:        fmt.Sprintf("CPU Usage: %.2f%%", cpuUsage),
 	})
 	if err != nil {
-		logger.Error("failed to send cpu metric", "error", err)
+		logger.Error("failed to send cpu metric event", "error", err)
 	}
 
 	return nil

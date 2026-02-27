@@ -3,7 +3,6 @@ package idleMonitorMacos
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -39,13 +38,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"metrics", "alerts", "events"}, logger)
 
 	if _, ok := svc.Cfg.Config["threshold"].(string); !ok {
 		logger.Warn("no threshold provided, using default 5m")
 	}
 
-	return errs
+	return nil
 }
 
 func (svc *Service) Initialize() error {
@@ -141,9 +139,10 @@ func (svc *Service) Check() error {
 
 	// Send event message on every check
 	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "status_update",
 		Status:      status,
 		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration)),
 		Data: map[string]interface{}{
@@ -159,9 +158,10 @@ func (svc *Service) Check() error {
 
 	// Send idle duration metric
 	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "idle_duration_metric",
 		MetricName:  svc.idleMetricName,
 		Metric:      idleDuration.Seconds(),
 		Text:        fmt.Sprintf("Status: %s, Time since status change: %s, Idle duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(idleDuration)),
@@ -172,9 +172,10 @@ func (svc *Service) Check() error {
 
 	// Send active duration metric
 	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "active_duration_metric",
 		MetricName:  svc.activeMetricName,
 		Metric:      activeDuration.Seconds(),
 		Text:        fmt.Sprintf("Status: %s, Time since status change: %s, Active duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(activeDuration)),
@@ -192,9 +193,10 @@ func (svc *Service) Check() error {
 		timeSinceLastStatusChange = now.Sub(svc.lastTransition)
 
 		err = messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "idle_alert",
 			Status:      "idle",
 			Summary:     fmt.Sprintf("Idle on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime)),
@@ -217,9 +219,10 @@ func (svc *Service) Check() error {
 		timeSinceLastStatusChange = 0
 
 		err = messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "active_alert",
 			Status:      "active",
 			Summary:     fmt.Sprintf("Active on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s is active again. Was idle for: %s.", svc.hostname, formatHumanDuration(idleTime)),
@@ -239,9 +242,10 @@ func (svc *Service) Check() error {
 		if activeHours > svc.lastAlertHours {
 			svc.lastAlertHours = activeHours
 			err = messenger.Send(core.Message{
-				ChannelName: svc.Cfg.Pubs["alerts"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
+				Event:       "active_reminder",
 				Status:      "active_reminder",
 				Summary:     fmt.Sprintf("break time for %s", svc.hostname),
 				Text:        fmt.Sprintf("Active on %s for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),

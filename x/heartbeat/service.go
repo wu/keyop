@@ -30,8 +30,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors", "alerts"}, logger)
+	return nil
 }
 
 func (svc Service) Initialize() error {
@@ -70,9 +69,10 @@ func (svc Service) Check() error {
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 		err := messenger.Send(core.Message{
 			Correlation: correlationId,
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "restart",
 			Text:        fmt.Sprintf("%s restarted", hostname),
 		})
 		if err != nil {
@@ -83,9 +83,10 @@ func (svc Service) Check() error {
 
 	eventErr := messenger.Send(core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "uptime_check",
 		MetricName:  metricName,
 		Text:        fmt.Sprintf("heartbeat: uptime %s", heartbeat.Uptime),
 		Metric:      float64(heartbeat.UptimeSeconds),
@@ -97,9 +98,10 @@ func (svc Service) Check() error {
 
 	metricErr := messenger.Send(core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "uptime_metric",
 		MetricName:  metricName,
 		Text:        fmt.Sprintf("heartbeat metric: uptime_seconds %d", heartbeat.UptimeSeconds),
 		Metric:      float64(heartbeat.UptimeSeconds),

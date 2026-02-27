@@ -64,9 +64,8 @@ func getValidModes() []string {
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "heater", "cooler", "errors"}, logger)
 	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
-	errs := append(pubErrs, subErrs...)
+	errs := subErrs
 
 	// check min/max temps
 	_, minTempExists := svc.Cfg.Config["minTemp"].(float64)
@@ -133,44 +132,41 @@ func (svc Service) tempHandler(msg core.Message) error {
 	svc.HeaterState = event.HeaterTargetState
 	svc.CoolerState = event.CoolerTargetState
 
-	if ch, ok := svc.Cfg.Pubs["heater"]; ok {
-		logger.Debug("Sending to heater channel", "channel", ch.Name)
-		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(core.Message{
-			ChannelName: ch.Name,
-			ServiceName: svc.Cfg.Name,
-			ServiceType: svc.Cfg.Type,
-			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
-			State:       event.HeaterTargetState,
-			Data:        event,
-		})
-	}
+	logger.Debug("Sending heater state", "channel", svc.Cfg.Name)
+	//goland:noinspection GoUnhandledErrorResult
+	messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "heater_state",
+		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
+		State:       event.HeaterTargetState,
+		Data:        event,
+	})
 
-	if ch, ok := svc.Cfg.Pubs["cooler"]; ok {
-		logger.Debug("Sending to cooler channel", "channel", ch.Name)
-		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(core.Message{
-			ChannelName: ch.Name,
-			ServiceName: svc.Cfg.Name,
-			ServiceType: svc.Cfg.Type,
-			Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
-			State:       event.CoolerTargetState,
-			Data:        event,
-		})
-	}
+	logger.Debug("Sending cooler state", "channel", svc.Cfg.Name)
+	//goland:noinspection GoUnhandledErrorResult
+	messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "cooler_state",
+		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
+		State:       event.CoolerTargetState,
+		Data:        event,
+	})
 
-	if ch, ok := svc.Cfg.Pubs["events"]; ok {
-		logger.Debug("Sending to events channel", "channel", ch.Name)
-		//goland:noinspection GoUnhandledErrorResult
-		messenger.Send(core.Message{
-			ChannelName: ch.Name,
-			ServiceName: svc.Cfg.Name,
-			ServiceType: svc.Cfg.Type,
-			Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
-			State:       event.HeaterTargetState, // or some aggregate state
-			Data:        event,
-		})
-	}
+	logger.Debug("Sending thermostat status", "channel", svc.Cfg.Name)
+	//goland:noinspection GoUnhandledErrorResult
+	messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "thermostat_status",
+		Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
+		State:       event.HeaterTargetState,
+		Data:        event,
+	})
 
 	return nil
 }

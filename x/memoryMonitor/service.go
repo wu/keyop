@@ -3,7 +3,6 @@ package memoryMonitor
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -25,10 +24,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
 	var errs []error
-
-	errs = append(errs, util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"metrics"}, logger)...)
 
 	if val, ok := svc.Cfg.Config["metric_name"]; ok {
 		if _, ok := val.(string); !ok {
@@ -91,9 +87,10 @@ func (svc *Service) Check() error {
 	logger.Info("Memory utilization", "utilized_percent", fmt.Sprintf("%.2f%%", utilizedPercent))
 
 	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "memory_metric",
 		MetricName:  svc.MetricName,
 		Metric:      utilizedPercent,
 		Status:      "ok",

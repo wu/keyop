@@ -115,11 +115,11 @@ func TestMoonService(t *testing.T) {
 
 		var eventMsg *core.Message
 		var alertMsg *core.Message
-		for _, m := range messenger.messages {
-			if m.ChannelName == "events" {
-				eventMsg = &m
-			} else if m.ChannelName == "alerts" {
-				alertMsg = &m
+		for i, m := range messenger.messages {
+			if m.Event == "moon_phase" {
+				eventMsg = &messenger.messages[i]
+			} else if m.Event == "moon_phase_change" {
+				alertMsg = &messenger.messages[i]
 			}
 		}
 		assert.NotNil(t, eventMsg)
@@ -147,7 +147,7 @@ func TestMoonService(t *testing.T) {
 			assert.Equal(t, 2, len(messenger.messages))
 		} else {
 			assert.Equal(t, 1, len(messenger.messages))
-			assert.Equal(t, "events", messenger.messages[0].ChannelName)
+			assert.Equal(t, "test-moon", messenger.messages[0].ChannelName)
 		}
 	})
 
@@ -174,7 +174,7 @@ func TestMoonService(t *testing.T) {
 		// Only event message, no alert because phase name is same as persisted
 		assert.Equal(t, 1, len(messenger.messages), "Should not send redundant alert after restart")
 		if len(messenger.messages) > 0 {
-			assert.Equal(t, "events", messenger.messages[0].ChannelName)
+			assert.Equal(t, "test-moon", messenger.messages[0].ChannelName)
 		}
 	})
 }

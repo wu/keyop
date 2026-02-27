@@ -255,13 +255,12 @@ func TestValidateConfig_EdgeCases(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	cfg := core.ServiceConfig{
-		Pubs:   map[string]core.ChannelInfo{},
 		Config: map[string]interface{}{},
 	}
 	svc := NewService(deps, cfg)
 	errs := svc.ValidateConfig()
-	if len(errs) == 0 {
-		t.Error("Expected error for missing pubs, got none")
+	if len(errs) != 0 {
+		t.Errorf("Expected no errors for empty config, got %v", errs)
 	}
 }
 

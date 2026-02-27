@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"net"
 	"time"
 )
@@ -25,8 +24,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"status"}, logger)
+	var errs []error
 
 	if url, ok := svc.Cfg.Config["url"].(string); !ok || url == "" {
 		errs = append(errs, fmt.Errorf("required config parameter 'url' is missing or empty"))
@@ -111,9 +109,9 @@ func (svc *Service) Check() error {
 
 func (svc *Service) sendStatus(messenger core.MessengerApi, status string, summary string) error {
 	return messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Pubs["status"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
+		Event:       "status",
 		Status:      status,
 		Summary:     summary,
 		Text:        summary,

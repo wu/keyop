@@ -37,8 +37,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "alerts"}, logger)
-	errs = append(errs, util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)...)
+	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)
 
 	if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
 		errs = append(errs, fmt.Errorf("aurora: lat not set or not a float in config"))
@@ -104,9 +103,10 @@ func (svc *Service) Check() error {
 
 	// Send event each time Check() gets run
 	eventMsg := core.Message{
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "aurora_check",
 		Text:        fmt.Sprintf("Aurora likelihood: %d%%", bestProb),
 		Summary:     fmt.Sprintf("Aurora: %d%%", bestProb),
 		Data: map[string]interface{}{
@@ -123,9 +123,10 @@ func (svc *Service) Check() error {
 	// Send an alert if the possibility is greater than zero
 	if bestProb > 0 {
 		alertMsg := core.Message{
-			ChannelName: svc.Cfg.Pubs["alerts"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
+			Event:       "aurora_alert",
 			Text:        fmt.Sprintf("Aurora alert! Likelihood is %d%% at your location.", bestProb),
 			Summary:     fmt.Sprintf("Aurora Alert: %d%%", bestProb),
 			Data: map[string]interface{}{

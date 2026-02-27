@@ -66,9 +66,6 @@ func TestService_ValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: core.ServiceConfig{
-				Pubs: map[string]core.ChannelInfo{
-					"events": {Name: "events_channel"},
-				},
 				Config: map[string]any{
 					"note_name": "TestNote",
 				},
@@ -76,21 +73,8 @@ func TestService_ValidateConfig(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "missing events channel",
-			cfg: core.ServiceConfig{
-				Pubs: map[string]core.ChannelInfo{},
-				Config: map[string]any{
-					"note_name": "TestNote",
-				},
-			},
-			expected: 1,
-		},
-		{
 			name: "missing note_name",
 			cfg: core.ServiceConfig{
-				Pubs: map[string]core.ChannelInfo{
-					"events": {Name: "events_channel"},
-				},
 				Config: map[string]any{},
 			},
 			expected: 1,

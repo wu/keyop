@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
-	"keyop/util"
 	"net"
 	"net/http"
 	"strings"
@@ -51,19 +50,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
 	var errs []error
-
-	pubErrs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"owntracks", "gps", "metrics", "events"}, logger)
-	if len(pubErrs) > 0 {
-		errs = append(errs, pubErrs...)
-	}
 
 	// check port
 	_, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {
 		err := fmt.Errorf("owntracks: port not set in config")
-		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
 
@@ -166,9 +158,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger.Debug("received owntracks message", "data", data, "deviceUUID", deviceUUID, "deviceName", deviceName)
 
 	msg := core.Message{
-		ChannelName: svc.Cfg.Pubs["owntracks"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		ServiceName: serviceName,
+		Event:       "location",
 		Data:        data,
 	}
 
@@ -197,9 +190,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		gpsMsg := core.Message{
 			Correlation: correlationID,
-			ChannelName: svc.Cfg.Pubs["gps"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			ServiceName: serviceName,
+			Event:       "gps",
 			Data:        gpsData,
 		}
 		if err := messenger.Send(gpsMsg); err != nil {
@@ -227,9 +221,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		metricsMsg := core.Message{
 			Correlation: correlationID,
-			ChannelName: svc.Cfg.Pubs["metrics"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			ServiceName: serviceName,
+			Event:       "battery_metric",
 			MetricName:  metricName,
 			Metric:      batt,
 			Data:        metricsData,
@@ -248,8 +243,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		eventsChannel := svc.Cfg.Pubs["events"].Name
-
 		svc.mu.Lock()
 		// check for entered regions
 		for _, nr := range newRegions {
@@ -263,9 +256,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !found {
 				eventMsg := core.Message{
 					Correlation: correlationID,
-					ChannelName: eventsChannel,
+					ChannelName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
+					Event:       "region_enter",
 					Text:        fmt.Sprintf("Entered region: %s", nr),
 					Summary:     fmt.Sprintf("Arriving: %s", nr),
 					Data: map[string]interface{}{
@@ -291,9 +285,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !found {
 				eventMsg := core.Message{
 					Correlation: correlationID,
-					ChannelName: eventsChannel,
+					ChannelName: svc.Cfg.Name,
 					ServiceType: svc.Cfg.Type,
 					ServiceName: serviceName,
+					Event:       "region_exit",
 					Text:        fmt.Sprintf("Exited region: %s", cr),
 					Summary:     fmt.Sprintf("Departing: %s", cr),
 					Data: map[string]interface{}{

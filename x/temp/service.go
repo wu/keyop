@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"os"
 	"strconv"
 	"strings"
@@ -37,8 +36,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics", "errors"}, logger)
+	var errs []error
 
 	if _, ok := svc.Cfg.Config["devicePath"].(string); !ok {
 		errs = append(errs, fmt.Errorf("temp: devicePath not set in config"))
@@ -135,9 +133,10 @@ func (svc Service) temp() (Event, error) {
 
 	eventErr := messenger.Send(core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "temp_reading",
 		Text:        fmt.Sprintf("%s is %.3f°F", svc.Cfg.Name, temp.TempF),
 		Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, temp.TempF),
 		MetricName:  metricName,
@@ -150,9 +149,10 @@ func (svc Service) temp() (Event, error) {
 
 	metricErr := messenger.Send(core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["metrics"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "temp_metric",
 		MetricName:  metricName,
 		Metric:      float64(temp.TempF),
 		Text:        fmt.Sprintf("%s metric: %.3f°F", svc.Cfg.Name, temp.TempF),

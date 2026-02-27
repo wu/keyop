@@ -90,12 +90,12 @@ func TestCheck(t *testing.T) {
 		foundEvent := false
 		foundMetric := false
 		for _, msg := range messenger.messages {
-			if msg.ChannelName == "status-topic" {
+			if msg.Event == "ping_status" {
 				foundEvent = true
 				assert.Contains(t, msg.Text, "successful")
 				assert.Contains(t, msg.Text, "12.3")
 			}
-			if msg.ChannelName == "metrics-topic" {
+			if msg.Event == "ping_metric" {
 				foundMetric = true
 				assert.Equal(t, 12.3, msg.Metric)
 				assert.Equal(t, "net-mon.ping_time", msg.MetricName)
@@ -140,7 +140,7 @@ func TestCheck(t *testing.T) {
 
 		foundMetric := false
 		for _, msg := range messenger.messages {
-			if msg.ChannelName == "metrics-topic" {
+			if msg.Event == "ping_metric" {
 				foundMetric = true
 				assert.Equal(t, 12.3, msg.Metric)
 				assert.Equal(t, "custom.ping.latency", msg.MetricName)
@@ -181,7 +181,7 @@ func TestCheck(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 		assert.Len(t, messenger.messages, 1)
-		assert.Equal(t, "status-topic", messenger.messages[0].ChannelName)
+		assert.Equal(t, "net-mon", messenger.messages[0].ChannelName)
 		assert.Contains(t, messenger.messages[0].Text, "unreachable.host")
 	})
 }
@@ -194,10 +194,6 @@ func TestValidateConfig(t *testing.T) {
 		deps.SetLogger(logger)
 		cfg := core.ServiceConfig{
 			Name: "net-mon",
-			Pubs: map[string]core.ChannelInfo{
-				"status":  {Name: "status-topic"},
-				"metrics": {Name: "metrics-topic"},
-			},
 			Config: map[string]interface{}{
 				"host": "google.com",
 			},
@@ -211,11 +207,7 @@ func TestValidateConfig(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		cfg := core.ServiceConfig{
-			Name: "net-mon",
-			Pubs: map[string]core.ChannelInfo{
-				"status":  {Name: "status-topic"},
-				"metrics": {Name: "metrics-topic"},
-			},
+			Name:   "net-mon",
 			Config: map[string]interface{}{},
 		}
 		svc := NewService(deps, cfg)
@@ -227,28 +219,6 @@ func TestValidateConfig(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "expected host required error")
-	})
-
-	t.Run("missing status channel", func(t *testing.T) {
-		deps := core.Dependencies{}
-		deps.SetLogger(logger)
-		cfg := core.ServiceConfig{
-			Name: "net-mon",
-			Pubs: map[string]core.ChannelInfo{},
-			Config: map[string]interface{}{
-				"host": "google.com",
-			},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.NotEmpty(t, errs)
-		found := false
-		for _, e := range errs {
-			if contains(e.Error(), "required pubs channel 'status' is missing") {
-				found = true
-			}
-		}
-		assert.True(t, found)
 	})
 
 }

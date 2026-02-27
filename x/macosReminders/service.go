@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
-	"keyop/util"
 	"os"
 	"runtime"
 	"strconv"
@@ -58,10 +57,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	err := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"task"}, logger)
-	if len(err) > 0 {
-		return err
-	}
+	var err []error
 
 	// helper_path is optional but if present must be a non-empty string
 	if v, ok := svc.Cfg.Config["helper_path"]; ok {
@@ -402,9 +398,10 @@ func (svc *Service) fetchAndPublish() {
 			key = fmt.Sprintf("anon:%s:%s", m.Summary, dueRaw)
 		}
 		if _, seen := prev[key]; !seen {
-			m.ChannelName = svc.Cfg.Pubs["task"].Name
+			m.ChannelName = svc.Cfg.Name
 			m.ServiceName = svc.Cfg.Name
 			m.ServiceType = svc.Cfg.Type
+			m.Event = "reminder_created"
 			if data, ok := m.Data.(map[string]interface{}); ok {
 				data["event"] = "created"
 				// set user_id from config, default to 1
@@ -435,9 +432,10 @@ func (svc *Service) fetchAndPublish() {
 	for k, prevState := range prev {
 		if _, present := curr[k]; !present {
 			msg := core.Message{
-				ChannelName: svc.Cfg.Pubs["task"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
+				Event:       "reminder_removed",
 				Summary:     prevState.Title,
 				Text:        "(removed)",
 				Data: map[string]interface{}{

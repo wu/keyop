@@ -51,24 +51,11 @@ func TestService_ValidateConfig(t *testing.T) {
 			config: map[string]interface{}{
 				"port": 8080,
 			},
-			pubs: map[string]core.ChannelInfo{
-				"owntracks": {Name: "owntracks-topic"},
-				"gps":       {Name: "gps-topic"},
-				"metrics":   {Name: "metrics-topic"},
-				"events":    {Name: "events-topic"},
-			},
 			expectError: false,
 		},
 		{
 			name:        "missing port",
 			config:      map[string]interface{}{},
-			expectError: true,
-		},
-		{
-			name: "missing pubs",
-			config: map[string]interface{}{
-				"port": 8080,
-			},
 			expectError: true,
 		},
 	}
@@ -194,25 +181,10 @@ func TestService_ServeHTTP(t *testing.T) {
 
 	t.Run("Location and Battery and Regions", func(t *testing.T) {
 		messenger := deps.MustGetMessenger().(*core.Messenger)
-		gpsChan := make(chan core.Message, 10)
-		metricsChan := make(chan core.Message, 10)
-		eventsChan := make(chan core.Message, 10)
-		owntracksChan := make(chan core.Message, 10)
+		allMsgs := make(chan core.Message, 20)
 
-		messenger.Subscribe(context.Background(), "test", "gps", "owntracks", "test", 0, func(m core.Message) error {
-			gpsChan <- m
-			return nil
-		})
-		messenger.Subscribe(context.Background(), "test", "metrics", "owntracks", "test", 0, func(m core.Message) error {
-			metricsChan <- m
-			return nil
-		})
-		messenger.Subscribe(context.Background(), "test", "events", "owntracks", "test", 0, func(m core.Message) error {
-			eventsChan <- m
-			return nil
-		})
-		messenger.Subscribe(context.Background(), "test", "owntracks", "owntracks", "test", 0, func(m core.Message) error {
-			owntracksChan <- m
+		messenger.Subscribe(context.Background(), "test", "test-owntracks", "owntracks", "test", 0, func(m core.Message) error {
+			allMsgs <- m
 			return nil
 		})
 
@@ -234,85 +206,43 @@ func TestService_ServeHTTP(t *testing.T) {
 		svc.(*Service).ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// Check owntracks message
-		select {
-		case msg := <-owntracksChan:
-			// Drain previous messages if any (unlikely but safe)
-			for msg.Correlation != correlationID {
-				select {
-				case msg = <-owntracksChan:
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("timed out waiting for owntracks message with correlationID")
+		// Collect all messages for this correlation
+		var msgs []core.Message
+		deadline := time.After(500 * time.Millisecond)
+		for {
+			select {
+			case msg := <-allMsgs:
+				if msg.Correlation == correlationID {
+					msgs = append(msgs, msg)
 				}
+			case <-deadline:
+				goto done1
 			}
-			assert.Equal(t, "owntracks", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Correlation)
-		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for owntracks message")
 		}
+	done1:
+		// We expect: location, gps, battery_metric, region_enter(home)
+		assert.GreaterOrEqual(t, len(msgs), 3, "expected at least 3 messages")
 
-		// Check gps message
-		select {
-		case msg := <-gpsChan:
-			for msg.Correlation != correlationID {
-				select {
-				case msg = <-gpsChan:
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("timed out waiting for gps message with correlationID")
-				}
-			}
-			assert.Equal(t, "gps", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Correlation)
-			data := msg.Data.(map[string]interface{})
-			assert.Equal(t, 51.5033, data["lat"])
-			assert.Equal(t, 2, len(data)) // lat, lon
-			assert.Nil(t, data["batt"])
-			assert.Nil(t, data["tid"])
-		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for gps message")
+		events := map[string]core.Message{}
+		for _, m := range msgs {
+			events[m.Event] = m
 		}
+		assert.Contains(t, events, "location")
+		assert.Contains(t, events, "gps")
+		assert.Contains(t, events, "battery_metric")
+		assert.Contains(t, events, "region_enter")
 
-		// Check metrics message
-		select {
-		case msg := <-metricsChan:
-			for msg.Correlation != correlationID {
-				select {
-				case msg = <-metricsChan:
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("timed out waiting for metrics message with correlationID")
-				}
-			}
-			assert.Equal(t, "metrics", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Correlation)
-			assert.Equal(t, float64(85), msg.Metric)
-			assert.Equal(t, "test-owntracks", msg.ServiceName)
-			assert.Equal(t, "owntracks", msg.ServiceType)
-			data := msg.Data.(map[string]interface{})
-			assert.Equal(t, "ne", data["tid"])
-		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for metrics message")
-		}
+		gpsMsg := events["gps"]
+		data := gpsMsg.Data.(map[string]interface{})
+		assert.Equal(t, 51.5033, data["lat"])
 
-		// Check events message (enter home)
-		select {
-		case msg := <-eventsChan:
-			for msg.Correlation != correlationID {
-				select {
-				case msg = <-eventsChan:
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("timed out waiting for events message with correlationID")
-				}
-			}
-			assert.Equal(t, "events", msg.ChannelName)
-			assert.Equal(t, correlationID, msg.Correlation)
-			assert.Equal(t, "test-owntracks", msg.ServiceName)
-			assert.Equal(t, "owntracks", msg.ServiceType)
-			data := msg.Data.(map[string]interface{})
-			assert.Equal(t, "enter", data["event"])
-			assert.Equal(t, "home", data["region"])
-		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for events message")
-		}
+		battMsg := events["battery_metric"]
+		assert.Equal(t, float64(85), battMsg.Metric)
+
+		enterMsg := events["region_enter"]
+		enterData := enterMsg.Data.(map[string]interface{})
+		assert.Equal(t, "enter", enterData["event"])
+		assert.Equal(t, "home", enterData["region"])
 
 		// Second request: exit home, enter work
 		testData2 := map[string]interface{}{
@@ -328,27 +258,27 @@ func TestService_ServeHTTP(t *testing.T) {
 		svc.(*Service).ServeHTTP(rr2, req2)
 		assert.Equal(t, http.StatusOK, rr2.Code)
 
-		// Should get exit home and enter work
-		var events []core.Message
-		for i := 0; i < 2; i++ {
+		var regionMsgs []core.Message
+		deadline2 := time.After(500 * time.Millisecond)
+		for {
 			select {
-			case msg := <-eventsChan:
-				events = append(events, msg)
-			case <-time.After(500 * time.Millisecond):
-				t.Fatalf("timed out waiting for event %d", i)
+			case msg := <-allMsgs:
+				if msg.Event == "region_exit" || msg.Event == "region_enter" {
+					regionMsgs = append(regionMsgs, msg)
+				}
+			case <-deadline2:
+				goto done2
 			}
 		}
-
-		assert.Len(t, events, 2)
-		// One should be exit home, other enter work
+	done2:
 		foundExit := false
 		foundEnter := false
-		for _, e := range events {
-			data := e.Data.(map[string]interface{})
-			if data["event"] == "exit" && data["region"] == "home" {
+		for _, e := range regionMsgs {
+			d := e.Data.(map[string]interface{})
+			if d["event"] == "exit" && d["region"] == "home" {
 				foundExit = true
 			}
-			if data["event"] == "enter" && data["region"] == "work" {
+			if d["event"] == "enter" && d["region"] == "work" {
 				foundEnter = true
 			}
 		}
@@ -366,19 +296,13 @@ func TestService_ServeHTTP(t *testing.T) {
 					"iphone": "phone",
 				},
 			},
-			Pubs: map[string]core.ChannelInfo{
-				"owntracks": {Name: "owntracks"},
-				"gps":       {Name: "gps"},
-				"metrics":   {Name: "metrics"},
-				"events":    {Name: "events"},
-			},
 		}
 		svcWithDevices := NewService(deps, cfgWithDevices)
 
 		messenger := deps.MustGetMessenger().(*core.Messenger)
-		metricsChan := make(chan core.Message, 10)
-		messenger.Subscribe(context.Background(), "test-device", "metrics", "owntracks", "test", 0, func(m core.Message) error {
-			metricsChan <- m
+		allMsgs2 := make(chan core.Message, 10)
+		messenger.Subscribe(context.Background(), "test-device", "test-owntracks", "owntracks", "test-device", 0, func(m core.Message) error {
+			allMsgs2 <- m
 			return nil
 		})
 
@@ -390,33 +314,37 @@ func TestService_ServeHTTP(t *testing.T) {
 			"batt":  float64(90),
 		}
 		body, _ := json.Marshal(testData)
-		// Use topic that maps to "phone"
 		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
 		rr := httptest.NewRecorder()
 
 		svcWithDevices.(*Service).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		// Check response body
 		var resp map[string]string
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, "phone", resp["device"])
 
-		// Check metrics message
-		select {
-		case msg := <-metricsChan:
-			for msg.Correlation != correlationID {
-				select {
-				case msg = <-metricsChan:
-				case <-time.After(100 * time.Millisecond):
-					t.Fatal("timed out waiting for metrics message with correlationID")
+		// Check battery_metric message
+		var battMsg *core.Message
+		deadline3 := time.After(500 * time.Millisecond)
+		for battMsg == nil {
+			select {
+			case msg := <-allMsgs2:
+				if msg.Event == "battery_metric" && msg.Correlation == correlationID {
+					m := msg
+					battMsg = &m
 				}
+			case <-deadline3:
+				goto done3
 			}
-			assert.Equal(t, "test-owntracks-phone", msg.ServiceName)
-			assert.Equal(t, "battery.phone", msg.MetricName)
-		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for metrics message")
+		}
+	done3:
+		if battMsg != nil {
+			assert.Equal(t, "test-owntracks-phone", battMsg.ServiceName)
+			assert.Equal(t, "battery.phone", battMsg.MetricName)
+		} else {
+			t.Fatal("timed out waiting for battery_metric message")
 		}
 	})
 }

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"keyop/core"
-	"keyop/util"
 
 	"github.com/google/uuid"
 )
@@ -26,8 +25,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events", "metrics"}, logger)
+	return nil
 }
 
 func (svc *Service) Initialize() error {
@@ -44,26 +42,24 @@ func (svc *Service) Check() error {
 	currentTime := time.Now()
 	correlationId := uuid.New().String()
 
-	// send to events channel
 	eventErr := messenger.Send(core.Message{
 		Correlation: correlationId,
-		ChannelName: svc.Cfg.Pubs["events"].Name,
+		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
+		Event:       "stats",
 		Text:        fmt.Sprintf("messenger stats: total %d, failures %d, retries %d", stats.TotalMessageCount, stats.TotalFailureCount, stats.TotalRetryCount),
 		Data:        stats,
 	})
 	if eventErr != nil {
-		logger.Error("Failed to send messenger stats to events channel", "error", eventErr)
+		logger.Error("Failed to send messenger stats", "error", eventErr)
 	}
 
-	// send total to metrics channel
 	metricName, _ := svc.Cfg.Config["metric_name"].(string)
 	if metricName == "" {
 		metricName = svc.Cfg.Name
 	}
 
-	// send msgs per minute to metrics channel
 	var metricErr error
 	if !svc.lastCheckTime.IsZero() {
 		deltaMessages := stats.TotalMessageCount - svc.lastTotalMessageCount
@@ -73,15 +69,16 @@ func (svc *Service) Check() error {
 
 			metricErr = messenger.Send(core.Message{
 				Correlation: correlationId,
-				ChannelName: svc.Cfg.Pubs["metrics"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
+				Event:       "message_rate",
 				MetricName:  metricName,
 				Metric:      msgsPerMinute,
 				Text:        fmt.Sprintf("message rate per minute: %.2f", msgsPerMinute),
 			})
 			if metricErr != nil {
-				logger.Error("Failed to send messenger mpm to metrics channel", "error", metricErr)
+				logger.Error("Failed to send messenger mpm metric", "error", metricErr)
 			}
 		}
 	}

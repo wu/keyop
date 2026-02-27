@@ -21,6 +21,7 @@ type Message struct {
 	ChannelName string      `json:"channelName,omitempty"`
 	ServiceType string      `json:"serviceType,omitempty"`
 	ServiceName string      `json:"serviceName,omitempty"`
+	Event       string      `json:"event,omitempty"`
 	Status      string      `json:"status,omitempty"`
 	Text        string      `json:"text,omitempty"`
 	Summary     string      `json:"summary,omitempty"`

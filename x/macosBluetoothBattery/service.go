@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -35,11 +34,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"metrics"}, logger)
-
+	var errs []error
 	if runtime.GOOS != "darwin" {
-		logger.Warn("macosBluetoothBattery is only supported on macOS")
+		errs = append(errs, fmt.Errorf("unsupported platform: %s", runtime.GOOS))
 	}
 
 	return errs
@@ -94,9 +91,9 @@ func (svc *Service) Check() error {
 		}
 		logger.Info("bluetooth battery", "device", device.Name, "percent", device.Percent)
 		err := messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["metrics"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
-			ServiceType: svc.Cfg.Type,
+			Event:       "bluetooth_metric",
 			MetricName:  metricName,
 			Metric:      device.Percent,
 			Text:        fmt.Sprintf("%s battery: %.0f%%", device.Name, device.Percent),

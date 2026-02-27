@@ -29,7 +29,18 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			logger.Error("service type not registered", "type", serviceConfig.Type)
 			return fmt.Errorf("service type not registered: %s", serviceConfig.Type)
 		}
-		service := serviceFunc(deps, serviceConfig)
+
+		// Build per-service deps, wrapping the messenger with preprocessing if configured.
+		serviceDeps := deps
+		subConds, pubConds := core.ParsePreprocessConditions(serviceConfig)
+		if len(subConds) > 0 || len(pubConds) > 0 {
+			serviceDeps = deps.Clone()
+			serviceDeps.SetMessenger(core.NewPreprocessMessenger(deps.MustGetMessenger(), subConds, pubConds))
+			logger.Info("Preprocessing enabled for service", "name", serviceConfig.Name,
+				"sub_preprocess_rules", len(subConds), "pub_preprocess_rules", len(pubConds))
+		}
+
+		service := serviceFunc(serviceDeps, serviceConfig)
 		services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
 	}
 
