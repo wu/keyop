@@ -78,8 +78,11 @@ func (svc *Service) startProcess() error {
 	if err != nil {
 		return fmt.Errorf("failed to open pid file: %w", err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			logger.Error("process: failed to close pid file", "error", err)
+		}
+	}()
 
 	if _, err := f.WriteString(fmt.Sprintf("%d", svc.cmd.Process.Pid)); err != nil {
 		return fmt.Errorf("failed to write to pid file: %w", err)

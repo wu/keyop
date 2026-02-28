@@ -135,8 +135,6 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			return svc.reportAnomalyStatus(msg, mse, "ok")
 		}
 	}
-
-	return nil
 }
 
 func (svc *Service) reportAnomalyStatus(msg core.Message, mse float64, status string) error {

@@ -68,7 +68,11 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 	if err != nil {
 		return nil, fmt.Errorf("failed to call ollama api: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("ollama: failed to close response body: %v\n", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("api returned status %d", resp.StatusCode)

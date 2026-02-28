@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -69,8 +70,11 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 	if err != nil {
 		return err
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("PersistentQueue: failed to close file %s: %v", fileName, err)
+		}
+	}()
 
 	if _, err := f.WriteString(entry + "\n"); err != nil {
 		return err
@@ -244,8 +248,11 @@ func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 		}
 		return state, err
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			pq.logger.Error("PersistentQueue: failed to close state file", "file", stateFile, "error", err)
+		}
+	}()
 
 	if err := json.NewDecoder(f).Decode(&state); err != nil {
 		if err == io.EOF {
@@ -267,8 +274,11 @@ func (pq *PersistentQueue) saveState(readerName string, state readerState) error
 	if err != nil {
 		return err
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("PersistentQueue: failed to close file %s: %v", stateFile, err)
+		}
+	}()
 
 	return json.NewEncoder(f).Encode(state)
 }
@@ -299,8 +309,11 @@ func (pq *PersistentQueue) readEntry(fileName string, offset int64) (string, int
 	if err != nil {
 		return "", offset, err
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("PersistentQueue: failed to close file %s: %v", fullPath, err)
+		}
+	}()
 
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
 		return "", offset, err

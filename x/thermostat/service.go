@@ -133,8 +133,7 @@ func (svc Service) tempHandler(msg core.Message) error {
 	svc.CoolerState = event.CoolerTargetState
 
 	logger.Debug("Sending heater state", "channel", svc.Cfg.Name)
-	//goland:noinspection GoUnhandledErrorResult
-	messenger.Send(core.Message{
+	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -142,11 +141,12 @@ func (svc Service) tempHandler(msg core.Message) error {
 		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
 		State:       event.HeaterTargetState,
 		Data:        event,
-	})
+	}); err != nil {
+		logger.Warn("failed to send heater_state message", "err", err)
+	}
 
 	logger.Debug("Sending cooler state", "channel", svc.Cfg.Name)
-	//goland:noinspection GoUnhandledErrorResult
-	messenger.Send(core.Message{
+	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -154,11 +154,12 @@ func (svc Service) tempHandler(msg core.Message) error {
 		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
 		State:       event.CoolerTargetState,
 		Data:        event,
-	})
+	}); err != nil {
+		logger.Warn("failed to send cooler_state message", "err", err)
+	}
 
 	logger.Debug("Sending thermostat status", "channel", svc.Cfg.Name)
-	//goland:noinspection GoUnhandledErrorResult
-	messenger.Send(core.Message{
+	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -166,7 +167,9 @@ func (svc Service) tempHandler(msg core.Message) error {
 		Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
 		State:       event.HeaterTargetState,
 		Data:        event,
-	})
+	}); err != nil {
+		logger.Warn("failed to send thermostat_status message", "err", err)
+	}
 
 	return nil
 }

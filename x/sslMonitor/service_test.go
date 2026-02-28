@@ -66,7 +66,11 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close listener: %v", err)
+		}
+	}()
 
 	addr := ln.Addr().String()
 
@@ -104,8 +108,12 @@ func TestCheck(t *testing.T) {
 			}
 			go func() {
 				tlsConn := conn.(*tls.Conn)
-				tlsConn.Handshake()
-				tlsConn.Close()
+				if err := tlsConn.Handshake(); err != nil {
+					t.Logf("tls handshake error: %v", err)
+				}
+				if err := tlsConn.Close(); err != nil {
+					t.Logf("tls conn close error: %v", err)
+				}
 			}()
 		}
 	}()
@@ -149,7 +157,11 @@ func TestCheck_Critical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close listener: %v", err)
+		}
+	}()
 
 	addr := ln.Addr().String()
 
@@ -187,8 +199,12 @@ func TestCheck_Critical(t *testing.T) {
 			}
 			go func() {
 				tlsConn := conn.(*tls.Conn)
-				tlsConn.Handshake()
-				tlsConn.Close()
+				if err := tlsConn.Handshake(); err != nil {
+					t.Logf("tls handshake error: %v", err)
+				}
+				if err := tlsConn.Close(); err != nil {
+					t.Logf("tls conn close error: %v", err)
+				}
 			}()
 		}
 	}()
@@ -222,7 +238,11 @@ func TestCheck_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close listener: %v", err)
+		}
+	}()
 
 	addr := ln.Addr().String()
 
@@ -260,8 +280,12 @@ func TestCheck_OK(t *testing.T) {
 			}
 			go func() {
 				tlsConn := conn.(*tls.Conn)
-				tlsConn.Handshake()
-				tlsConn.Close()
+				if err := tlsConn.Handshake(); err != nil {
+					t.Logf("tls handshake error: %v", err)
+				}
+				if err := tlsConn.Close(); err != nil {
+					t.Logf("tls conn close error: %v", err)
+				}
 			}()
 		}
 	}()

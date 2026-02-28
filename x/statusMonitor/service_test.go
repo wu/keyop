@@ -335,7 +335,11 @@ func TestService_NotificationDelayRecovery(t *testing.T) {
 func TestService_Persistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "statusMonitor_persist_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := core.OsProvider{}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

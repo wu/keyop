@@ -136,7 +136,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("slack: failed to close response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -187,7 +191,11 @@ func (svc *Service) getChannelName(channelID string) string {
 		logger.Error("Failed to call conversations.info", "error", err)
 		return channelID
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("slack: failed to close response body", "error", err)
+		}
+	}()
 
 	var infoResp struct {
 		OK      bool   `json:"ok"`
@@ -243,7 +251,11 @@ func (svc *Service) getUserName(userID string) string {
 		logger.Error("Failed to call users.info", "error", err)
 		return userID
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("slack: failed to close response body", "error", err)
+		}
+	}()
 
 	var infoResp struct {
 		OK    bool   `json:"ok"`
@@ -306,7 +318,11 @@ func (svc *Service) Check() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("slack: failed to close response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -331,7 +347,11 @@ func (svc *Service) Check() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to slack websocket: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("slack: failed to close websocket conn", "error", err)
+		}
+	}()
 
 	svc.mu.Lock()
 	svc.conn = conn
@@ -348,7 +368,9 @@ func (svc *Service) Check() error {
 	// Start a goroutine to close the connection if the context is cancelled
 	go func() {
 		<-ctx.Done()
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			logger.Error("slack: failed to close websocket conn on context done", "error", err)
+		}
 	}()
 
 	// 3. Receive messages

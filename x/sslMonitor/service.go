@@ -75,7 +75,11 @@ func (svc *Service) Check() error {
 		svc.sendStatus(messenger, "CRITICAL", fmt.Sprintf("Failed to connect to %s: %v", svc.url, err))
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Error("sslMonitor: failed to close connection", "error", err)
+		}
+	}()
 
 	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) == 0 {

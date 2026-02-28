@@ -18,7 +18,11 @@ import (
 func TestService_Check(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "logManagerTest")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
@@ -73,10 +77,18 @@ func TestService_Check(t *testing.T) {
 
 	f, err := os.Open(oldFile + ".gz")
 	assert.NoError(t, err)
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Logf("failed to close gz file: %v", err)
+		}
+	}()
 	gz, err := gzip.NewReader(f)
 	assert.NoError(t, err)
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			t.Logf("failed to close gzip reader: %v", err)
+		}
+	}()
 	content, err := io.ReadAll(gz)
 	assert.NoError(t, err)
 	assert.Equal(t, "old log content", string(content))
@@ -196,7 +208,11 @@ func TestService_gzipFile_Errors(t *testing.T) {
 func TestService_Check_CustomMaxAge(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "logManagerTestCustom")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
@@ -250,7 +266,11 @@ func TestService_Check_CustomMaxAge(t *testing.T) {
 func TestService_Check_InvalidMaxAge(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "logManagerTestInvalid")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	deps := core.Dependencies{}

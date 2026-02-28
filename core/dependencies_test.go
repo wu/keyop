@@ -36,7 +36,8 @@ func TestDependencies_MustGetContext_PanicsWhenUnset(t *testing.T) {
 
 func TestDependencies_MustGetContext_ReturnsWhenSet(t *testing.T) {
 	var d Dependencies
-	ctx := context.WithValue(context.Background(), "k", "v")
+	type ctxKey string
+	ctx := context.WithValue(context.Background(), ctxKey("k"), "v")
 	d.SetContext(ctx)
 
 	got := d.MustGetContext()

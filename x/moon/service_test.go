@@ -116,9 +116,10 @@ func TestMoonService(t *testing.T) {
 		var eventMsg *core.Message
 		var alertMsg *core.Message
 		for i, m := range messenger.messages {
-			if m.Event == "moon_phase" {
+			switch m.Event {
+			case "moon_phase":
 				eventMsg = &messenger.messages[i]
-			} else if m.Event == "moon_phase_change" {
+			case "moon_phase_change":
 				alertMsg = &messenger.messages[i]
 			}
 		}

@@ -33,7 +33,7 @@ func Execute() {
 
 	var console bool
 	fs := pflag.NewFlagSet("keyop", pflag.ContinueOnError)
-	fs.ParseErrorsWhitelist.UnknownFlags = true
+	fs.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
 	fs.BoolVarP(&console, "stdout", "o", false, "display the logs in colorized output to stdout")
 	versionFlag := fs.BoolP("version", "v", false, "display version information")
 	_ = fs.Parse(os.Args[1:])

@@ -29,7 +29,11 @@ import (
 func TestWebSocket_ClientServer(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "ws_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	}()
 
 	certsDir := filepath.Join(tmpDir, ".keyop", "certs")
 	err = util.GenerateTestCerts(certsDir)
@@ -258,7 +262,11 @@ func TestClientHandlesIncomingBatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		// Handshake
 		if !sendWelcome(t, conn) {
@@ -406,7 +414,11 @@ func TestClientSendsOutgoingBatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		if !sendWelcome(t, conn) {
 			return
@@ -525,7 +537,11 @@ func TestClientOutboundAtLeastOnce(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		if !sendWelcome(t, conn) {
 			return
@@ -647,7 +663,11 @@ func TestClientVersionMismatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		// Read hello
 		var hello wsMessage
@@ -695,7 +715,12 @@ func TestClientVersionMismatch(t *testing.T) {
 	deps.SetOsProvider(osProvider)
 	deps.SetMessenger(core.NewMessenger(logger, osProvider))
 	stateDir, _ := os.MkdirTemp("", "ws_vmismatch_*")
-	defer os.RemoveAll(stateDir)
+	defer func() {
+		if err := os.RemoveAll(stateDir); err != nil {
+			t.Logf("failed to remove %s: %v", stateDir, err)
+		}
+	}()
+
 	deps.SetStateStore(core.NewFileStateStore(filepath.Join(stateDir, "state"), osProvider))
 	deps.SetContext(ctx)
 	deps.SetCancel(cancel)
@@ -723,7 +748,7 @@ func TestClientVersionMismatch(t *testing.T) {
 // releases only that waiter and does not unblock the other.
 //
 // Two separate Pubs channels give the client two independent batch-sender goroutines,
-// so both can be in-flight at the same time. The mock server captures both, then acks
+// so both can be in-flight at the same time.  The mock server captures both, then acks
 // them out of order (second batchId first).
 func TestClientAckCrossRelease(t *testing.T) {
 	type capturedBatch struct {
@@ -745,7 +770,11 @@ func TestClientAckCrossRelease(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		if !sendWelcome(t, conn) {
 			return
@@ -901,7 +930,11 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 
 		// Complete the handshake normally
 		if !sendWelcome(t, conn) {
@@ -968,7 +1001,12 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 	deps.SetOsProvider(osProvider)
 	deps.SetMessenger(core.NewMessenger(logger, osProvider))
 	stateDir, _ := os.MkdirTemp("", "ws_postver_*")
-	defer os.RemoveAll(stateDir)
+	defer func() {
+		if err := os.RemoveAll(stateDir); err != nil {
+			t.Logf("failed to remove %s: %v", stateDir, err)
+		}
+	}()
+
 	deps.SetStateStore(core.NewFileStateStore(filepath.Join(stateDir, "state"), osProvider))
 	deps.SetContext(ctx)
 	deps.SetCancel(cancel)
@@ -1071,7 +1109,11 @@ func TestClientFlushPendingOnClose(t *testing.T) {
 			if err != nil {
 				return
 			}
-			defer conn.Close()
+			defer func() {
+				if err := conn.Close(); err != nil {
+					t.Logf("server handler conn close error: %v", err)
+				}
+			}()
 
 			if !sendWelcome(t, conn) {
 				return
@@ -1209,7 +1251,11 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 		select {
 		case upgraded <- struct{}{}:
 		default:
@@ -1222,7 +1268,11 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 	// Client certs go under clientDir.
 	clientDir, err := os.MkdirTemp("", "ws_wrongca_client_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(clientDir)
+	defer func() {
+		if err := os.RemoveAll(clientDir); err != nil {
+			t.Logf("failed to remove %s: %v", clientDir, err)
+		}
+	}()
 
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", clientDir)
@@ -1249,7 +1299,11 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 
 	stateDir, err := os.MkdirTemp("", "ws_wrongca_state_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(stateDir)
+	defer func() {
+		if err := os.RemoveAll(stateDir); err != nil {
+			t.Logf("failed to remove %s: %v", stateDir, err)
+		}
+	}()
 
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
@@ -1291,7 +1345,11 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 		select {
 		case upgraded <- struct{}{}:
 		default:
@@ -1301,7 +1359,11 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 
 	clientDir, err := os.MkdirTemp("", "ws_spki_mismatch_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(clientDir)
+	defer func() {
+		if err := os.RemoveAll(clientDir); err != nil {
+			t.Logf("failed to remove %s: %v", clientDir, err)
+		}
+	}()
 
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", clientDir)
@@ -1345,7 +1407,11 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 
 	stateDir, err := os.MkdirTemp("", "ws_spki_mismatch_state_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(stateDir)
+	defer func() {
+		if err := os.RemoveAll(stateDir); err != nil {
+			t.Logf("failed to remove %s: %v", stateDir, err)
+		}
+	}()
 
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
@@ -1387,7 +1453,11 @@ func TestClientSPKIPinMatch(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("server handler conn close error: %v", err)
+			}
+		}()
 		select {
 		case upgraded <- struct{}{}:
 		default:
@@ -1426,7 +1496,11 @@ func TestClientSPKIPinMatch(t *testing.T) {
 
 	clientDir, err := os.MkdirTemp("", "ws_spki_match_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(clientDir)
+	defer func() {
+		if err := os.RemoveAll(clientDir); err != nil {
+			t.Logf("failed to remove %s: %v", clientDir, err)
+		}
+	}()
 
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", clientDir)
@@ -1479,7 +1553,11 @@ func TestClientSPKIPinMatch(t *testing.T) {
 
 	stateDir, err := os.MkdirTemp("", "ws_spki_match_state_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(stateDir)
+	defer func() {
+		if err := os.RemoveAll(stateDir); err != nil {
+			t.Logf("failed to remove %s: %v", stateDir, err)
+		}
+	}()
 
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)

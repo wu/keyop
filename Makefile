@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: all build build-main build-plugins plugins clean clean-main clean-plugins build-reminders-fetcher clean-reminders-fetcher build-release
+.PHONY: all build build-main build-plugins plugins clean clean-main clean-plugins build-reminders-fetcher clean-reminders-fetcher build-release fmt lint lint-fix test
 
 OUTPUT_DIR := output
 
@@ -98,3 +98,25 @@ clean-plugins:
 clean-reminders-fetcher:
 	@echo "Removing reminders_fetcher binary if present"; \
 	rm -f x/macosReminders/cmd/reminders_fetcher/reminders_fetcher
+
+# Formatting, linting and test helpers
+fmt:
+	@gofmt -w -s . || true
+	@command -v goimports >/dev/null 2>&1 && goimports -w . || true
+
+lint:
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not available; install it to run full lint checks"; \
+	fi
+
+lint-fix: fmt
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --fix ./...; \
+	else \
+		echo "golangci-lint not available; run 'make fmt' and install golangci-lint to do --fix"; \
+	fi
+
+test:
+	@go test ./...

@@ -1,0 +1,5 @@
+x/kodi/service.go:1: : # keyop/x/kodi [keyop/x/kodi.test]
+x/kodi/service.go:250:33: invalid operation: svc.Deps != nil (mismatched types core.Dependencies and untyped nil) (typecheck)
+package kodi
+1 issues:
+* typecheck: 1

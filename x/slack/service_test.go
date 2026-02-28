@@ -227,9 +227,10 @@ func TestService_Check(t *testing.T) {
 	// Create a new server because we need wsURL
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/apps.connections.open" {
+		switch r.URL.Path {
+		case "/apps.connections.open":
 			fmt.Fprintf(w, `{"ok": true, "url": "%s"}`, wsURL)
-		} else if r.URL.Path == "/conversations.info" {
+		case "/conversations.info":
 			assert.Equal(t, "GET", r.Method)
 			assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 			channelID := r.URL.Query().Get("channel")
@@ -238,7 +239,7 @@ func TestService_Check(t *testing.T) {
 			} else {
 				fmt.Fprint(w, `{"ok": false, "error": "channel_not_found"}`)
 			}
-		} else if r.URL.Path == "/users.info" {
+		case "/users.info":
 			assert.Equal(t, "GET", r.Method)
 			assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 			userID := r.URL.Query().Get("user")
@@ -284,7 +285,11 @@ func TestService_Check(t *testing.T) {
 	dialer := websocket.DefaultDialer
 	conn, _, err := dialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Logf("failed to close websocket conn: %v", err)
+		}
+	}()
 
 	payload := map[string]interface{}{
 		"type":        "events_api",

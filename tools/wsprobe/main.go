@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -17,7 +17,7 @@ import (
 )
 
 func mustReadFile(p string) []byte {
-	b, err := ioutil.ReadFile(p)
+	b, err := os.ReadFile(p)
 	if err != nil {
 		log.Fatalf("failed to read %s: %v", p, err)
 	}
@@ -64,19 +64,21 @@ func main() {
 	conn, resp, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		if resp != nil {
-			body, _ := ioutil.ReadAll(resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			log.Fatalf("dial failed: %v; resp status=%s; body=%s", err, resp.Status, string(body))
 		}
 		log.Fatalf("dial failed: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("conn close error: %v", err)
+		}
+	}()
 
 	log.Printf("connected (HTTP status %v)", resp.Status)
 
-	chList := []string{}
-	for _, c := range splitAndTrim(*channels) {
-		chList = append(chList, c)
-	}
+	// build channel list
+	chList := splitAndTrim(*channels)
 
 	if *mode == "subscribe-first" {
 		// send subscribe without hello
@@ -107,7 +109,9 @@ func main() {
 	}
 
 	// wait for welcome or error (with timeout)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		log.Fatalf("failed to set read deadline: %v", err)
+	}
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		log.Fatalf("failed to read welcome: %v", err)
@@ -115,7 +119,9 @@ func main() {
 	log.Printf("received: %s", string(message))
 
 	// clear deadline
-	conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		log.Printf("failed to clear read deadline: %v", err)
+	}
 
 	// send subscribe
 	sub := map[string]interface{}{

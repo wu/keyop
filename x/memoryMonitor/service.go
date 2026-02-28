@@ -71,11 +71,12 @@ func (svc *Service) Check() error {
 	var utilizedPercent float64
 	var err error
 
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		utilizedPercent, err = svc.getLinuxMemUsage()
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		utilizedPercent, err = svc.getDarwinMemUsage()
-	} else {
+	default:
 		err = fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
@@ -105,12 +106,17 @@ func (svc *Service) Check() error {
 }
 
 func (svc *Service) getLinuxMemUsage() (float64, error) {
+	logger := svc.Deps.MustGetLogger()
 	osProvider := svc.Deps.MustGetOsProvider()
 	f, err := osProvider.OpenFile("/proc/meminfo", 0, 0)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			logger.Warn("memoryMonitor: failed to close /proc/meminfo", "err", err)
+		}
+	}()
 
 	buf := make([]byte, 2048)
 	n, err := f.Read(buf)
@@ -129,9 +135,10 @@ func parseMeminfo(content string) (float64, error) {
 		if len(fields) < 2 {
 			continue
 		}
-		if fields[0] == "MemTotal:" {
+		switch fields[0] {
+		case "MemTotal:":
 			memTotal, _ = strconv.ParseFloat(fields[1], 64)
-		} else if fields[0] == "MemAvailable:" {
+		case "MemAvailable:":
 			memAvailable, _ = strconv.ParseFloat(fields[1], 64)
 		}
 	}

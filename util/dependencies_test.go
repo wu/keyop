@@ -1,7 +1,6 @@
 package util
 
 import (
-	"context"
 	"keyop/core"
 	"log/slog"
 	"testing"
@@ -15,13 +14,11 @@ func Test_InitializeDependencies_ReturnsInitializedDependencies(t *testing.T) {
 	// Check context is set and not nil
 	ctx := deps.MustGetContext()
 	assert.NotNil(t, ctx)
-	_, ok := ctx.(context.Context)
-	assert.True(t, ok)
 
 	// Check logger is set and not nil
 	logger := deps.MustGetLogger()
 	assert.NotNil(t, logger)
-	_, ok = logger.(*slog.Logger)
+	_, ok := logger.(*slog.Logger)
 	assert.True(t, ok)
 
 	// Check osProvider is set and not nil

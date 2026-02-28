@@ -24,8 +24,11 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
@@ -58,8 +61,11 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
@@ -88,8 +94,11 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
@@ -120,8 +129,11 @@ func TestMessenger_Send_DiscardDuplicateRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
@@ -160,8 +172,11 @@ func TestMessenger_Send_NoSubscribers_NoError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir
@@ -176,8 +191,11 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(&FakeLogger{}, OsProvider{})
 	m.dataDir = tmpDir
@@ -239,8 +257,11 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	fl := &FakeLogger{}
 	testErr := errors.New("hostname lookup failed")
@@ -287,8 +308,11 @@ func TestMessenger_Send_CustomHostnameLoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(&FakeLogger{}, OsProvider{})
 	m.dataDir = tmpDir
@@ -350,8 +374,11 @@ func TestMessenger_Send_EnqueueError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -387,8 +414,11 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -482,8 +512,11 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -513,8 +546,11 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -556,8 +592,11 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), OsProvider{})
 	m.dataDir = tmpDir

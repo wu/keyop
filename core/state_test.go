@@ -13,7 +13,11 @@ import (
 func TestFileStateStore(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "state_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	store := NewFileStateStore(tmpDir, osProvider)

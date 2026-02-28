@@ -104,6 +104,7 @@ func (svc *Service) Check() error {
 }
 
 func (svc *Service) gzipFile(srcPath string, modTime time.Time) error {
+	logger := svc.Deps.MustGetLogger()
 	osProvider := svc.Deps.MustGetOsProvider()
 	destPath := srcPath + ".gz"
 
@@ -111,17 +112,29 @@ func (svc *Service) gzipFile(srcPath string, modTime time.Time) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		if err := src.Close(); err != nil {
+			logger.Error("logManager: failed to close src file", "file", srcPath, "error", err)
+		}
+	}()
 
 	dest, err := osProvider.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
-	defer dest.Close()
+	defer func() {
+		if err := dest.Close(); err != nil {
+			logger.Error("logManager: failed to close dest file", "file", destPath, "error", err)
+		}
+	}()
 
 	gz := gzip.NewWriter(dest)
 	gz.ModTime = modTime
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			logger.Error("logManager: failed to close gzip writer", "file", destPath, "error", err)
+		}
+	}()
 
 	if _, err := io.Copy(gz, src); err != nil {
 		return err

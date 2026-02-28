@@ -83,7 +83,11 @@ func TestService_Check(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "kodi_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	deps := core.Dependencies{}
 	logger := &core.FakeLogger{}

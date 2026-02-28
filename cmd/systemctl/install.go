@@ -63,7 +63,11 @@ WantedBy=multi-user.target
 	if err != nil {
 		return fmt.Errorf("failed to create service file (do you have root privileges?): %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			logger.Warn("systemctl: failed to close service file", "err", err)
+		}
+	}()
 
 	if _, err := f.WriteString(serviceConfig); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)

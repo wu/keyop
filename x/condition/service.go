@@ -38,9 +38,7 @@ func (svc *Service) ValidateConfig() []error {
 		return errs
 	}
 
-	for _, e := range core.ValidateConditions("condition", condsRaw) {
-		errs = append(errs, e)
-	}
+	errs = append(errs, core.ValidateConditions("condition", condsRaw)...)
 
 	return errs
 }

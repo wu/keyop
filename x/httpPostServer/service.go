@@ -11,10 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 )
-
-var alphanumeric = regexp.MustCompile("^[a-zA-Z0-9]+$")
 
 type Service struct {
 	Deps      core.Dependencies
@@ -196,8 +193,11 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading body", http.StatusInternalServerError)
 		return
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			logger.Error("httpPostServer: failed to close request body", "error", err)
+		}
+	}()
 
 	var msg core.Message
 	if err := json.Unmarshal(body, &msg); err != nil {

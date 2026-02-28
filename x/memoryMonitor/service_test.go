@@ -256,7 +256,8 @@ func TestInitialize_CustomMetricName(t *testing.T) {
 }
 
 func TestCheck_ErrorHandling(t *testing.T) {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		// On Darwin, Initialize() calls sysctl for total memory; mock it properly,
 		// then fail only on the vm_stat call used during Check().
 		fakeOs := &core.FakeOsProvider{}
@@ -295,7 +296,7 @@ func TestCheck_ErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error from command failure, got nil")
 		}
-	} else if runtime.GOOS == "linux" {
+	case "linux":
 		fakeOs := &core.FakeOsProvider{}
 		fakeOs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
 			return nil, fmt.Errorf("file error")
@@ -320,7 +321,7 @@ func TestCheck_ErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error from file failure, got nil")
 		}
-	} else {
+	default:
 		t.Skip("Unsupported platform for TestCheck_ErrorHandling")
 	}
 }

@@ -26,25 +26,25 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
 	return nil
 }
 
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
 	return nil
 }
 
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error {
 	return nil
 }
 
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
+func (m *mockMessenger) SeekToEnd(_ string, _ string) error {
 	return nil
 }
 
-func (m *mockMessenger) SetDataDir(dir string) {}
+func (m *mockMessenger) SetDataDir(_ string) {}
 
-func (m *mockMessenger) SetHostname(hostname string) {}
+func (m *mockMessenger) SetHostname(_ string) {}
 
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
@@ -221,8 +221,4 @@ func TestValidateConfig(t *testing.T) {
 		assert.True(t, found, "expected host required error")
 	})
 
-}
-
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }

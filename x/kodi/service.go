@@ -244,7 +244,11 @@ func (svc *Service) callKodi(url string, method string, params interface{}, resu
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			svc.Deps.MustGetLogger().Warn("kodi: failed to close response body", "err", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("kodi returned status %d", resp.StatusCode)

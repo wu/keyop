@@ -120,7 +120,7 @@ func (svc *Service) Check() error {
 
 	// Determine the next event
 	nextEventName := ""
-	nextEventTime := time.Time{}
+	var nextEventTime time.Time
 
 	if events.CivilDawn.After(now) {
 		nextEventName = "Dawn"
@@ -183,15 +183,20 @@ func (svc *Service) scheduleAlerts() {
 			if eventTime.After(now) {
 				duration := eventTime.Sub(now)
 				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
+				// capture variables for closure
+				et := eventTime
+				n := name
 				timer := time.AfterFunc(duration, func() {
-					messenger.Send(core.Message{
+					if err := messenger.Send(core.Message{
 						ChannelName: svc.Cfg.Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,
 						Event:       "sun_event",
-						Text:        fmt.Sprintf("Sun event: %s", name),
-						Summary:     name,
-					})
+						Text:        fmt.Sprintf("Sun event: %s", n),
+						Summary:     n,
+					}); err != nil {
+						logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
+					}
 					// Reschedule after the alert fires to keep it going
 					svc.scheduleAlerts()
 				})

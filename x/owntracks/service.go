@@ -92,7 +92,9 @@ func (svc *Service) Initialize() error {
 	ctx := svc.Deps.MustGetContext()
 	go func() {
 		<-ctx.Done()
-		_ = ln.Close()
+		if err := ln.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("owntracks: failed to close listener", "error", err)
+		}
 	}()
 
 	go func() {
@@ -120,7 +122,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//goland:noinspection GoUnhandledErrorResult
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("owntracks: failed to close request body", "error", err)
+		}
+	}()
 
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
@@ -327,7 +333,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if deviceName != "" {
 		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]string{"device": deviceName}
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			logger.Error("owntracks: failed to write response", "error", err)
+		}
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}

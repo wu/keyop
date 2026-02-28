@@ -55,9 +55,10 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	_ = messenger.Subscribe(context.Background(), "test", "thermo", "thermostat", "test", 0, func(m core.Message) error {
 		mu.Lock()
 		defer mu.Unlock()
-		if m.Event == "heater_state" {
+		switch m.Event {
+		case "heater_state":
 			heaterMsgs = append(heaterMsgs, m)
-		} else if m.Event == "cooler_state" {
+		case "cooler_state":
 			coolerMsgs = append(coolerMsgs, m)
 		}
 		return nil

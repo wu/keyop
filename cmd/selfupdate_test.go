@@ -15,7 +15,11 @@ func TestInstallUpdate(t *testing.T) {
 	// Setup
 	tmpDir, err := os.MkdirTemp("", "keyop-test-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	exePath := filepath.Join(tmpDir, "keyop")
 	err = os.WriteFile(exePath, []byte("original binary"), 0644)

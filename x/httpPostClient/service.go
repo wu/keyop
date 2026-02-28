@@ -260,8 +260,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		logger.Error("failed to post message to HTTP endpoint", "url", url, "error", err)
 		return err
 	}
-	//goland:noinspection GoUnhandledErrorResult
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("httpPostClient: failed to close response body", "err", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

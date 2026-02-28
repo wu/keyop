@@ -101,6 +101,8 @@ func (svc *Service) fetchForecastURL() error {
 	}
 	svc.mu.RUnlock()
 
+	logger := svc.Deps.MustGetLogger()
+
 	url := fmt.Sprintf("%s/points/%.4f,%.4f", apiBaseURL, lat, lon)
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -114,7 +116,11 @@ func (svc *Service) fetchForecastURL() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("nwsWeather: failed to close response body", "err", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("nwsWeather: failed to fetch points: status %d", resp.StatusCode)
@@ -167,11 +173,17 @@ func (svc *Service) Check() error {
 	}
 	req.Header.Set("User-Agent", "(keyop, https://github.com/keyop/keyop)")
 
+	logger := svc.Deps.MustGetLogger()
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("nwsWeather: failed to close response body", "err", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		// If forecast URL failed, maybe it expired or is wrong, try to refetch it next time

@@ -206,7 +206,9 @@ func (svc *Service) connectLoop() {
 		logger.Debug("webSocketClient: connected")
 
 		svc.handleConnection(conn)
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			logger.Debug("webSocketClient: conn close failed", "error", err)
+		}
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -277,7 +279,9 @@ func (w *connWriter) writePing() error {
 func (w *connWriter) close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.conn.Close()
+	if err := w.conn.Close(); err != nil {
+		fmt.Printf("webSocketClient: failed to close conn: %v\n", err)
+	}
 }
 
 // flushPending closes all outstanding pending-ack done channels so that batch-sender
@@ -332,13 +336,19 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	}
 	logger.Debug("webSocketClient: sent hello", "clientId", clientID)
 
-	conn.SetReadDeadline(time.Now().Add(welcomeTimeout))
+	if err := conn.SetReadDeadline(time.Now().Add(welcomeTimeout)); err != nil {
+		logger.Error("webSocketClient: failed to set read deadline for welcome", "error", err)
+		return
+	}
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		logger.Error("webSocketClient: failed to read welcome", "error", err)
 		return
 	}
-	conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		logger.Error("webSocketClient: failed to clear read deadline", "error", err)
+		// continue; not fatal
+	}
 
 	var welcome wsMessage
 	if err := json.Unmarshal(raw, &welcome); err != nil {
@@ -359,9 +369,15 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	logger.Debug("webSocketClient: handshake complete", "serverId", welcome.ServerID)
 
 	// ── Ping / Pong deadlines ─────────────────────────────────────────────────
-	conn.SetReadDeadline(time.Now().Add(pongTimeout))
+	if err := conn.SetReadDeadline(time.Now().Add(pongTimeout)); err != nil {
+		logger.Error("webSocketClient: failed to set read deadline for pong", "error", err)
+		return
+	}
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(pongTimeout))
+		if err := conn.SetReadDeadline(time.Now().Add(pongTimeout)); err != nil {
+			logger.Error("webSocketClient: failed to extend read deadline on pong", "error", err)
+			return err
+		}
 		return nil
 	})
 

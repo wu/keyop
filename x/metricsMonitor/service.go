@@ -147,14 +147,15 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		matchedMetricName = true
 
 		triggered := false
-		if t.Condition == "above" {
+		switch t.Condition {
+		case "above":
 			if msg.Metric > t.Value {
 				triggered = true
 			} else if t.RecoveryThreshold != nil && lastStatus != "ok" && msg.Metric > *t.RecoveryThreshold {
 				// We haven't recovered yet
 				triggered = true
 			}
-		} else if t.Condition == "below" {
+		case "below":
 			if msg.Metric < t.Value {
 				triggered = true
 			} else if t.RecoveryThreshold != nil && lastStatus != "ok" && msg.Metric < *t.RecoveryThreshold {

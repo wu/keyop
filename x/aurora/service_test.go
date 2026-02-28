@@ -140,9 +140,10 @@ func TestService_Check(t *testing.T) {
 	messenger := deps.MustGetMessenger()
 	messenger.Subscribe(context.Background(), "test", "aurora", "aurora", "aurora", 0, func(msg core.Message) error {
 		mu.Lock()
-		if msg.Event == "aurora_check" {
+		switch msg.Event {
+		case "aurora_check":
 			receivedChecks = append(receivedChecks, msg)
-		} else if msg.Event == "aurora_alert" {
+		case "aurora_alert":
 			receivedAlerts = append(receivedAlerts, msg)
 		}
 		mu.Unlock()

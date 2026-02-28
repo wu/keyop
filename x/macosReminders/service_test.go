@@ -63,10 +63,7 @@ func TestParseLineAndSend(t *testing.T) {
 
 	_ = parts[4] // id is unused in this test
 
-	completed := false
-	if completedRaw == "true" {
-		completed = true
-	}
+	completed := completedRaw == "true"
 
 	var ts time.Time
 	if dueRaw != "" {

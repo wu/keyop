@@ -38,7 +38,11 @@ func runSelfUpdateWithURL(deps core.Dependencies, baseURL string) error {
 	if err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("selfupdate: failed to close response body", "err", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download update: received status code %d", resp.StatusCode)
@@ -66,7 +70,11 @@ func runSelfUpdateWithURL(deps core.Dependencies, baseURL string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			logger.Warn("failed to close gzip reader", "err", err)
+		}
+	}()
 
 	exePath, err := os.Executable()
 	if err != nil {
@@ -83,8 +91,12 @@ func installUpdate(logger core.Logger, gzReader io.Reader, exePath string) error
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 	defer func() {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		if err := tmpFile.Close(); err != nil {
+			logger.Warn("failed to close temp update file", "err", err)
+		}
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			logger.Debug("failed to remove temp update file", "err", err, "path", tmpFile.Name())
+		}
 	}()
 
 	logger.Info("Decompressing update", "to", tmpFile.Name())

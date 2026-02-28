@@ -1,0 +1,4 @@
+cmd/tui.go:766:5: this value of start is never used (SA4006)
+core/condition_parser.go:135:6: func parseConditionValue is unused (U1000)
+x/idleMonitorMacos/service.go:193:3: this value of timeSinceLastStatusChange is never used (SA4006)
+x/idleMonitorMacos/service.go:193:31: Sub doesn't have side effects and its return value is ignored (SA4017)

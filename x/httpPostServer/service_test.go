@@ -454,7 +454,11 @@ func TestService_Initialize_FailedToCreateTargetDirectory(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	tmpDir, _ := os.MkdirTemp("", "httpPostServer_fail_mkdir")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove tmpDir %s: %v", tmpDir, err)
+		}
+	}()
 	certsDir := filepath.Join(tmpDir, ".keyop", "certs")
 	_ = util.GenerateTestCerts(certsDir)
 

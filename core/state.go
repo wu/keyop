@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -40,7 +41,11 @@ func (s *FileStateStore) Save(key string, value interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("FileStateStore: failed to close file %s: %v", path, err)
+		}
+	}()
 
 	_, err = f.WriteString(string(data))
 	return err
@@ -56,7 +61,11 @@ func (s *FileStateStore) Load(key string, value interface{}) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("FileStateStore: failed to close file %s: %v", path, err)
+		}
+	}()
 
 	decoder := json.NewDecoder(f)
 	return decoder.Decode(value)

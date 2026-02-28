@@ -410,7 +410,11 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 
 	// Create a different CA and a server certificate signed by it
 	tmpDir, _ := os.MkdirTemp("", "untrusted_server")
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove tmpDir %s: %v", tmpDir, err)
+		}
+	}()
 	_ = util.GenerateTestCerts(tmpDir)
 
 	serverCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.crt"))

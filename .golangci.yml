@@ -1,0 +1,51 @@
+version: 2
+
+run:
+  timeout: 10m
+  tests: true
+  skip-dirs:
+    - output
+    - plugins
+    - resources
+  skip-files:
+    - ".*\\.gen\\.go"
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - gosec
+    - revive
+
+linters-settings:
+  revive:
+    # keep default rule set but allow generated header detection
+    ignore-generated-header: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude:
+    # Common false positives / non-actionable items
+    - "generated"
+    - "should replace loop with" # allow some stylistic suggestions to be ignored if necessary
+
+# Skip linting for third-party generated or build outputs
+exclude-rules:
+  - path: ^output/.*
+    linters:
+      - "*"
+  - path: ^plugins/.*
+    linters:
+      - "*"
+  - path: ^resources/.*
+    linters:
+      - "*"
+  - path: ".*_test\\.go$"
+    linters:
+      - errcheck
+
+# Optional: tune per-linter severity or add more exclusions as the project evolves

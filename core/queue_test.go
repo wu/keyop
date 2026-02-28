@@ -15,8 +15,11 @@ import (
 func TestPersistentQueue_Basic(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -46,8 +49,11 @@ func TestPersistentQueue_Basic(t *testing.T) {
 func TestPersistentQueue_Persistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_persist")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -82,8 +88,11 @@ func TestPersistentQueue_Persistence(t *testing.T) {
 func TestPersistentQueue_Ack(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_ack")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -142,8 +151,11 @@ func TestPersistentQueue_Ack(t *testing.T) {
 func TestPersistentQueue_Rotation(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_rotation")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -179,8 +191,11 @@ func TestPersistentQueue_Rotation(t *testing.T) {
 func TestPersistentQueue_Blocking(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_blocking")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -217,8 +232,11 @@ func TestPersistentQueue_Blocking(t *testing.T) {
 func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_before")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -259,8 +277,11 @@ func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 func TestPersistentQueue_MultipleReaders(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_multi")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -305,8 +326,11 @@ func TestPersistentQueue_MultipleReaders(t *testing.T) {
 func TestPersistentQueue_MultipleQueues(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_multi_queues")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -356,8 +380,11 @@ func TestPersistentQueue_MultipleQueues(t *testing.T) {
 func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_missing")
 	require.NoError(t, err)
-	//goland:noinspection GoUnhandledErrorResult
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}
@@ -415,7 +442,11 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 func TestPersistentQueue_WSReaderPersistence(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "queue_test_ws_persistence")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
 
 	osProvider := OsProvider{}
 	logger := &FakeLogger{}

@@ -215,7 +215,9 @@ func (w *connWriter) writePing() error {
 func (w *connWriter) close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.conn.Close()
+	if err := w.conn.Close(); err != nil {
+		fmt.Printf("webSocketServer: failed to close conn: %v\n", err)
+	}
 }
 
 // flushPending closes all in-flight pending-ack done channels so that any goroutine
@@ -237,8 +239,13 @@ func flushPending(pending map[string]*pendingAck) {
 }
 
 func (svc *Service) handleConnection(conn *websocket.Conn) {
-	defer conn.Close()
+	// get logger early so we can report Close errors from defer
 	logger := svc.Deps.MustGetLogger()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Error("webSocketServer: failed to close connection", "error", err)
+		}
+	}()
 	messenger := svc.Deps.MustGetMessenger()
 
 	logger.Debug("webSocketServer: handling new connection")
@@ -249,13 +256,17 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	cw := &connWriter{conn: conn}
 
 	// ── Handshake ─────────────────────────────────────────────────────────────
-	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	if err := conn.SetReadDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		logger.Error("webSocketServer: failed to set read deadline for handshake", "error", err)
+	}
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		logger.Error("webSocketServer: handshake read failed", "error", err)
 		return
 	}
-	conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		logger.Error("webSocketServer: failed to clear read deadline", "error", err)
+	}
 
 	var hello wsMessage
 	if err := json.Unmarshal(raw, &hello); err != nil || hello.Type != "hello" {
@@ -296,9 +307,14 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	}
 
 	// ── Ping / Pong deadlines ──────────────────────────────────────────────────
-	conn.SetReadDeadline(time.Now().Add(pongTimeout))
+	if err := conn.SetReadDeadline(time.Now().Add(pongTimeout)); err != nil {
+		logger.Error("webSocketServer: failed to set read deadline for pong", "error", err)
+	}
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(pongTimeout))
+		if err := conn.SetReadDeadline(time.Now().Add(pongTimeout)); err != nil {
+			logger.Error("webSocketServer: failed to extend read deadline on pong", "error", err)
+			return err
+		}
 		return nil
 	})
 

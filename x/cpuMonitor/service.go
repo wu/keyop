@@ -104,7 +104,11 @@ func (svc *Service) getLinuxCpuStats() (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			svc.Deps.MustGetLogger().Error("cpuMonitor: failed to close /proc/stat", "error", err)
+		}
+	}()
 
 	buf := make([]byte, 1024)
 	n, err := f.Read(buf)

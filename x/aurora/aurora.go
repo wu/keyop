@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"time"
@@ -25,7 +26,11 @@ func FetchOvationData(url string) (*OvationData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("aurora: failed to fetch data: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("aurora: failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("aurora: failed to fetch data: status %d", resp.StatusCode)

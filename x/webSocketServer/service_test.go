@@ -22,12 +22,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Helper utilities for tests to make SetReadDeadline/Close error handling explicit.
+func safeSetReadDeadline(t *testing.T, c *websocket.Conn, tm time.Time) {
+	t.Helper()
+	if err := c.SetReadDeadline(tm); err != nil {
+		t.Logf("SetReadDeadline failed: %v", err)
+	}
+}
+
+func safeClearReadDeadline(t *testing.T, c *websocket.Conn) {
+	t.Helper()
+	if err := c.SetReadDeadline(time.Time{}); err != nil {
+		t.Logf("Clear ReadDeadline failed: %v", err)
+	}
+}
+
+func safeCloseConn(t *testing.T, c *websocket.Conn) {
+	t.Helper()
+	if c == nil {
+		return
+	}
+	if err := c.Close(); err != nil {
+		t.Logf("failed to close websocket conn: %v", err)
+	}
+}
+
 func TestValidateConfig(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-home-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	if err := os.MkdirAll(certDir, 0755); err != nil {
@@ -99,7 +128,11 @@ func TestInitialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -163,13 +196,13 @@ func (f *fakeMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName, channelName, serviceType, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
 	return f.SubscribeExtended(ctx, sourceName, channelName, serviceType, serviceName, maxAge, func(msg core.Message, fileName string, offset int64) error {
 		return messageHandler(msg)
 	})
 }
 
-func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+func (f *fakeMessenger) SubscribeExtended(ctx context.Context, _ string, channelName string, _ string, _ string, _ time.Duration, messageHandler func(core.Message, string, int64) error) error {
 	f.mu.Lock()
 	f.subscribedChannels[channelName] = true
 	f.mu.Unlock()
@@ -188,23 +221,23 @@ func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, ch
 	return nil
 }
 
-func (f *fakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+func (f *fakeMessenger) SetReaderState(channelName, readerName, fileName string, offset int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.readerStates[channelName+":"+readerName] = fmt.Sprintf("%s:%d", fileName, offset)
 	return nil
 }
 
-func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
+func (f *fakeMessenger) SeekToEnd(channelName string, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.seekedChannels[channelName] = true
 	return nil
 }
 
-func (f *fakeMessenger) SetDataDir(dir string) {}
+func (f *fakeMessenger) SetDataDir(_ string) {}
 
-func (f *fakeMessenger) SetHostname(hostname string) {}
+func (f *fakeMessenger) SetHostname(_ string) {}
 
 func (f *fakeMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
@@ -266,9 +299,9 @@ func doHandshake(t *testing.T, conn *websocket.Conn) {
 	require.NoError(t, conn.WriteJSON(wsMessage{V: 1, Type: "hello", ClientID: "test-client",
 		Capabilities: &wsCapabilities{Batch: true}}))
 	var welcome wsMessage
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
 	require.NoError(t, conn.ReadJSON(&welcome))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 	require.Equal(t, "welcome", welcome.Type)
 	require.Equal(t, 1, welcome.V)
 }
@@ -278,7 +311,11 @@ func doHandshake(t *testing.T, conn *websocket.Conn) {
 func TestHandleConnection(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-home-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -323,9 +360,9 @@ func TestHandleConnection(t *testing.T) {
 	messenger.subscribeChan <- testMsg
 
 	var received wsMessage
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
 	require.NoError(t, conn.ReadJSON(&received))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 	assert.Equal(t, "batch", received.Type)
 	assert.Equal(t, 1, received.V)
 	assert.NotEmpty(t, received.BatchID)
@@ -377,7 +414,11 @@ func TestHandleConnection(t *testing.T) {
 func TestHandleConnection_VersionMismatch(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-vmismatch-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -426,7 +467,11 @@ func TestHandleConnection_VersionMismatch(t *testing.T) {
 func TestHandleConnection_Batching(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-batch-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -492,7 +537,11 @@ func TestHandleConnection_Batching(t *testing.T) {
 func TestHandleConnection_ClientBatch(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-clientbatch-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -535,9 +584,9 @@ func TestHandleConnection_ClientBatch(t *testing.T) {
 	require.NoError(t, conn.WriteJSON(batch))
 
 	var ackMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
 	require.NoError(t, conn.ReadJSON(&ackMsg))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 	assert.Equal(t, "ack", ackMsg.Type)
 	assert.Equal(t, batchID, ackMsg.BatchID, "ack must carry the same batchId")
 
@@ -560,7 +609,11 @@ func TestHandleConnection_ClientBatch(t *testing.T) {
 func TestHandleConnection_ClientBatch_NoAckOnFailure(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-clientbatch-fail-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -645,7 +698,11 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 	wsURL := strings.Replace(plainSrv.URL, "http", "ws", 1)
 	clientConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer clientConn.Close()
+	defer func() {
+		if err := clientConn.Close(); err != nil {
+			t.Logf("failed to close client websocket conn: %v", err)
+		}
+	}()
 
 	var serverConn *websocket.Conn
 	select {
@@ -754,7 +811,11 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 func TestHandleConnection_PostHandshakeVersionMismatch(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-post-ver-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -811,7 +872,11 @@ func TestHandleConnection_PostHandshakeVersionMismatch(t *testing.T) {
 func TestHandleConnection_BadHandshake(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-bad-hs-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", home, err)
+		}
+	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
 	_, _, _, _, err = util.CreateTestCerts(certDir)
@@ -923,7 +988,11 @@ func TestSendBatchAndWaitAck_FlushOnClose(t *testing.T) {
 	clientConn, _, err := websocket.DefaultDialer.Dial(
 		strings.Replace(srv.URL, "http", "ws", 1), nil)
 	require.NoError(t, err)
-	defer clientConn.Close()
+	defer func() {
+		if err := clientConn.Close(); err != nil {
+			t.Logf("failed to close client websocket conn: %v", err)
+		}
+	}()
 
 	serverConn := <-serverConnCh
 
