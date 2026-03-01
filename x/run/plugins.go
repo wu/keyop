@@ -59,7 +59,14 @@ func LoadPlugins(deps core.Dependencies) error {
 		logger.Info("Loading plugin", "name", p.Name, "path", p.Path)
 		if _, statErr := os.Stat(p.Path); statErr != nil {
 			if os.IsNotExist(statErr) {
-				logger.Error("Plugin file not found, skipping", "name", p.Name, "path", p.Path)
+				// Improved error message: list the directory where the plugin was expected and include hints
+				pluginDir := filepath.Dir(p.Path)
+				files := []os.DirEntry{}
+				if dirEntries, readErr := os.ReadDir(pluginDir); readErr == nil {
+					files = dirEntries
+				}
+				logger.Error("Plugin file not found, skipping", "name", p.Name, "path", p.Path, "dir_listing", files)
+				logger.Error("Hint: ensure the plugin .so exists at the absolute path above (container paths: /root/.keyop or /.keyop)")
 				continue
 			}
 			return fmt.Errorf("error stating plugin file %s: %w", p.Path, statErr)

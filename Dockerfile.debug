@@ -1,0 +1,30 @@
+# Dockerfile.debug - small Debian image with a shell for debugging
+FROM debian:bookworm-slim
+
+# Install minimal debugging tools (bash, ls, ps, curl)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash ca-certificates procps curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Expose web UI port for convenience
+EXPOSE 8823
+
+# Copy prepared .keyop files (plugins, conf) if present
+COPY .keyop /root/.keyop
+# Copy example conf as fallback
+COPY example-conf /root/.keyop/conf
+COPY example-conf /.keyop/conf
+
+# Copy web UI static assets into the image root so the web UI can serve them
+COPY plugins/webUiPlugin/static /webui-static
+
+# Ensure webui directory exists so the web UI can store its DB file
+RUN mkdir -p /root/.keyop/webui /.keyop/webui && \
+    chown -R root:root /root/.keyop/webui /.keyop/webui || true
+
+# Copy prebuilt binary to a known path and make it executable
+COPY keyop /usr/local/bin/keyop
+RUN chmod +x /usr/local/bin/keyop
+
+ENTRYPOINT ["/usr/local/bin/keyop"]
+CMD ["--help"]

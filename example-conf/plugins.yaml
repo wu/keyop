@@ -1,0 +1,5 @@
+plugins:
+  - name: webUi
+    path: ../keyop-webUiPlugin/webUiPlugin.so
+    enabled: true
+

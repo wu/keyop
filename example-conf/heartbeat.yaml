@@ -1,0 +1,24 @@
+x: heartbeat
+freq: 15s
+
+config:
+
+  metricName: heartbeat.{{.ShortHostname}}
+
+  pub_preprocess:
+    - when: 'event eq "restart"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "uptime"'
+      updates:
+        channelName: heartbeat
+
+    - when: 'event eq "uptime_metric"'
+      updates:
+        channelName: metrics
+
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+

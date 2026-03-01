@@ -1,0 +1,29 @@
+# Binaries and outputs
+output
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Git and temp files
+.git
+.gitignore
+
+# Editor and OS files
+*.swp
+*~
+.DS_Store
+
+# Build cache
+**/vendor/
+**/node_modules/
+
+# Secrets and env
+.env
+
+# Plugins build artifacts
+plugins/*/*.so
+
+# Allow web UI static assets to be included in the build context
+!plugins/webUiPlugin/static
+!plugins/webUiPlugin/static/**

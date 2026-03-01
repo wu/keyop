@@ -120,3 +120,22 @@ lint-fix: fmt
 
 test:
 	@go test ./...
+
+# Docker convenience targets
+.PHONY: docker-build docker-push docker-run
+
+DOCKER_IMAGE ?= ghcr.io/$(shell git config --get user.name || echo $(GIT_BRANCH))/keyop
+DOCKER_TAG ?= latest
+
+docker-build:
+	@./scripts/docker-build.sh $(DOCKER_IMAGE) $(DOCKER_TAG)
+
+docker-build-debug:
+	@./scripts/docker-build.sh $(DOCKER_IMAGE) $(DOCKER_TAG) Dockerfile.debug
+
+docker-push: docker-build
+	@echo "Pushing docker image $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker-run:
+	docker run --rm -it $(DOCKER_IMAGE):$(DOCKER_TAG) $(ARGS)
