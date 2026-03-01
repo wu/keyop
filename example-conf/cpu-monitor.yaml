@@ -1,0 +1,13 @@
+x: cpuMonitor
+freq: 15s
+
+config:
+
+  cpu_metric_name: cpu.{{.ShortHostname}}
+
+  pub_preprocess:
+    - when: 'event eq "metric"'
+      updates:
+        channelName: metrics
+
+

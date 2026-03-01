@@ -1,0 +1,12 @@
+freq: 1h
+x: logManager
+config:
+  dataDir: {{.HomeDir}}/.keyop/data
+pubs:
+  events:
+    name: log-manager
+    description: Publish events to local channel
+  errors:
+    name: errors
+    description: Publish errors to local channel
+

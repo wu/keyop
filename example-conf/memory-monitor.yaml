@@ -1,0 +1,12 @@
+x: memoryMonitor
+freq: 15s
+
+config:
+
+  metric_name: memory.{{.ShortHostname}}
+
+  pub_preprocess:
+    - when: 'event eq "memory_metric"'
+      updates:
+        channelName: metrics
+

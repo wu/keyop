@@ -1,0 +1,17 @@
+x: messengerStats
+freq: 15s
+
+config:
+
+  metric_name: messages.{{.ShortHostname}}
+
+  pub_preprocess:
+
+    - when: 'event eq "stats"'
+      updates:
+        channelName: messenger
+
+    - when: 'event eq "message_rate"'
+      updates:
+        channelName: metrics
+

@@ -1,0 +1,17 @@
+x: statusMonitor
+freq: 15s
+
+config:
+
+  notificationDelay: 5m
+
+  pub_preprocess:
+    - when: 'event eq "status_alert"'
+      updates:
+        channelName: alerts
+
+subs:
+  status:
+    name: status
+    description: Subscribe to local status events
+
