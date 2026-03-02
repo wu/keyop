@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sj14/astral/pkg/astral"
+	"github.com/soniakeys/meeus/v3/moonphase"
 )
 
 type Service struct {
@@ -87,13 +88,14 @@ func (svc *Service) Check() error {
 
 	// Send alert if the phase name has changed
 	if phaseName != lastPhaseName {
+		nextEvent, timeUntil := timeUntilNextMajorPhase(now)
 		alertMsg := core.Message{
 			Correlation: correlationId,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "moon_phase_change",
-			Text:        fmt.Sprintf("The moon is now in the %s phase", phaseName),
+			Text:        fmt.Sprintf("The moon is now in the %s phase. Next %s in %s.", phaseName, nextEvent, formatDuration(timeUntil)),
 			Summary:     fmt.Sprintf("Moon phase: %s", phaseName),
 		}
 		return messenger.Send(alertMsg)
@@ -129,4 +131,58 @@ func getMoonPhaseName(phase float64) string {
 	} else {
 		return "New Moon"
 	}
+}
+
+// timeUntilNextMajorPhase returns the name and exact time.Time of the next New Moon or Full Moon,
+// whichever comes first, using the Meeus algorithm for precise timing.
+func timeUntilNextMajorPhase(from time.Time) (string, time.Duration) {
+	dy := decimalYear(from)
+
+	nextNew := jdeToTime(moonphase.New(dy))
+	if !nextNew.After(from) {
+		nextNew = jdeToTime(moonphase.New(decimalYear(from.Add(30 * 24 * time.Hour))))
+	}
+
+	nextFull := jdeToTime(moonphase.Full(dy))
+	if !nextFull.After(from) {
+		nextFull = jdeToTime(moonphase.Full(decimalYear(from.Add(30 * 24 * time.Hour))))
+	}
+
+	if nextNew.Before(nextFull) {
+		return "New Moon", time.Until(nextNew).Round(time.Minute)
+	}
+	return "Full Moon", time.Until(nextFull).Round(time.Minute)
+}
+
+// decimalYear converts a time.Time to a decimal year for use with the Meeus algorithms.
+func decimalYear(t time.Time) float64 {
+	y := t.Year()
+	start := time.Date(y, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(y+1, 1, 1, 0, 0, 0, 0, time.UTC)
+	frac := float64(t.UTC().Sub(start)) / float64(end.Sub(start))
+	return float64(y) + frac
+}
+
+// jdeToTime converts a Julian Ephemeris Day number to a time.Time (UTC).
+// The Unix epoch (1970-01-01 00:00:00 UTC) corresponds to JDE 2440587.5.
+func jdeToTime(jde float64) time.Time {
+	const jdeUnixEpoch = 2440587.5
+	secondsFromEpoch := (jde - jdeUnixEpoch) * 86400
+	sec := int64(secondsFromEpoch)
+	ns := int64((secondsFromEpoch - float64(sec)) * 1e9)
+	return time.Unix(sec, ns).UTC()
+}
+
+// formatDuration returns a human-readable duration in days and hours.
+func formatDuration(d time.Duration) string {
+	totalHours := int(d.Hours())
+	days := totalHours / 24
+	hours := totalHours % 24
+	if days == 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	if hours == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd %dh", days, hours)
 }
