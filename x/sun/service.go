@@ -157,6 +157,18 @@ func (svc *Service) Check() error {
 	return messenger.Send(eventMsg)
 }
 
+// formatDuration formats a duration string (e.g. "13h2m30s") as "13h 2m" (hours and minutes only).
+func formatDuration(s string) string {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return s
+	}
+	d = d.Truncate(time.Minute)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	return fmt.Sprintf("%dh %dm", h, m)
+}
+
 func (svc *Service) scheduleAlerts() {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -179,20 +191,22 @@ func (svc *Service) scheduleAlerts() {
 	for _, t := range days {
 		events := svc.calculateSunEvents(lat, lon, alt, t)
 
-		schedule := func(eventTime time.Time, name string) {
+		schedule := func(eventTime time.Time, name string, dayLength string, nightLength string) {
 			if eventTime.After(now) {
 				duration := eventTime.Sub(now)
 				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
 				// capture variables for closure
 				et := eventTime
 				n := name
+				dl := dayLength
+				nl := nightLength
 				timer := time.AfterFunc(duration, func() {
 					if err := messenger.Send(core.Message{
 						ChannelName: svc.Cfg.Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,
 						Event:       "sun_event",
-						Text:        fmt.Sprintf("Sun event: %s", n),
+						Text:        fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
 						Summary:     n,
 					}); err != nil {
 						logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
@@ -204,10 +218,10 @@ func (svc *Service) scheduleAlerts() {
 			}
 		}
 
-		schedule(events.Sunrise, "sunrise")
-		schedule(events.Sunset, "sunset")
-		schedule(events.CivilDawn, "dawn")
-		schedule(events.CivilDusk, "dusk")
+		schedule(events.Sunrise, "sunrise", events.DayLength, events.NightLength)
+		schedule(events.Sunset, "sunset", events.DayLength, events.NightLength)
+		schedule(events.CivilDawn, "dawn", events.DayLength, events.NightLength)
+		schedule(events.CivilDusk, "dusk", events.DayLength, events.NightLength)
 	}
 }
 
