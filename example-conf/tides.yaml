@@ -1,0 +1,21 @@
+x: tidesNoaa
+freq: 15m
+
+config:
+  # NOAA CO-OPS station ID (required).
+  # Find your station at https://tidesandcurrents.noaa.gov/
+  stationId: "9414290"   # San Francisco, CA
+
+  # Directory where tide YAML cache files are stored (optional).
+  # Default: ~/.keyop/tides
+  # dataDir: /var/lib/keyop/tides
+
+  pub_preprocess:
+    - when: 'event eq "tide"'
+      updates:
+        channelName: tides
+
+    - when: 'event matches /alert/'
+      updates:
+        channelName: alerts
+
