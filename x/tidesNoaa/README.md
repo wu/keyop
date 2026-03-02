@@ -11,19 +11,41 @@ x: tidesNoaa
 freq: 15m
 
 config:
-   # NOAA CO-OPS station ID (required).
-   # Find your station at https://tidesandcurrents.noaa.gov/
-   stationId: "9414290"   # San Francisco, CA
+  # NOAA CO-OPS station ID (required).
+  # Find your station at https://tidesandcurrents.noaa.gov/
+  stationId: "9414290"   # San Francisco, CA
 
-   # Directory where daily tide cache files are stored (optional).
-   # Default: ~/.keyop/tides
-   # dataDir: /var/lib/keyop/tides
+  # Directory where daily tide cache files are stored (optional).
+  # Default: ~/.keyop/tides
+  # dataDir: /var/lib/keyop/tides
+
+  # Observer coordinates for sunrise/sunset calculations.
+  # If omitted, the service looks them up automatically from the NOAA
+  # metadata API using the station ID.  Only set these to override the
+  # station's reported location.
+  # lat: 37.7749
+  # lon: -122.4194
+  # alt: 0.0   # metres above sea level (optional, defaults to 0)
+
+  # Low tide threshold in feet for the daily report (optional).
+  # Daylight periods where the tide is at or below this level are included.
+  # Default: 5.0
+  # lowTideThreshold: 5.0
 ```
 
-| Field       | Required | Default          | Description                          |
-|-------------|----------|------------------|--------------------------------------|
-| `stationId` | yes      | —                | NOAA CO-OPS station ID               |
-| `dataDir`   | no       | `~/.keyop/tides` | Directory for daily YAML cache files |
+| Field              | Required | Default                | Description                                                         |
+|--------------------|----------|------------------------|---------------------------------------------------------------------|
+| `stationId`        | yes      | —                      | NOAA CO-OPS station ID                                              |
+| `dataDir`          | no       | `~/.keyop/tides`       | Directory for daily YAML cache files                                |
+| `lat`              | no       | auto-fetched from NOAA | Observer latitude (decimal degrees)                                 |
+| `lon`              | no       | auto-fetched from NOAA | Observer longitude (decimal degrees)                                |
+| `alt`              | no       | `0`                    | Observer elevation in metres                                        |
+| `lowTideThreshold` | no       | `5.0`                  | Tide level (ft) below which a daylight period appears in the report |
+
+When `lat` and `lon` are not configured the service looks them up automatically
+from the NOAA metadata API using the station ID. Set them explicitly only to
+override the station's reported location. The tide report is disabled only if
+the lookup fails and no explicit coordinates are provided.
 
 `freq` controls how often `Check()` runs. 15 minutes is a reasonable default;
 the NOAA data is at 6-minute resolution so finer than that offers no benefit.
@@ -159,6 +181,38 @@ i.e. the next peak is no longer extreme for that window.
 A separate `extreme_tide` message is sent for each window whose status changes,
 so up to three messages may be sent in a single `Check()` call.
 
+### `tide_report`
+
+Sent once daily with a summary of the day's tidal extremes and daylight
+information (sunrise, sunset, and day length) if observer coordinates are
+configured.
+
+```json
+{
+   "event": "tide_report",
+   "summary": "Tide report for 2026-03-01",
+   "data": {
+      "stationId": "9414290",
+      "date": "2026-03-01",
+      "extremes": {
+         "high": {
+            "time": "2026-03-01 16:24",
+            "value": 5.80
+         },
+         "low": {
+            "time": "2026-03-01 22:12",
+            "value": 1.20
+         }
+      },
+      "sun": {
+         "rise": "2026-03-01 06:12",
+         "set": "2026-03-01 18:12",
+         "duration": "12:00"
+      }
+   }
+}
+```
+
 ## Historical extremes
 
 For each rolling window the service tracks the highest and lowest predicted
@@ -200,6 +254,7 @@ The following are persisted to the keyop state store across restarts:
 | `<name>.extremes`          | High/low leaderboards for all three windows    |
 | `<name>.alertedPeaks`      | Recently alerted peaks (pruned after 24 hours) |
 | `<name>.extremeTideStatus` | Current warning/ok status per window           |
+| `<name>.lastReportDay`     | Last day for which a tide_report was sent      |
 
 ## NOAA CO-OPS API
 
@@ -219,6 +274,9 @@ GET https://api.tidesandcurrents.noaa.gov/api/prod/datagetter
 Results are in local standard/daylight time (`lst_ldt`), MLLW datum, English
 units (feet), at 6-minute intervals. Find station IDs at
 <https://tidesandcurrents.noaa.gov/>.
+
+
+
 
 
 

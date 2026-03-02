@@ -203,6 +203,60 @@ func mockNoaaServer(t *testing.T, recordsByDate map[string][]TideRecord, errMsg 
 	}))
 }
 
+// noopMetadataServer returns a metadata server that always responds with an
+// empty station list so Initialize gracefully skips coordinate lookup.
+func noopMetadataServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"stations": []interface{}{}})
+	}))
+}
+
+// initSvc sets svc.metadataBase to a no-op server then calls Initialize.
+// Use this whenever the test does not need real station coordinates.
+func initSvc(t *testing.T, svc *Service) {
+	t.Helper()
+	meta := noopMetadataServer(t)
+	t.Cleanup(meta.Close)
+	svc.metadataBase = meta.URL
+	require.NoError(t, svc.Initialize())
+}
+
+// mockMetadataServer returns a test server that serves a static lat/lng
+// response for any station ID request.
+func mockMetadataServer(t *testing.T, lat, lon float64) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"stations": []map[string]interface{}{
+				{"lat": lat, "lng": lon},
+			},
+		})
+	}))
+}
+
+// newTestService creates, configures, and initialises a Service with mock API
+// servers so no real network calls are made.  The caller must close the
+// returned servers with defer.
+func newTestService(t *testing.T, stationID string, extraCfg map[string]interface{},
+	recordsByDate map[string][]TideRecord, metaLat, metaLon float64,
+) (svc *Service, messenger *mockMessenger, noaaServer, metaServer *httptest.Server) {
+	t.Helper()
+
+	messenger = &mockMessenger{}
+	osP := newMockOsProvider(t)
+	deps := makeDeps(t, messenger, osP)
+
+	noaaServer = mockNoaaServer(t, recordsByDate, "")
+	metaServer = mockMetadataServer(t, metaLat, metaLon)
+
+	svc = NewService(deps, makeCfg(stationID, extraCfg)).(*Service)
+	svc.apiBase = noaaServer.URL
+	svc.metadataBase = metaServer.URL
+	require.NoError(t, svc.Initialize())
+	return
+}
+
 // seedDayFile writes a TideDayFile into the mock OS provider's in-memory store.
 func seedDayFile(t *testing.T, svc *Service, day time.Time, records []TideRecord, fetchedAt time.Time) {
 	t.Helper()
@@ -753,7 +807,7 @@ func TestBackfillExtremes(t *testing.T) {
 	osP := newMockOsProvider(t)
 	deps := makeDeps(t, &mockMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 
 	// Write a day file from 10 days ago with a clear high (9.0) and low (1.0).
 	past := now.AddDate(0, 0, -10)
@@ -808,8 +862,7 @@ func TestInitialize_DefaultDataDir(t *testing.T) {
 	osP := newMockOsProvider(t)
 	deps := makeDeps(t, &mockMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	assert.Equal(t, filepath.Join(osP.dir, ".keyop", "tides"), svc.dataDir)
 	assert.Equal(t, "9414290", svc.stationID)
 	// Station sub-directory should have been created.
@@ -824,16 +877,50 @@ func TestInitialize_CustomDataDir(t *testing.T) {
 	svc := NewService(deps, makeCfg("9414290", map[string]interface{}{
 		"dataDir": customDir,
 	})).(*Service)
-
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	assert.Equal(t, customDir, svc.dataDir)
+}
+
+func TestInitialize_FetchesStationCoordinates(t *testing.T) {
+	// When lat/lon are absent from config, Initialize should fetch them from
+	// the NOAA metadata API and populate svc.lat/svc.lon.
+	meta := mockMetadataServer(t, 47.18, -122.675)
+	defer meta.Close()
+
+	osP := newMockOsProvider(t)
+	deps := makeDeps(t, &mockMessenger{}, osP)
+	svc := NewService(deps, makeCfg("9446705", nil)).(*Service)
+	svc.metadataBase = meta.URL
+	require.NoError(t, svc.Initialize())
+
+	assert.InDelta(t, 47.18, svc.lat, 0.001)
+	assert.InDelta(t, -122.675, svc.lon, 0.001)
+}
+
+func TestInitialize_ExplicitCoordsSkipFetch(t *testing.T) {
+	// When lat/lon are explicitly configured, the metadata API must not be
+	// called (the no-op server returns empty stations, so if we did call it
+	// lat/lon would be zeroed out — this test verifies they're preserved).
+	meta := noopMetadataServer(t)
+	defer meta.Close()
+
+	osP := newMockOsProvider(t)
+	deps := makeDeps(t, &mockMessenger{}, osP)
+	svc := NewService(deps, makeCfg("9414290", map[string]interface{}{
+		"lat": 37.7749, "lon": -122.4194,
+	})).(*Service)
+	svc.metadataBase = meta.URL
+	require.NoError(t, svc.Initialize())
+
+	assert.InDelta(t, 37.7749, svc.lat, 0.001)
+	assert.InDelta(t, -122.4194, svc.lon, 0.001)
 }
 
 func TestDayFilePath(t *testing.T) {
 	osP := newMockOsProvider(t)
 	deps := makeDeps(t, &mockMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 
 	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.Local)
 	path := svc.dayFilePath(day)
@@ -859,7 +946,7 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 
 	// Seed today's file as fresh — it should not be re-fetched.
@@ -918,7 +1005,7 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 	seedDayFile(t, svc, now, records, now)
 
@@ -994,7 +1081,7 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		osP := newMockOsProvider(t)
 		deps := makeDeps(t, messenger, osP)
 		svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-		require.NoError(t, svc.Initialize())
+		initSvc(t, svc)
 		svc.extremeTideStatus = make(map[string]string)
 		return svc
 	}
@@ -1132,7 +1219,7 @@ func runHighLowAlertTest(t *testing.T, base time.Time, records []TideRecord, wan
 	messenger := &mockMessenger{}
 	deps := makeDeps(t, messenger, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 	svc.lastBackfillDay = base.Truncate(24 * time.Hour)
 	seedDayFile(t, svc, base, records, base)
@@ -1179,7 +1266,7 @@ func TestCheck_NoDoublePeakAlert(t *testing.T) {
 	messenger := &mockMessenger{}
 	deps := makeDeps(t, messenger, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 	svc.lastBackfillDay = base.Truncate(24 * time.Hour)
 	seedDayFile(t, svc, base, records, base)
@@ -1230,7 +1317,7 @@ func TestCheck_FetchesMissingDayFiles(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 
 	err := svc.Check()
@@ -1263,7 +1350,7 @@ func TestCheck_RefreshesStaleFile(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 
 	// Seed stale file (FetchedAt = 2 hours ago).
@@ -1288,7 +1375,7 @@ func TestCheck_PropagatesTodayFetchError(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 	svc.apiBase = server.URL
 
 	err := svc.Check()
@@ -1317,7 +1404,7 @@ func TestCheck_UsesYesterdayRecordsNearMidnight(t *testing.T) {
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
-	require.NoError(t, svc.Initialize())
+	initSvc(t, svc)
 
 	// Seed both files as fresh (past day is never stale).
 	seedDayFile(t, svc, yesterday, yRecords, today.Add(-1*time.Hour))
@@ -1333,4 +1420,273 @@ func TestCheck_UsesYesterdayRecordsNearMidnight(t *testing.T) {
 	// current must come from yesterday's records since today's first record is 00:06.
 	currTime, _ := time.ParseInLocation(noaaTimeFormat, curr.Time, time.Local)
 	assert.True(t, currTime.Before(today), "expected current record to be before midnight")
+}
+
+// ---------------------------------------------------------------------------
+// report.go – unit tests
+// ---------------------------------------------------------------------------
+
+// buildDetailedRecords creates a slice of records with a sinusoidal tide
+// pattern (values 0–10 ft) starting at base, with count entries at 6-minute
+// intervals.
+func buildDetailedRecords(base time.Time, count int, offset float64) []TideRecord {
+	records := make([]TideRecord, count)
+	for i := 0; i < count; i++ {
+		// Simple triangular wave: rises to 10 then falls back to 0.
+		phase := float64(i%240) / 240.0 // 240 steps = 24 hours
+		var v float64
+		if phase < 0.5 {
+			v = phase * 20.0 // 0 → 10
+		} else {
+			v = (1.0 - phase) * 20.0 // 10 → 0
+		}
+		records[i] = TideRecord{
+			Time:  base.Add(time.Duration(i) * 6 * time.Minute).Format(noaaTimeFormat),
+			Value: v + offset,
+		}
+	}
+	return records
+}
+
+func TestDaylightLowPeriods(t *testing.T) {
+	// Use a fixed local day so sunrise/sunset are predictable.
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.Local)
+	// Synthetic sunrise/sunset: 07:00 – 18:00.
+	sunrise := time.Date(2026, 3, 1, 7, 0, 0, 0, time.Local)
+	sunset := time.Date(2026, 3, 1, 18, 0, 0, 0, time.Local)
+
+	t.Run("records all above threshold return no periods", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 08:00", Value: 6.0},
+			{Time: "2026-03-01 09:00", Value: 7.0},
+			{Time: "2026-03-01 10:00", Value: 6.5},
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		assert.Empty(t, periods)
+	})
+
+	t.Run("single contiguous low-tide period within daylight", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 06:00", Value: 3.0}, // before sunrise — excluded
+			{Time: "2026-03-01 08:00", Value: 3.0}, // in daylight, below threshold
+			{Time: "2026-03-01 09:00", Value: 2.5}, // in daylight, below threshold
+			{Time: "2026-03-01 10:00", Value: 4.8}, // in daylight, below threshold
+			{Time: "2026-03-01 11:00", Value: 6.0}, // above threshold — closes period
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		require.Len(t, periods, 1)
+		assert.Equal(t, "2026-03-01", periods[0].Date)
+		assert.Equal(t, "Sunday", periods[0].DayOfWeek)
+		assert.Equal(t, "08:00", periods[0].Start.Format("15:04"))
+		assert.Equal(t, "10:00", periods[0].End.Format("15:04"))
+		assert.InDelta(t, 2.5, periods[0].MinValue, 0.001)
+	})
+
+	t.Run("two separate low-tide periods in one day", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 08:00", Value: 3.0},
+			{Time: "2026-03-01 09:00", Value: 3.5},
+			{Time: "2026-03-01 10:00", Value: 6.0}, // gap above threshold
+			{Time: "2026-03-01 11:00", Value: 4.0},
+			{Time: "2026-03-01 12:00", Value: 3.8},
+			{Time: "2026-03-01 13:00", Value: 7.0}, // above threshold
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		require.Len(t, periods, 2)
+		assert.Equal(t, "08:00", periods[0].Start.Format("15:04"))
+		assert.Equal(t, "09:00", periods[0].End.Format("15:04"))
+		assert.Equal(t, "11:00", periods[1].Start.Format("15:04"))
+		assert.Equal(t, "12:00", periods[1].End.Format("15:04"))
+	})
+
+	t.Run("period before sunrise is excluded", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 05:00", Value: 2.0}, // before sunrise
+			{Time: "2026-03-01 06:00", Value: 2.0}, // before sunrise
+			{Time: "2026-03-01 08:00", Value: 8.0}, // above threshold
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		assert.Empty(t, periods)
+	})
+
+	t.Run("period after sunset is excluded", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 16:00", Value: 7.0}, // above threshold
+			{Time: "2026-03-01 19:00", Value: 2.0}, // after sunset
+			{Time: "2026-03-01 20:00", Value: 2.0}, // after sunset
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		assert.Empty(t, periods)
+	})
+
+	t.Run("period cut short by sunset", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 17:00", Value: 3.0}, // in daylight
+			{Time: "2026-03-01 17:30", Value: 2.5}, // in daylight
+			{Time: "2026-03-01 18:30", Value: 2.0}, // after sunset — closes period
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		require.Len(t, periods, 1)
+		assert.Equal(t, "17:00", periods[0].Start.Format("15:04"))
+		assert.Equal(t, "17:30", periods[0].End.Format("15:04"))
+	})
+
+	t.Run("duration is calculated correctly", func(t *testing.T) {
+		records := []TideRecord{
+			{Time: "2026-03-01 08:00", Value: 3.0},
+			{Time: "2026-03-01 08:06", Value: 3.1},
+			{Time: "2026-03-01 08:12", Value: 3.2},
+			{Time: "2026-03-01 08:18", Value: 6.0},
+		}
+		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
+		require.Len(t, periods, 1)
+		assert.Equal(t, 12*time.Minute, periods[0].Duration)
+	})
+}
+
+func TestFormatDuration(t *testing.T) {
+	assert.Equal(t, "2h 30m", FormatDuration(2*time.Hour+30*time.Minute))
+	assert.Equal(t, "3h", FormatDuration(3*time.Hour))
+	assert.Equal(t, "45m", FormatDuration(45*time.Minute))
+}
+
+func TestFormatTideReport(t *testing.T) {
+	t.Run("empty periods produces no-periods message", func(t *testing.T) {
+		out := formatTideReport(nil, 5.0, "9414290")
+		assert.Contains(t, out, "## Tide Report")
+		assert.Contains(t, out, "No daylight low tides")
+		assert.Contains(t, out, "9414290")
+	})
+
+	t.Run("report groups by date with markdown table", func(t *testing.T) {
+		start := time.Date(2026, 3, 2, 8, 0, 0, 0, time.Local)
+		end := time.Date(2026, 3, 2, 10, 30, 0, 0, time.Local)
+		periods := []LowTidePeriod{
+			{
+				Date:      "2026-03-02",
+				DayOfWeek: "Monday",
+				Start:     start,
+				End:       end,
+				Duration:  end.Sub(start),
+				MinValue:  2.34,
+			},
+		}
+		out := formatTideReport(periods, 5.0, "9414290")
+		assert.Contains(t, out, "## Tide Report")
+		assert.Contains(t, out, "| Date | Day | Start | End | Duration | Min |")
+		assert.Contains(t, out, "| 2026-03-02 | Monday | 08:00 | 10:30 | 2h 30m | 2.34 ft |")
+		assert.Contains(t, out, "9414290")
+	})
+}
+
+func TestMaybeSendTideReport(t *testing.T) {
+	// Seattle coordinates — reliable sunrise/sunset year-round.
+	const lat, lon = 47.6062, -122.3321
+
+	makeReportSvc := func(t *testing.T, extraCfg map[string]interface{}) (*Service, *mockMessenger) {
+		t.Helper()
+		messenger := &mockMessenger{}
+		osP := newMockOsProvider(t)
+		cfg := makeCfg("9414290", extraCfg)
+		deps := makeDeps(t, messenger, osP)
+		svc := NewService(deps, cfg).(*Service)
+		initSvc(t, svc)
+		return svc, messenger
+	}
+
+	t.Run("no report when lat/lon not configured", func(t *testing.T) {
+		svc, messenger := makeReportSvc(t, nil)
+		now := time.Date(2026, 3, 1, 5, 0, 0, 0, time.Local)
+		require.NoError(t, svc.maybeSendTideReport(messenger, now))
+		messenger.mu.Lock()
+		msgs := filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		assert.Empty(t, msgs)
+	})
+
+	t.Run("report sent immediately on first run even before 04:00", func(t *testing.T) {
+		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
+		// Confirm no prior state — lastReportDay should be zero.
+		require.True(t, svc.lastReportDay.IsZero())
+
+		now := time.Date(2026, 3, 1, 1, 30, 0, 0, time.Local) // 01:30 — before 04:00
+		require.NoError(t, svc.maybeSendTideReport(messenger, now))
+
+		messenger.mu.Lock()
+		msgs := filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		require.Len(t, msgs, 1, "first-run report should fire immediately regardless of time")
+	})
+
+	t.Run("no report before 04:00", func(t *testing.T) {
+		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
+		now := time.Date(2026, 3, 1, 3, 59, 0, 0, time.Local)
+		// Simulate a service that has already sent a report yesterday.
+		svc.lastReportDay = localMidnight(now).AddDate(0, 0, -1)
+		require.NoError(t, svc.maybeSendTideReport(messenger, now))
+		messenger.mu.Lock()
+		msgs := filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		assert.Empty(t, msgs)
+	})
+
+	t.Run("report sent once at or after 04:00", func(t *testing.T) {
+		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
+		now := time.Date(2026, 3, 1, 4, 0, 0, 0, time.Local)
+
+		// Seed 7 days of data so the report has something to work with.
+		for i := 0; i < 7; i++ {
+			day := localMidnight(now).AddDate(0, 0, i)
+			// Tide low at 08:00–10:00 (below 5 ft) each day.
+			records := []TideRecord{
+				{Time: day.Add(7 * time.Hour).Format(noaaTimeFormat), Value: 6.0},
+				{Time: day.Add(8 * time.Hour).Format(noaaTimeFormat), Value: 3.0},
+				{Time: day.Add(9 * time.Hour).Format(noaaTimeFormat), Value: 2.5},
+				{Time: day.Add(10 * time.Hour).Format(noaaTimeFormat), Value: 3.0},
+				{Time: day.Add(11 * time.Hour).Format(noaaTimeFormat), Value: 6.0},
+			}
+			seedDayFile(t, svc, day, records, now)
+		}
+
+		require.NoError(t, svc.maybeSendTideReport(messenger, now))
+
+		messenger.mu.Lock()
+		msgs := filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		require.Len(t, msgs, 1)
+		assert.Contains(t, msgs[0].Text, "9414290")
+
+		// Second call same day — should not send again.
+		require.NoError(t, svc.maybeSendTideReport(messenger, now.Add(time.Hour)))
+		messenger.mu.Lock()
+		msgs = filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		assert.Len(t, msgs, 1, "report must not be sent twice in one day")
+	})
+
+	t.Run("report re-sent next day", func(t *testing.T) {
+		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
+		day1 := time.Date(2026, 3, 1, 4, 0, 0, 0, time.Local)
+		day2 := time.Date(2026, 3, 2, 4, 0, 0, 0, time.Local)
+
+		require.NoError(t, svc.maybeSendTideReport(messenger, day1))
+		require.NoError(t, svc.maybeSendTideReport(messenger, day2))
+
+		messenger.mu.Lock()
+		msgs := filterByEvent(messenger.messages, "tide_report")
+		messenger.mu.Unlock()
+		assert.Len(t, msgs, 2, "report should fire once per calendar day")
+	})
+
+	t.Run("default threshold is 5.0 ft", func(t *testing.T) {
+		svc, _ := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
+		assert.InDelta(t, 5.0, svc.lowTideThreshold, 0.001)
+	})
+
+	t.Run("custom threshold is respected", func(t *testing.T) {
+		svc, _ := makeReportSvc(t, map[string]interface{}{
+			"lat": lat, "lon": lon, "lowTideThreshold": 3.5,
+		})
+		assert.InDelta(t, 3.5, svc.lowTideThreshold, 0.001)
+	})
 }

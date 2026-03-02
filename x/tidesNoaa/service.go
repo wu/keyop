@@ -27,18 +27,25 @@ type Service struct {
 	stationID         string
 	dataDir           string
 	apiBase           string // overridable in tests; defaults to noaaAPIBase
+	metadataBase      string // overridable in tests; defaults to noaaMetadataBase
+	lat               float64
+	lon               float64
+	alt               float64
+	lowTideThreshold  float64
 	extremes          TideExtremes
 	alertedPeaks      []alertedPeak
-	extremeTideStatus map[string]string // keyed by window label ("30-day" etc.), value "warning" or "ok"
+	extremeTideStatus map[string]string // keyed by window label, value "warning" or "ok"
 	lastBackfillDay   time.Time
+	lastReportDay     time.Time // calendar day on which the last tide_report was sent
 	mu                sync.RWMutex
 }
 
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
-		Deps:    deps,
-		Cfg:     cfg,
-		apiBase: noaaAPIBase,
+		Deps:         deps,
+		Cfg:          cfg,
+		apiBase:      noaaAPIBase,
+		metadataBase: noaaMetadataBase,
 	}
 }
 
@@ -49,6 +56,19 @@ func (svc *Service) ValidateConfig() []error {
 	stationID, ok := svc.Cfg.Config["stationId"].(string)
 	if !ok || stationID == "" {
 		errs = append(errs, fmt.Errorf("tidesNoaa: required config parameter 'stationId' is missing or empty"))
+	}
+
+	// lat and lon are required when a tide report is configured.
+	// They are not required for basic tide level monitoring.
+	if _, hasLat := svc.Cfg.Config["lat"]; hasLat {
+		if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
+			errs = append(errs, fmt.Errorf("tidesNoaa: 'lat' must be a float64"))
+		}
+	}
+	if _, hasLon := svc.Cfg.Config["lon"]; hasLon {
+		if _, ok := svc.Cfg.Config["lon"].(float64); !ok {
+			errs = append(errs, fmt.Errorf("tidesNoaa: 'lon' must be a float64"))
+		}
 	}
 
 	return errs
@@ -66,6 +86,32 @@ func (svc *Service) Initialize() error {
 			return fmt.Errorf("tidesNoaa: failed to determine home directory: %w", err)
 		}
 		svc.dataDir = filepath.Join(home, ".keyop", "tides")
+	}
+
+	// Observer coordinates for sunrise/sunset calculations (used by tide report).
+	// If not explicitly configured, look them up from the NOAA metadata API.
+	svc.lat, _ = svc.Cfg.Config["lat"].(float64)
+	svc.lon, _ = svc.Cfg.Config["lon"].(float64)
+	svc.alt, _ = svc.Cfg.Config["alt"].(float64)
+
+	if svc.lat == 0 && svc.lon == 0 {
+		lat, lon, err := fetchStationLocation(svc.metadataBase, svc.stationID)
+		if err != nil {
+			svc.Deps.MustGetLogger().Warn("tidesNoaa: could not fetch station coordinates; tide report disabled",
+				"station", svc.stationID, "error", err)
+		} else {
+			svc.lat = lat
+			svc.lon = lon
+			svc.Deps.MustGetLogger().Info("tidesNoaa: using station coordinates from NOAA metadata API",
+				"station", svc.stationID, "lat", lat, "lon", lon)
+		}
+	}
+
+	// Low tide threshold for the daily report (default 5 ft).
+	if v, ok := svc.Cfg.Config["lowTideThreshold"].(float64); ok {
+		svc.lowTideThreshold = v
+	} else {
+		svc.lowTideThreshold = 5.0
 	}
 
 	// Per-station sub-directory keeps each station's daily files together.
@@ -87,6 +133,11 @@ func (svc *Service) Initialize() error {
 	// Load extreme tide status for alert windows
 	if err := svc.Deps.MustGetStateStore().Load(svc.extremeTideStatusKey(), &svc.extremeTideStatus); err != nil {
 		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to load extreme tide status from state store", "error", err)
+	}
+
+	// Load the last day a tide report was sent so we don't re-send on restart.
+	if err := svc.Deps.MustGetStateStore().Load(svc.tideReportKey(), &svc.lastReportDay); err != nil {
+		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to load last report day from state store", "error", err)
 	}
 
 	// Backfill extremes from existing day files so a fresh or deleted state
@@ -232,7 +283,12 @@ func (svc *Service) Check() error {
 	}
 
 	// Check and send extreme_tide status events for each window.
-	return svc.sendExtremeTideStatus(messenger, peak, state, prevExtremes)
+	if err := svc.sendExtremeTideStatus(messenger, peak, state, prevExtremes); err != nil {
+		return err
+	}
+
+	// Send the daily tide report once per day at or after 04:00 local time.
+	return svc.maybeSendTideReport(messenger, now)
 }
 
 // ensureDayFiles fetches and stores any day files that are missing or stale,
@@ -376,6 +432,98 @@ func (svc *Service) alertedPeaksKey() string {
 // extremeTideStatusKey returns the state store key for the extreme tide status.
 func (svc *Service) extremeTideStatusKey() string {
 	return fmt.Sprintf("%s.extremeTideStatus", svc.Cfg.Name)
+}
+
+// tideReportKey returns the state store key for the last tide-report send day.
+func (svc *Service) tideReportKey() string {
+	return fmt.Sprintf("%s.lastReportDay", svc.Cfg.Name)
+}
+
+// maybeSendTideReport sends a tide_report event once per calendar day at or
+// after 04:00 local time.  It is a no-op when lat/lon are not configured or
+// when the report has already been sent today.
+func (svc *Service) maybeSendTideReport(messenger core.MessengerApi, now time.Time) error {
+	// Tide report requires observer coordinates for sunrise/sunset.
+	svc.mu.RLock()
+	lat, lon, alt := svc.lat, svc.lon, svc.alt
+	lastReport := svc.lastReportDay
+	svc.mu.RUnlock()
+
+	if lat == 0 && lon == 0 {
+		return nil // no coordinates configured — skip report
+	}
+
+	today := localMidnight(now)
+	if !lastReport.Before(today) {
+		return nil // already sent today
+	}
+
+	// On the very first run (no prior state) send immediately regardless of
+	// the time of day.  On subsequent days, wait until 04:00 so the report
+	// arrives after the overnight tides have settled.
+	firstRun := lastReport.IsZero()
+	if !firstRun && now.Hour() < 4 {
+		return nil
+	}
+
+	// Gather 7 days of records starting from today.
+	const reportDays = 7
+	var allPeriods []LowTidePeriod
+
+	for i := 0; i < reportDays; i++ {
+		day := today.AddDate(0, 0, i)
+		f, err := svc.loadDayFile(day)
+		if err != nil || len(f.Records) == 0 {
+			continue
+		}
+		// Include tomorrow's records so periods that straddle midnight are
+		// captured correctly by daylightLowPeriods.
+		var records []TideRecord
+		records = append(records, f.Records...)
+		if next, err := svc.loadDayFile(day.AddDate(0, 0, 1)); err == nil {
+			records = append(records, next.Records...)
+		}
+
+		sunrise, sunset := sunriseSunset(lat, lon, alt, day)
+		svc.mu.RLock()
+		threshold := svc.lowTideThreshold
+		svc.mu.RUnlock()
+
+		periods := daylightLowPeriods(records, day, sunrise, sunset, threshold)
+		allPeriods = append(allPeriods, periods...)
+	}
+
+	svc.mu.RLock()
+	threshold := svc.lowTideThreshold
+	svc.mu.RUnlock()
+
+	text := formatTideReport(allPeriods, threshold, svc.stationID)
+	summary := fmt.Sprintf("Tide report: %d daylight low-tide period(s) in next %d days", len(allPeriods), reportDays)
+
+	if err := messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "tide_report",
+		Text:        text,
+		Summary:     summary,
+		Data: map[string]interface{}{
+			"stationId": svc.stationID,
+			"threshold": threshold,
+			"periods":   allPeriods,
+		},
+	}); err != nil {
+		return err
+	}
+
+	svc.mu.Lock()
+	svc.lastReportDay = today
+	svc.mu.Unlock()
+
+	if saveErr := svc.Deps.MustGetStateStore().Save(svc.tideReportKey(), today); saveErr != nil {
+		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to save last report day", "error", saveErr)
+	}
+	return nil
 }
 
 // isPeakAlerted returns true if a peak with the same type and time string is

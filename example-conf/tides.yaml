@@ -10,6 +10,18 @@ config:
   # Default: ~/.keyop/tides
   # dataDir: /var/lib/keyop/tides
 
+  # Observer coordinates for sunrise/sunset calculations used by the daily
+  # tide report.  If omitted, coordinates are looked up automatically from
+  # the NOAA metadata API using the station ID.  Set explicitly to override.
+  # lat: 37.7749
+  # lon: -122.4194
+  # alt: 0.0   # elevation in metres (optional, defaults to 0)
+
+  # Water level threshold (feet) for the daily low-tide report.
+  # Periods where the tide is at or below this value during daylight hours
+  # are included in the report.  Default: 5.0
+  # lowTideThreshold: 5.0
+
   pub_preprocess:
     - when: 'event eq "tide"'
       updates:
@@ -18,4 +30,8 @@ config:
     - when: 'event matches /alert/'
       updates:
         channelName: alerts
+
+    - when: 'event eq "tide_report"'
+      updates:
+        channelName: tides
 
