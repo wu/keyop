@@ -225,6 +225,9 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 			var msg Message
 			if err := json.Unmarshal([]byte(msgStr), &msg); err != nil {
 				logger.Error("Failed to unmarshal dequeued message", "error", err, "message", msgStr)
+				if ackErr := queue.Ack(source); ackErr != nil {
+					logger.Error("Failed to ack unparseable message", "error", ackErr, "channel", channelName)
+				}
 				continue
 			}
 

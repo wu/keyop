@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -505,6 +506,59 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return m2.logger.(*FakeLogger).LastErrMsg() == "Message handler returned error, retrying"
 	}, 2*time.Second, 100*time.Millisecond)
+}
+
+func TestMessenger_Subscribe_UnmarshalError_AdvancesPastCorruptMessage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "messenger_test_corrupt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
+
+	fl := &FakeLogger{}
+	m := NewMessenger(fl, OsProvider{})
+	m.dataDir = tmpDir
+
+	channelName := "corrupt-test-chan"
+	err = m.initializePersistentQueue(channelName)
+	assert.NoError(t, err)
+
+	// Write a corrupt message (missing leading '{') followed by a valid message, mimicking the reported bug.
+	logPath := fmt.Sprintf("%s/%s_queue_%s.log", tmpDir, channelName, time.Now().Format("20060102"))
+	corruptLine := `,"channelName":"metrics","serviceType":"memoryMonitor","text":"Memory utilization: 27.12%"}`
+	validMsg := Message{ChannelName: channelName, Text: "valid-after-corrupt"}
+	validBytes, _ := json.Marshal(validMsg)
+	content := corruptLine + "\n" + string(validBytes) + "\n"
+	err = os.WriteFile(logPath, []byte(content), 0644)
+	assert.NoError(t, err)
+
+	var received []string
+	var mu sync.Mutex
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.Subscribe(ctx, "corrupt-test-source", channelName, "testType", "test", 0, func(msg Message) error {
+		mu.Lock()
+		defer mu.Unlock()
+		received = append(received, msg.Text)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	// The valid message after the corrupt one should be received, proving the reader advanced past the bad entry.
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received) == 1 && received[0] == "valid-after-corrupt"
+	}, 3*time.Second, 50*time.Millisecond, "Expected valid message after corrupt entry to be received")
+
+	// And an error should have been logged for the corrupt message.
+	assert.Equal(t, "Failed to unmarshal dequeued message", fl.LastErrMsg())
 }
 
 func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
