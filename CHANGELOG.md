@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/wu/keyop/compare/1.0.1...1.1.0) (2026-03-03)
+
+### Features
+
+* test change to trigger release ([8e5921a](https://github.com/wu/keyop/commit/8e5921aa77bc567454caaf29474018e18cde34b2))
+
 ## [1.0.1](https://github.com/wu/keyop/compare/1.0.0...1.0.1) (2026-03-03)
 
 ### Bug Fixes
