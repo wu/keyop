@@ -45,3 +45,4 @@ make build PLUGINS="rgbMatrix helloWorldPlugin"
 ```
 
 Note: The `rgbMatrix` plugin only builds on Raspberry Pi (Linux on ARM).
+
