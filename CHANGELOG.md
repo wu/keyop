@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/wu/keyop/compare/1.1.1...1.1.2) (2026-03-03)
+
+### Bug Fixes
+
+* update lint workflow config ([6ca4373](https://github.com/wu/keyop/commit/6ca437375bc39f8cdd74fbd97bd0486948e8b2a9))
+
 ## [1.1.1](https://github.com/wu/keyop/compare/1.1.0...1.1.1) (2026-03-03)
 
 ### Bug Fixes
