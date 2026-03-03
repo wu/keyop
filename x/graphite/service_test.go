@@ -336,17 +336,21 @@ func TestService_MessageHandler_SendError(t *testing.T) {
 		Metric:      123.456,
 	}
 
-	// Try multiple times as some libraries might retry or the timing might be tricky
+	// Try multiple times as TCP buffering may allow the first write to appear
+	// to succeed before the broken pipe is detected.
 	var lastErr error
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		lastErr = s.messageHandler(msg)
 		if lastErr != nil {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		// Allow time for the OS to detect the broken pipe on the cached connection.
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	assert.Error(t, lastErr)
+	// After an error the connection must be reset so the next call reconnects.
+	assert.Nil(t, s.Graphite, "Graphite connection should be nil after a send error")
 }
 
 func TestService_Check(t *testing.T) {

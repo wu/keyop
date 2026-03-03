@@ -103,6 +103,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		svc.Graphite, err = graphite.NewGraphite(svc.Host, svc.Port)
 		if err != nil {
 			logger.Error("ERROR: failed to connect to Graphite", "err", err.Error())
+			svc.Graphite = nil
 			return err
 		}
 		logger.Info("Graphite connection established", "host", svc.Host, "port", svc.Port)
@@ -110,7 +111,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	err := svc.Graphite.SendMetric(metric)
 	if err != nil {
-		logger.Error("ERROR: failed sending metric to Graphite", "err", err.Error())
+		logger.Error("ERROR: failed sending metric to Graphite, resetting connection", "err", err.Error())
+		// Discard the broken connection; the next message will trigger a fresh reconnect.
+		svc.Graphite = nil
 		return err
 	}
 
