@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"fmt"
 	"keyop/core"
 	"keyop/util"
@@ -10,9 +11,7 @@ import (
 	"text/template"
 	"time"
 
-	"bytes"
-
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // YAML representation of services in the config file

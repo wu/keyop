@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marpaia/graphite-golang"
+	graphiteClient "github.com/marpaia/graphite-golang"
 )
 
 func init() {
@@ -16,7 +16,7 @@ func init() {
 type Service struct {
 	Deps     core.Dependencies
 	Cfg      core.ServiceConfig
-	Graphite *graphite.Graphite
+	Graphite *graphiteClient.Graphite
 	Host     string
 	Port     int
 }
@@ -95,12 +95,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		"value", value,
 	)
 
-	metric := graphite.NewMetric(metricName, fmt.Sprintf("%v", value), unixTime)
+	metric := graphiteClient.NewMetric(metricName, fmt.Sprintf("%v", value), unixTime)
 
 	if svc.Graphite == nil {
 		logger.Info("Graphite connection is nil, attempting to connect to Graphite", "host", svc.Host, "port", svc.Port)
 		var err error
-		svc.Graphite, err = graphite.NewGraphite(svc.Host, svc.Port)
+		svc.Graphite, err = graphiteClient.NewGraphite(svc.Host, svc.Port)
 		if err != nil {
 			logger.Error("ERROR: failed to connect to Graphite", "err", err.Error())
 			svc.Graphite = nil

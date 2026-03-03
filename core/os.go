@@ -41,6 +41,9 @@ type FileApi interface {
 	WriteString(s string) (n int, err error)
 }
 
+// Ensure the standard library's *os.File implements our FileApi at compile time.
+var _ FileApi = (*os.File)(nil)
+
 // FakeFile is a simple in-memory file used by tests. We keep an embedded
 // ReadWriteSeeker for convenience but also provide explicit method
 // implementations to ensure the methods exist on *FakeFile.

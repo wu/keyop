@@ -3,12 +3,6 @@ version: 2
 run:
   timeout: 10m
   tests: true
-  skip-dirs:
-    - output
-    - plugins
-    - resources
-  skip-files:
-    - ".*\\.gen\\.go"
 
 linters:
   enable:
@@ -26,6 +20,15 @@ linters-settings:
 
 issues:
   exclude-use-default: false
+  # Moved from deprecated run.skip-files
+  exclude-files:
+    - ".*\\.gen\\.go"
+  # Moved from deprecated run.skip-dirs
+  exclude-dirs:
+    - output
+    - plugins
+    - resources
+
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude:

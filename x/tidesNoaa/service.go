@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // alertedPeak records a peak that has already been announced so that

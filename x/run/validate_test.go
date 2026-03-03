@@ -22,7 +22,6 @@ func (f *fakeService) String() string          { return "fakeService" }
 func Test_validateServiceConfig(t *testing.T) {
 
 	var buf bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&buf, nil))
 
 	tests := []struct {
 		name     string
@@ -71,8 +70,7 @@ func Test_validateServiceConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf.Reset()
-			err := validateServiceConfig(tt.services, logger)
-			tt.wantErr(t, err, fmt.Sprintf("validateServiceConfig(%v, %v)", tt.services, logger))
+			tt.wantErr(t, validateServiceConfig(tt.services, slog.New(slog.NewJSONHandler(&buf, nil))), fmt.Sprintf("validateServiceConfig(%v, %v)", tt.services, slog.New(slog.NewJSONHandler(&buf, nil))))
 			logs := buf.String()
 			for _, msg := range tt.logMsgs {
 				assert.Contains(t, logs, msg)
