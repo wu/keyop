@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/wu/keyop/compare/1.0.0...1.0.1) (2026-03-03)
+
+### Bug Fixes
+
+* resolve warnings ([c13ff3e](https://github.com/wu/keyop/commit/c13ff3e62027a4b8f0ae917afbe147ceba25c7b5))
+
 ## 1.0.0 (2026-03-03)
 
 ### Features
