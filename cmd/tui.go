@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gdamore/tcell/v2"
+	tcell "github.com/gdamore/tcell/v2"
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
