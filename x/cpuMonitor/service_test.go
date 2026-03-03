@@ -21,25 +21,25 @@ func (m *mockMessenger) Send(msg core.Message) error {
 	return nil
 }
 
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
 	return nil
 }
 
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
+func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
 	return nil
 }
 
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error {
 	return nil
 }
 
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
+func (m *mockMessenger) SeekToEnd(_ string, _ string) error {
 	return nil
 }
 
-func (m *mockMessenger) SetDataDir(dir string) {}
+func (m *mockMessenger) SetDataDir(_ string) {}
 
-func (m *mockMessenger) SetHostname(hostname string) {}
+func (m *mockMessenger) SetHostname(_ string) {}
 
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
@@ -49,7 +49,7 @@ type readWriteSeeker struct {
 	*bytes.Reader
 }
 
-func (rws *readWriteSeeker) Write(p []byte) (n int, err error) {
+func (rws *readWriteSeeker) Write(_ []byte) (n int, err error) {
 	return 0, fmt.Errorf("read-only")
 }
 
@@ -89,7 +89,9 @@ func TestCheck_Linux(t *testing.T) {
 	}
 
 	svc := NewService(deps, cfg).(*Service)
-	svc.Initialize()
+	if err := svc.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
 
 	// First check to initialize CPU stats
 	err := svc.Check()
@@ -165,7 +167,9 @@ func TestCheck_Darwin(t *testing.T) {
 	}
 
 	svc := NewService(deps, cfg)
-	svc.Initialize()
+	if err := svc.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
 	err := svc.Check()
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -201,7 +205,9 @@ func TestCheck_ErrorHandling(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	svc.Initialize()
+	if err := svc.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
 	err := svc.Check()
 	if err == nil {
 		t.Error("Expected error from file failure, got nil")
@@ -237,6 +243,7 @@ func TestCheck_UnsupportedPlatform(t *testing.T) {
 func TestInitialize_MissingConfig(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
+	deps.SetOsProvider(&core.FakeOsProvider{})
 	cfg := core.ServiceConfig{
 		Name:   "cpu_test",
 		Config: map[string]interface{}{},
