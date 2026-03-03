@@ -15,7 +15,7 @@ import (
 	"time"
 
 	tcell "github.com/gdamore/tcell/v2"
-	"github.com/lucasb-eyer/go-colorful"
+	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )

@@ -29,6 +29,9 @@ type CommandApi interface {
 	Output() ([]byte, error)
 }
 
+// FileApi is the minimal file-like interface used by the codebase.
+// Explicitly include the common methods so f.Close and f.Write are always available
+// on implementations instead of relying solely on embedded promotions.
 type FileApi interface {
 	io.Closer
 	io.Writer
@@ -37,6 +40,9 @@ type FileApi interface {
 	WriteString(s string) (n int, err error)
 }
 
+// FakeFile is a simple in-memory file used by tests. We keep an embedded
+// ReadWriteSeeker for convenience but also provide explicit method
+// implementations to ensure the methods exist on *FakeFile.
 type FakeFile struct {
 	io.ReadWriteSeeker
 	CloseFunc func() error
@@ -51,6 +57,28 @@ func (f *FakeFile) Close() error {
 
 func (f *FakeFile) WriteString(s string) (n int, err error) {
 	return f.Write([]byte(s))
+}
+
+// Provide explicit Read/Write/Seek so callers don't depend on promotion.
+func (f *FakeFile) Write(p []byte) (int, error) {
+	if f.ReadWriteSeeker != nil {
+		return f.ReadWriteSeeker.Write(p)
+	}
+	return 0, os.ErrInvalid
+}
+
+func (f *FakeFile) Read(p []byte) (int, error) {
+	if f.ReadWriteSeeker != nil {
+		return f.ReadWriteSeeker.Read(p)
+	}
+	return 0, os.ErrInvalid
+}
+
+func (f *FakeFile) Seek(offset int64, whence int) (int64, error) {
+	if f.ReadWriteSeeker != nil {
+		return f.ReadWriteSeeker.Seek(offset, whence)
+	}
+	return 0, os.ErrInvalid
 }
 
 // OsProvider is the production implementation of OsProviderApi using the standard library.
