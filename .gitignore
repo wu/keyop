@@ -32,3 +32,6 @@ keyop.*
 
 data/
 
+# Node (semantic-release runs in CI; ignore any local installs)
+node_modules/
+package-lock.json
