@@ -34,12 +34,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 func (svc *Service) ValidateConfig() []error {
-	var errs []error
-	if runtime.GOOS != "darwin" {
-		errs = append(errs, fmt.Errorf("unsupported platform: %s", runtime.GOOS))
-	}
-
-	return errs
+	return nil
 }
 
 func (svc *Service) Initialize() error {

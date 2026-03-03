@@ -374,6 +374,7 @@ func TestGetLinuxCpuStats_ReadError(t *testing.T) {
 func TestInitialize_CpuMetricNameKey(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
+	deps.SetOsProvider(&core.FakeOsProvider{})
 	cfg := core.ServiceConfig{
 		Name: "svc",
 		Config: map[string]interface{}{
@@ -392,6 +393,7 @@ func TestInitialize_CpuMetricNameKey(t *testing.T) {
 func TestInitialize_MetricNameFallback(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
+	deps.SetOsProvider(&core.FakeOsProvider{})
 	cfg := core.ServiceConfig{
 		Name: "svc",
 		Config: map[string]interface{}{
