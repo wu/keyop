@@ -1,3 +1,9 @@
+## [1.1.6](https://github.com/wu/keyop/compare/1.1.5...1.1.6) (2026-03-03)
+
+### Bug Fixes
+
+* clean up static check errors ([a0f0c41](https://github.com/wu/keyop/commit/a0f0c414bbb8f21adfca5637caad4fa10b90b2fd))
+
 ## [1.1.5](https://github.com/wu/keyop/compare/1.1.4...1.1.5) (2026-03-03)
 
 ### Bug Fixes
