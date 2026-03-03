@@ -25,6 +25,7 @@ type Service struct {
 	Deps              core.Dependencies
 	Cfg               core.ServiceConfig
 	stationID         string
+	stationName       string // human-readable station name from NOAA metadata API
 	dataDir           string
 	apiBase           string // overridable in tests; defaults to noaaAPIBase
 	metadataBase      string // overridable in tests; defaults to noaaMetadataBase
@@ -95,13 +96,14 @@ func (svc *Service) Initialize() error {
 	svc.alt, _ = svc.Cfg.Config["alt"].(float64)
 
 	if svc.lat == 0 && svc.lon == 0 {
-		lat, lon, err := fetchStationLocation(svc.metadataBase, svc.stationID)
+		lat, lon, name, err := fetchStationInfo(svc.metadataBase, svc.stationID)
 		if err != nil {
 			svc.Deps.MustGetLogger().Warn("tidesNoaa: could not fetch station coordinates; tide report disabled",
 				"station", svc.stationID, "error", err)
 		} else {
 			svc.lat = lat
 			svc.lon = lon
+			svc.stationName = name
 			svc.Deps.MustGetLogger().Info("tidesNoaa: using station coordinates from NOAA metadata API",
 				"station", svc.stationID, "lat", lat, "lon", lon)
 		}
@@ -495,9 +497,13 @@ func (svc *Service) maybeSendTideReport(messenger core.MessengerApi, now time.Ti
 
 	svc.mu.RLock()
 	threshold := svc.lowTideThreshold
+	stationLabel := svc.stationName
+	if stationLabel == "" {
+		stationLabel = svc.stationID
+	}
 	svc.mu.RUnlock()
 
-	text := formatTideReport(allPeriods, threshold, svc.stationID)
+	text := formatTideReport(allPeriods, threshold, stationLabel)
 	summary := fmt.Sprintf("Tide report: %d daylight low-tide period(s) in next %d days", len(allPeriods), reportDays)
 
 	if err := messenger.Send(core.Message{

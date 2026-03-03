@@ -12,51 +12,59 @@ import (
 
 const noaaMetadataBase = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations"
 
-// fetchStationLocation queries the NOAA metadata API and returns the latitude
-// and longitude for stationID.  metadataBase may be overridden in tests;
-// pass noaaMetadataBase for production.
-func fetchStationLocation(metadataBase, stationID string) (lat, lon float64, err error) {
+// fetchStationInfo queries the NOAA metadata API and returns the latitude,
+// longitude, and name for stationID.  metadataBase may be overridden in
+// tests; pass noaaMetadataBase for production.
+func fetchStationInfo(metadataBase, stationID string) (lat, lon float64, name string, err error) {
 	url := fmt.Sprintf("%s/%s.json", metadataBase, stationID)
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	req.Header.Set("User-Agent", "keyop (https://github.com/keyop/keyop)")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("NOAA metadata API returned status %d for station %s", resp.StatusCode, stationID)
+		return 0, 0, "", fmt.Errorf("NOAA metadata API returned status %d for station %s", resp.StatusCode, stationID)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 
 	var apiResp struct {
 		Stations []struct {
-			Lat float64 `json:"lat"`
-			Lng float64 `json:"lng"`
+			Lat  float64 `json:"lat"`
+			Lng  float64 `json:"lng"`
+			Name string  `json:"name"`
 		} `json:"stations"`
 	}
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return 0, 0, fmt.Errorf("failed to parse NOAA metadata response for station %s: %w", stationID, err)
+		return 0, 0, "", fmt.Errorf("failed to parse NOAA metadata response for station %s: %w", stationID, err)
 	}
 	if len(apiResp.Stations) == 0 {
-		return 0, 0, fmt.Errorf("NOAA metadata API returned no station for ID %s", stationID)
+		return 0, 0, "", fmt.Errorf("NOAA metadata API returned no station for ID %s", stationID)
 	}
 
 	s := apiResp.Stations[0]
 	if s.Lat == 0 && s.Lng == 0 {
-		return 0, 0, fmt.Errorf("NOAA metadata API returned zero coordinates for station %s", stationID)
+		return 0, 0, "", fmt.Errorf("NOAA metadata API returned zero coordinates for station %s", stationID)
 	}
-	return s.Lat, s.Lng, nil
+	return s.Lat, s.Lng, s.Name, nil
+}
+
+// fetchStationLocation is a compatibility wrapper around fetchStationInfo that
+// drops the station name return value.
+func fetchStationLocation(metadataBase, stationID string) (lat, lon float64, err error) {
+	lat, lon, _, err = fetchStationInfo(metadataBase, stationID)
+	return
 }
 
 // LowTidePeriod describes a contiguous window during which the tide is at or
@@ -68,6 +76,7 @@ type LowTidePeriod struct {
 	End       time.Time     `json:"end"`
 	Duration  time.Duration `json:"duration"`
 	MinValue  float64       `json:"minValue"` // lowest reading within the period
+	MinTime   time.Time     `json:"minTime"`  // time of the lowest reading
 }
 
 // FormatDuration renders a duration as "Xh Ym" (e.g. "2h 18m").
@@ -126,6 +135,7 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 	var periodStart time.Time
 	var lastTime time.Time
 	var minVal float64
+	var minTime time.Time
 
 	for _, r := range records {
 		t, err := time.ParseInLocation(noaaTimeFormat, r.Time, dayDate.Location())
@@ -143,6 +153,7 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 					End:       lastTime,
 					Duration:  lastTime.Sub(periodStart),
 					MinValue:  minVal,
+					MinTime:   minTime,
 				})
 				inPeriod = false
 			}
@@ -154,8 +165,10 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 				inPeriod = true
 				periodStart = t
 				minVal = r.Value
+				minTime = t
 			} else if r.Value < minVal {
 				minVal = r.Value
+				minTime = t
 			}
 			lastTime = t
 		} else {
@@ -167,6 +180,7 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 					End:       lastTime,
 					Duration:  lastTime.Sub(periodStart),
 					MinValue:  minVal,
+					MinTime:   minTime,
 				})
 				inPeriod = false
 			}
@@ -182,6 +196,7 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 			End:       lastTime,
 			Duration:  lastTime.Sub(periodStart),
 			MinValue:  minVal,
+			MinTime:   minTime,
 		})
 	}
 
@@ -190,23 +205,26 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 
 // formatTideReport renders a slice of LowTidePeriods as a Markdown document
 // with a single table covering all days.
-func formatTideReport(periods []LowTidePeriod, threshold float64, stationID string) string {
+// stationLabel is shown in the header; pass the station name when available,
+// falling back to the station ID.
+func formatTideReport(periods []LowTidePeriod, threshold float64, stationLabel string) string {
 	if len(periods) == 0 {
-		return fmt.Sprintf("## Tide Report — Station %s\n\nNo daylight low tides (≤ %.1f ft) in the next 7 days.\n",
-			stationID, threshold)
+		return fmt.Sprintf("## Tide Report — %s\n\nNo daylight low tides (≤ %.1f ft) in the next 7 days.\n",
+			stationLabel, threshold)
 	}
 
-	out := fmt.Sprintf("## Tide Report — Station %s\n\nDaylight low tides ≤ %.1f ft:\n\n", stationID, threshold)
-	out += "| Date | Day | Start | End | Duration | Min |\n"
-	out += "|------|-----|-------|-----|----------|-----|\n"
+	out := fmt.Sprintf("## Tide Report — %s\n\nDaylight low tides ≤ %.1f ft:\n\n", stationLabel, threshold)
+	out += "| Date | Day | Start | End | Duration | Min | Min Time |\n"
+	out += "|------|-----|-------|-----|----------|-----|----------|\n"
 	for _, p := range periods {
-		out += fmt.Sprintf("| %s | %s | %s | %s | %s | %.2f ft |\n",
+		out += fmt.Sprintf("| %s | %s | %s | %s | %s | %.2f ft | %s |\n",
 			p.Date,
 			p.DayOfWeek,
 			p.Start.Format("15:04"),
 			p.End.Format("15:04"),
 			FormatDuration(p.Duration),
 			p.MinValue,
+			p.MinTime.Format("15:04"),
 		)
 	}
 	return out

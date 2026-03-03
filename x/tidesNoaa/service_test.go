@@ -1561,6 +1561,7 @@ func TestFormatTideReport(t *testing.T) {
 	t.Run("report groups by date with markdown table", func(t *testing.T) {
 		start := time.Date(2026, 3, 2, 8, 0, 0, 0, time.Local)
 		end := time.Date(2026, 3, 2, 10, 30, 0, 0, time.Local)
+		minTime := time.Date(2026, 3, 2, 9, 12, 0, 0, time.Local)
 		periods := []LowTidePeriod{
 			{
 				Date:      "2026-03-02",
@@ -1569,12 +1570,13 @@ func TestFormatTideReport(t *testing.T) {
 				End:       end,
 				Duration:  end.Sub(start),
 				MinValue:  2.34,
+				MinTime:   minTime,
 			},
 		}
 		out := formatTideReport(periods, 5.0, "9414290")
 		assert.Contains(t, out, "## Tide Report")
-		assert.Contains(t, out, "| Date | Day | Start | End | Duration | Min |")
-		assert.Contains(t, out, "| 2026-03-02 | Monday | 08:00 | 10:30 | 2h 30m | 2.34 ft |")
+		assert.Contains(t, out, "| Date | Day | Start | End | Duration | Min | Min Time |")
+		assert.Contains(t, out, "| 2026-03-02 | Monday | 08:00 | 10:30 | 2h 30m | 2.34 ft | 09:12 |")
 		assert.Contains(t, out, "9414290")
 	})
 }
