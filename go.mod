@@ -1,6 +1,6 @@
 module keyop
 
-go 1.25
+go 1.26
 
 require (
 	github.com/MatusOllah/slogcolor v1.7.0

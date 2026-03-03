@@ -21,7 +21,7 @@ PLUGIN_COPIED=0
 TMPDIR=""
 
 # Default Go version for in-container builds
-GO_VERSION=${GO_VERSION:-1.25}
+GO_VERSION=${GO_VERSION:-1.26}
 
 cleanup() {
   # remove temporary dir if created (unless PRESERVE_TMPDIR=1)

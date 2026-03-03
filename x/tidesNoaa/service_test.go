@@ -1000,7 +1000,7 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 	}
 	svc.mu.Lock()
 	svc.extremes = TideExtremes{Window1Lunar: prevWindow, Window3Lunar: prevWindow, Window12Lunar: prevWindow}
-	svc.lastBackfillDay = time.Now().Truncate(24 * time.Hour)
+	svc.lastBackfillDay = localMidnight(time.Now())
 	svc.mu.Unlock()
 
 	require.NoError(t, svc.Check())

@@ -565,6 +565,7 @@ func pruneAlertedPeaks(alerted []alertedPeak, now time.Time) []alertedPeak {
 func (svc *Service) backfillExtremes(now time.Time) {
 	logger := svc.Deps.MustGetLogger()
 	cutoff := now.AddDate(0, 0, -365)
+	todayMidnight := localMidnight(now)
 
 	entries, err := svc.Deps.MustGetOsProvider().ReadDir(svc.stationDir())
 	if err != nil {
@@ -583,7 +584,11 @@ func (svc *Service) backfillExtremes(now time.Time) {
 			continue
 		}
 		day, err := time.ParseInLocation(fileDateFormat, name[:len(name)-len(".yaml")], now.Location())
-		if err != nil || day.Before(cutoff) || day.After(now) {
+		// Only include fully-completed past days. Today's data is still
+		// accumulating, so including it would pollute the extremes leaderboard
+		// with a partial day's high — exactly what ensureDayFiles avoids by
+		// gating on dayMidnight.Before(todayMidnight).
+		if err != nil || day.Before(cutoff) || !day.Before(todayMidnight) {
 			continue
 		}
 		names = append(names, name)

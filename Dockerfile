@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for building a minimal Linux binary for keyop
 # Use a simple ARG for Go version to allow overrides.
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.26
 FROM golang:${GO_VERSION} AS builder
 
 WORKDIR /src

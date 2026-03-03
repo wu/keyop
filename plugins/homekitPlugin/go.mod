@@ -1,6 +1,6 @@
 module keyop/plugins/homekitPlugin
 
-go 1.25.1
+go 1.26
 
 replace keyop => ../../
 
