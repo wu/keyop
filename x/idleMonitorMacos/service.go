@@ -190,7 +190,6 @@ func (svc *Service) Check() error {
 		activeTime := now.Sub(svc.lastTransition)
 		svc.lastTransition = now.Add(-idleDuration) // backdate to when it actually became idle
 		svc.lastAlertHours = 0                      // Reset alert counter
-		timeSinceLastStatusChange = now.Sub(svc.lastTransition)
 
 		err = messenger.Send(core.Message{
 			ChannelName: svc.Cfg.Name,

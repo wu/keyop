@@ -130,11 +130,3 @@ func tokenize(s string) ([]string, error) {
 
 	return tokens, nil
 }
-
-// parseConditionValue coerces a raw string into float64 if numeric, otherwise string.
-func parseConditionValue(s string) interface{} {
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f
-	}
-	return s
-}

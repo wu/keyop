@@ -754,24 +754,21 @@ func formatMarkdown(text string) string {
 			if start == -1 {
 				break
 			}
-			// Skip our already processed tags
-			if len(line) > start+1 && line[start+1] == '[' {
-				// This is likely start of [red] or similar.
-				// Need to find real next *
+			// If the star is immediately followed by a tview tag like [red], treat it as literal and find the next star
+			if start+1 < len(line) && line[start+1] == '[' {
 				nextStar := strings.Index(line[start+1:], "*")
 				if nextStar == -1 {
 					break
 				}
-				// Look for * after this one
+				// shift start to the next star position
 				start = start + 1 + nextStar
-				continue
 			}
 
-			end := strings.Index(line[start+1:], "*")
-			if end == -1 {
+			endRel := strings.Index(line[start+1:], "*")
+			if endRel == -1 {
 				break
 			}
-			end += start + 1
+			end := start + 1 + endRel
 			content := line[start+1 : end]
 			line = line[:start] + "[blue::b]" + content + "[-]" + line[end+1:]
 		}

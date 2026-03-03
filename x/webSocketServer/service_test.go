@@ -37,16 +37,6 @@ func safeClearReadDeadline(t *testing.T, c *websocket.Conn) {
 	}
 }
 
-func safeCloseConn(t *testing.T, c *websocket.Conn) {
-	t.Helper()
-	if c == nil {
-		return
-	}
-	if err := c.Close(); err != nil {
-		t.Logf("failed to close websocket conn: %v", err)
-	}
-}
-
 func TestValidateConfig(t *testing.T) {
 	home, err := os.MkdirTemp("", "keyop-test-home-*")
 	if err != nil {
