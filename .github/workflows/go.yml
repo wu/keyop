@@ -4,14 +4,17 @@
 name: Go
 
 on:
-#  push:
-#    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
   pull_request:
     branches: ["main"]
 
 jobs:
 
   build:
+    # Skip the automated chore(release) commit pushed back by semantic-release
+    # to avoid an unnecessary redundant run right after a release.
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
