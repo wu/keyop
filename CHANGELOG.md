@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/wu/keyop/compare/1.1.0...1.1.1) (2026-03-03)
+
+### Bug Fixes
+
+* clean up more lint / staticcheck warnings ([bd47e49](https://github.com/wu/keyop/commit/bd47e492bd77da8afff0036aa2d3245993e13087))
+
 ## [1.1.0](https://github.com/wu/keyop/compare/1.0.1...1.1.0) (2026-03-03)
 
 ### Features
