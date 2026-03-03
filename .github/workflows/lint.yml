@@ -28,8 +28,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.59.0
-          go install honnef.co/go/tools/cmd/staticcheck@latest
 
       - name: Check formatting (gofmt)
         run: |
@@ -39,14 +37,10 @@ jobs:
           fi
 
       - name: Run golangci-lint
-        env:
-          GOBIN: $(go env GOPATH)/bin
-        run: |
-          $(go env GOPATH)/bin/golangci-lint run ./...
-
-      - name: Run staticcheck
-        run: |
-          staticcheck ./...
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.59.0
+          args: run ./...
 
       - name: Run tests
         run: |
