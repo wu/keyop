@@ -1,3 +1,9 @@
+## [1.1.4](https://github.com/wu/keyop/compare/1.1.3...1.1.4) (2026-03-03)
+
+### Bug Fixes
+
+* pin go version in workflow config ([41c3543](https://github.com/wu/keyop/commit/41c3543e4062f52777cce34c13ad06490bd24ead))
+
 ## [1.1.3](https://github.com/wu/keyop/compare/1.1.2...1.1.3) (2026-03-03)
 
 ### Bug Fixes
