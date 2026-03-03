@@ -23,8 +23,9 @@ jobs:
 
       - name: Install linters
         run: |
-          echo "Installing linters with go install to ensure they are built with the runner's Go toolchain"
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.0
+          sudo apt-get update
+          sudo apt-get install -y curl
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.59.0
           go install honnef.co/go/tools/cmd/staticcheck@latest
 
       - name: Check formatting (gofmt)
