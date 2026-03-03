@@ -1,3 +1,9 @@
+## [1.1.5](https://github.com/wu/keyop/compare/1.1.4...1.1.5) (2026-03-03)
+
+### Bug Fixes
+
+* alias tcell import for static checks ([b2c6587](https://github.com/wu/keyop/commit/b2c6587dbedb7aa933353f99f28887da4492665d))
+
 ## [1.1.4](https://github.com/wu/keyop/compare/1.1.3...1.1.4) (2026-03-03)
 
 ### Bug Fixes
