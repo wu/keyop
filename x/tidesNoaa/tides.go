@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sort"
 	"time"
+
+	"keyop/core"
 )
 
 const (
@@ -67,7 +69,7 @@ func dayFileStale(f *TideDayFile, dayOffset int, now time.Time) bool {
 // fetchDayRecords calls the NOAA CO-OPS API for a single day and returns the
 // 6-minute water-level records for that day.
 // apiBase may be overridden in tests; pass noaaAPIBase for production.
-func fetchDayRecords(apiBase, stationID string, day time.Time) ([]TideRecord, error) {
+func fetchDayRecords(logger core.Logger, apiBase, stationID string, day time.Time) ([]TideRecord, error) {
 	date := day.Format(noaaDateFormat)
 	url := fmt.Sprintf(
 		"%s?product=predictions&application=keyop&begin_date=%s&end_date=%s&datum=MLLW&time_zone=lst_ldt&interval=6&units=english&format=json&station=%s",
@@ -81,11 +83,19 @@ func fetchDayRecords(apiBase, stationID string, day time.Time) ([]TideRecord, er
 	}
 	req.Header.Set("User-Agent", "keyop (https://github.com/keyop/keyop)")
 
-	resp, err := client.Do(req)
+	// client.Do is called with a constructed NOAA URL; this is not user-supplied
+	// network input and is safe. Suppress the gosec G704 warning here.
+	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			if logger != nil {
+				logger.Warn("tidesNoaa: failed to close response body", "error", cerr)
+			}
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("NOAA API returned status %d for %s", resp.StatusCode, date)
@@ -172,7 +182,7 @@ const maxExtremeEntries = 400
 // dayDate is the calendar date of those records, used for window membership.
 func updateExtremes(ex TideExtremes, records []TideRecord, dayDate time.Time, now time.Time) TideExtremes {
 	high, low := dailyHighLow(records, dayDate)
-	if high == nil {
+	if high == nil || low == nil {
 		return ex // no parseable records
 	}
 

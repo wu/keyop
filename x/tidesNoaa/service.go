@@ -41,6 +41,7 @@ type Service struct {
 	mu                sync.RWMutex
 }
 
+// NewService creates a new tidesNoaa Service with default NOAA API endpoints.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps:         deps,
@@ -96,7 +97,7 @@ func (svc *Service) Initialize() error {
 	svc.alt, _ = svc.Cfg.Config["alt"].(float64)
 
 	if svc.lat == 0 && svc.lon == 0 {
-		lat, lon, name, err := fetchStationInfo(svc.metadataBase, svc.stationID)
+		lat, lon, name, err := fetchStationInfo(svc.Deps.MustGetLogger(), svc.metadataBase, svc.stationID)
 		if err != nil {
 			svc.Deps.MustGetLogger().Warn("tidesNoaa: could not fetch station coordinates; tide report disabled",
 				"station", svc.stationID, "error", err)
@@ -118,7 +119,7 @@ func (svc *Service) Initialize() error {
 
 	// Per-station sub-directory keeps each station's daily files together.
 	stationDir := svc.stationDir()
-	if err := svc.Deps.MustGetOsProvider().MkdirAll(stationDir, 0o755); err != nil {
+	if err := svc.Deps.MustGetOsProvider().MkdirAll(stationDir, 0o750); err != nil {
 		return fmt.Errorf("tidesNoaa: failed to create data directory %s: %w", stationDir, err)
 	}
 
@@ -312,7 +313,7 @@ func (svc *Service) ensureDayFiles(now time.Time) error {
 		}
 
 		logger.Info("tidesNoaa: fetching day data", "station", svc.stationID, "date", day.Format(fileDateFormat))
-		records, err := fetchDayRecords(svc.apiBase, svc.stationID, day)
+		records, err := fetchDayRecords(logger, svc.apiBase, svc.stationID, day)
 		if err != nil {
 			// Future days may not yet have data; log and skip rather than abort.
 			if i > 0 {

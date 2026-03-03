@@ -81,6 +81,7 @@ func (m *mockOsProvider) ReadFile(name string) ([]byte, error) {
 	if ok {
 		return data, nil
 	}
+	// #nosec G304: test fallback to real file system is intentional (tests only)
 	return os.ReadFile(name)
 }
 
@@ -90,10 +91,10 @@ func (m *mockOsProvider) OpenFile(name string, _ int, _ os.FileMode) (core.FileA
 
 func (m *mockOsProvider) ReadDir(dirname string) ([]os.DirEntry, error) {
 	// Real on-disk entries (may be empty for a temp dir).
-	real, _ := os.ReadDir(dirname)
-	seen := make(map[string]bool, len(real))
-	result := make([]os.DirEntry, 0, len(real))
-	for _, e := range real {
+	realEntries, _ := os.ReadDir(dirname)
+	seen := make(map[string]bool, len(realEntries))
+	result := make([]os.DirEntry, 0, len(realEntries))
+	for _, e := range realEntries {
 		seen[e.Name()] = true
 		result = append(result, e)
 	}
@@ -207,7 +208,7 @@ func mockNoaaServer(t *testing.T, recordsByDate map[string][]TideRecord, errMsg 
 // empty station list so Initialize gracefully skips coordinate lookup.
 func noopMetadataServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"stations": []interface{}{}})
 	}))
 }
@@ -226,35 +227,13 @@ func initSvc(t *testing.T, svc *Service) {
 // response for any station ID request.
 func mockMetadataServer(t *testing.T, lat, lon float64) *httptest.Server {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"stations": []map[string]interface{}{
 				{"lat": lat, "lng": lon},
 			},
 		})
 	}))
-}
-
-// newTestService creates, configures, and initialises a Service with mock API
-// servers so no real network calls are made.  The caller must close the
-// returned servers with defer.
-func newTestService(t *testing.T, stationID string, extraCfg map[string]interface{},
-	recordsByDate map[string][]TideRecord, metaLat, metaLon float64,
-) (svc *Service, messenger *mockMessenger, noaaServer, metaServer *httptest.Server) {
-	t.Helper()
-
-	messenger = &mockMessenger{}
-	osP := newMockOsProvider(t)
-	deps := makeDeps(t, messenger, osP)
-
-	noaaServer = mockNoaaServer(t, recordsByDate, "")
-	metaServer = mockMetadataServer(t, metaLat, metaLon)
-
-	svc = NewService(deps, makeCfg(stationID, extraCfg)).(*Service)
-	svc.apiBase = noaaServer.URL
-	svc.metadataBase = metaServer.URL
-	require.NoError(t, svc.Initialize())
-	return
 }
 
 // seedDayFile writes a TideDayFile into the mock OS provider's in-memory store.
@@ -270,7 +249,8 @@ func seedDayFile(t *testing.T, svc *Service, day time.Time, records []TideRecord
 	require.NoError(t, err)
 
 	path := svc.dayFilePath(day)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	// use 0750 perms to satisfy gosec
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
 
 	osP := svc.Deps.MustGetOsProvider().(*mockOsProvider)
 	osP.mu.Lock()
@@ -357,7 +337,7 @@ func TestFetchDayRecords(t *testing.T) {
 		}, "")
 		defer server.Close()
 
-		got, err := fetchDayRecords(server.URL, "9414290", today)
+		got, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.NoError(t, err)
 		require.Len(t, got, len(records))
 		assert.Equal(t, records[0].Time, got[0].Time)
@@ -368,29 +348,29 @@ func TestFetchDayRecords(t *testing.T) {
 		server := mockNoaaServer(t, nil, "Station ID not found")
 		defer server.Close()
 
-		_, err := fetchDayRecords(server.URL, "INVALID", today)
+		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "INVALID", today)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Station ID not found")
 	})
 
 	t.Run("errors on non-200 status", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}))
 		defer server.Close()
 
-		_, err := fetchDayRecords(server.URL, "9414290", today)
+		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "503")
 	})
 
 	t.Run("errors when data array is empty", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"predictions": []TideRecord{}})
 		}))
 		defer server.Close()
 
-		_, err := fetchDayRecords(server.URL, "9414290", today)
+		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no records")
 	})
@@ -728,8 +708,8 @@ func TestUpdateExtremes(t *testing.T) {
 
 		// Advance time 6 days — the day-25 entry (now 31 days old, > 29.53) expires.
 		future := now.AddDate(0, 0, 6)
-		r2, d2 := dayRecs(5.0, 4.0, 0)
-		d2 = future
+		r2, _ := dayRecs(5.0, 4.0, 0)
+		d2 := future
 		ex = updateExtremes(ex, r2, d2, future)
 		// 11.0 is gone; 10.0 is now the high.
 		assert.InDelta(t, 10.0, ex.Window1Lunar.High().Value, 0.001)
@@ -744,8 +724,8 @@ func TestUpdateExtremes(t *testing.T) {
 
 		// Advance 2 days — entry is now 29 days old, outside the 28-day window.
 		future := now.AddDate(0, 0, 2)
-		r2, d2 := dayRecs(5.0, 2.0, 0)
-		d2 = future
+		r2, _ := dayRecs(5.0, 2.0, 0)
+		d2 := future
 		ex = updateExtremes(ex, r2, d2, future)
 		assert.InDelta(t, 5.0, ex.Window1Lunar.High().Value, 0.001)
 	})
@@ -1425,28 +1405,6 @@ func TestCheck_UsesYesterdayRecordsNearMidnight(t *testing.T) {
 // ---------------------------------------------------------------------------
 // report.go – unit tests
 // ---------------------------------------------------------------------------
-
-// buildDetailedRecords creates a slice of records with a sinusoidal tide
-// pattern (values 0–10 ft) starting at base, with count entries at 6-minute
-// intervals.
-func buildDetailedRecords(base time.Time, count int, offset float64) []TideRecord {
-	records := make([]TideRecord, count)
-	for i := 0; i < count; i++ {
-		// Simple triangular wave: rises to 10 then falls back to 0.
-		phase := float64(i%240) / 240.0 // 240 steps = 24 hours
-		var v float64
-		if phase < 0.5 {
-			v = phase * 20.0 // 0 → 10
-		} else {
-			v = (1.0 - phase) * 20.0 // 10 → 0
-		}
-		records[i] = TideRecord{
-			Time:  base.Add(time.Duration(i) * 6 * time.Minute).Format(noaaTimeFormat),
-			Value: v + offset,
-		}
-	}
-	return records
-}
 
 func TestDaylightLowPeriods(t *testing.T) {
 	// Use a fixed local day so sunrise/sunset are predictable.

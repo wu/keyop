@@ -1,3 +1,5 @@
+// Package tidesNoaa provides NOAA tide-data fetching, local storage, reports,
+// and extreme-tide detection for the keyop project.
 package tidesNoaa
 
 import (
@@ -7,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"keyop/core"
+
 	"github.com/sj14/astral/pkg/astral"
 )
 
@@ -15,7 +19,7 @@ const noaaMetadataBase = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webap
 // fetchStationInfo queries the NOAA metadata API and returns the latitude,
 // longitude, and name for stationID.  metadataBase may be overridden in
 // tests; pass noaaMetadataBase for production.
-func fetchStationInfo(metadataBase, stationID string) (lat, lon float64, name string, err error) {
+func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, lon float64, name string, err error) {
 	url := fmt.Sprintf("%s/%s.json", metadataBase, stationID)
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
@@ -24,11 +28,19 @@ func fetchStationInfo(metadataBase, stationID string) (lat, lon float64, name st
 	}
 	req.Header.Set("User-Agent", "keyop (https://github.com/keyop/keyop)")
 
-	resp, err := client.Do(req)
+	// client.Do is called with a constructed NOAA URL; this is not user-supplied
+	// network input and is safe. Suppress the gosec G704 warning here.
+	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
 		return 0, 0, "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			if logger != nil {
+				logger.Warn("tidesNoaa: failed to close metadata response body", "error", cerr)
+			}
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, 0, "", fmt.Errorf("NOAA metadata API returned status %d for station %s", resp.StatusCode, stationID)
@@ -58,13 +70,6 @@ func fetchStationInfo(metadataBase, stationID string) (lat, lon float64, name st
 		return 0, 0, "", fmt.Errorf("NOAA metadata API returned zero coordinates for station %s", stationID)
 	}
 	return s.Lat, s.Lng, s.Name, nil
-}
-
-// fetchStationLocation is a compatibility wrapper around fetchStationInfo that
-// drops the station name return value.
-func fetchStationLocation(metadataBase, stationID string) (lat, lon float64, err error) {
-	lat, lon, _, err = fetchStationInfo(metadataBase, stationID)
-	return
 }
 
 // LowTidePeriod describes a contiguous window during which the tide is at or
