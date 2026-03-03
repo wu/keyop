@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -576,11 +575,15 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	m := NewMessenger(fl, OsProvider{})
 	m.dataDir = tmpDir
 
-	var callCount int32
+	var mu sync.Mutex
+	var callCount int
 	handlerErr := errors.New("temporary handler failure")
 
 	err = m.Subscribe(context.Background(), "retry-test-source", "retry-test-chan", "testType", "test", 0, func(msg Message) error {
-		count := atomic.AddInt32(&callCount, 1)
+		mu.Lock()
+		callCount++
+		count := callCount
+		mu.Unlock()
 		if count < 3 {
 			return handlerErr
 		}
@@ -591,7 +594,9 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	_ = m.Send(Message{ChannelName: "retry-test-chan", Text: "retry-me"})
 
 	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&callCount) >= 3
+		mu.Lock()
+		defer mu.Unlock()
+		return callCount >= 3
 	}, 10*time.Second, 100*time.Millisecond, "Expected at least 3 calls due to retries")
 }
 
@@ -612,13 +617,14 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 
 	var received []string
 	var mu sync.Mutex
-	var callCount int32
+	var callCount int
 
 	err = m.Subscribe(context.Background(), "order-test-source", "order-test-chan", "testType", "test", 0, func(msg Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		count := atomic.AddInt32(&callCount, 1)
+		callCount++
+		count := callCount
 		if msg.Text == "first" && count == 1 {
 			return errors.New("fail first once")
 		}

@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 // ParseConditionString parses a compact condition expression into a ConditionConfig.
@@ -71,7 +70,7 @@ func tokenize(s string) ([]string, error) {
 	n := len(r)
 
 	for i < n {
-		for i < n && unicode.IsSpace(r[i]) {
+		for i < n && isSpace(r[i]) {
 			i++
 		}
 		if i >= n {
@@ -120,7 +119,7 @@ func tokenize(s string) ([]string, error) {
 
 		default:
 			var buf strings.Builder
-			for i < n && !unicode.IsSpace(r[i]) {
+			for i < n && !isSpace(r[i]) {
 				buf.WriteRune(r[i])
 				i++
 			}
@@ -129,4 +128,9 @@ func tokenize(s string) ([]string, error) {
 	}
 
 	return tokens, nil
+}
+
+// isSpace is a lightweight replacement for unicode.IsSpace restricted to common ASCII whitespace
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\f' || r == '\v'
 }

@@ -33,10 +33,11 @@ type CommandApi interface {
 // Explicitly include the common methods so f.Close and f.Write are always available
 // on implementations instead of relying solely on embedded promotions.
 type FileApi interface {
-	io.Closer
-	io.Writer
-	io.Reader
-	io.Seeker
+	// Declare methods explicitly to avoid relying on embedded interface promotion
+	Close() error
+	Write(p []byte) (n int, err error)
+	Read(p []byte) (n int, err error)
+	Seek(offset int64, whence int) (int64, error)
 	WriteString(s string) (n int, err error)
 }
 
