@@ -1,3 +1,9 @@
+## [1.1.8](https://github.com/wu/keyop/compare/1.1.7...1.1.8) (2026-03-03)
+
+### Bug Fixes
+
+* resolve more lint errors ([840e8c5](https://github.com/wu/keyop/commit/840e8c5c172886714ddcbe3771226147f5da2f13))
+
 ## [1.1.7](https://github.com/wu/keyop/compare/1.1.6...1.1.7) (2026-03-03)
 
 ### Bug Fixes
