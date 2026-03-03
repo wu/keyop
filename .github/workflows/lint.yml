@@ -33,7 +33,13 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: v1.59.0
-          args: run ./...
+          # Build the linter from source on the runner so the compiled binary
+          # uses the runner's Go toolchain (prevents "unsupported version" errors
+          # when using newer Go versions such as 1.26).
+          install-mode: source
+          # Use the newer output format to avoid the deprecated `github-actions`
+          # output warning. Run over the entire module.
+          args: run --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
         run: |
