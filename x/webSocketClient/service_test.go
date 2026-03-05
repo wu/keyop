@@ -349,7 +349,9 @@ func TestClientHandlesIncomingBatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	received := make(chan core.Message, 10)
 	require.NoError(t, messenger.Subscribe(ctx, "batchReader", "testCh", "test", "test", 0, func(m core.Message) error {
@@ -479,7 +481,9 @@ func TestClientSendsOutgoingBatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	svc := NewService(deps, core.ServiceConfig{
 		Name: "outboundBatchClient",
@@ -611,7 +615,9 @@ func TestClientOutboundAtLeastOnce(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	svc := NewService(deps, core.ServiceConfig{
 		Name: "atLeastOnceClient",
@@ -714,7 +720,9 @@ func TestClientVersionMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -861,7 +869,9 @@ func TestClientAckCrossRelease(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	// Two separate pub channels → two independent batch-sender goroutines, so both
 	// can be in-flight at the same time.  batch_size=1 guarantees one batch per message.
@@ -1006,7 +1016,9 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1157,7 +1169,9 @@ func TestClientFlushPendingOnClose(t *testing.T) {
 		hostParts := strings.Split(host, ":")
 		portStr := hostParts[len(hostParts)-1]
 		var port int
-		fmt.Sscanf(portStr, "%d", &port)
+		if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+			require.NoError(t, err)
+		}
 
 		logger := &core.FakeLogger{}
 		osProvider := core.OsProvider{}
@@ -1308,7 +1322,9 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1416,7 +1432,9 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1564,7 +1582,9 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		require.NoError(t, err)
+	}
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
