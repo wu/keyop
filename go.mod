@@ -4,11 +4,12 @@ go 1.26
 
 require (
 	github.com/MatusOllah/slogcolor v1.7.0
-	github.com/gdamore/tcell/v2 v2.7.4
+	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/lucasb-eyer/go-colorful v1.3.0
 	github.com/marpaia/graphite-golang v0.0.0-20190519024811-caf161d2c2b1
+	github.com/rivo/tview v0.42.0
 	github.com/sj14/astral v0.2.2
 	github.com/soniakeys/meeus/v3 v3.0.1
 	github.com/spf13/cobra v1.10.2
@@ -18,17 +19,18 @@ require (
 )
 
 require (
+	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/soniakeys/unit v1.0.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.15.0 // indirect
-	golang.org/x/tools v0.21.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
