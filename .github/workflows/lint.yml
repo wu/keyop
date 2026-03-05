@@ -47,7 +47,7 @@ jobs:
         run: |
           # Clear caches and run the linter.
           go clean -cache -modcache -testcache || true
-          golangci-lint run --timeout=10m --out-format=colored-line-number ./...
+          golangci-lint run --timeout=10m ./...
 
       - name: Check formatting (gofmt)
         run: |
