@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/wu/keyop/compare/1.1.8...1.2.0) (2026-03-05)
+
+### Features
+
+* add envelope and payload registration for plugins ([7c1f61c](https://github.com/wu/keyop/commit/7c1f61c27be76dc504e2fb5c04558602b1aa3bf7))
+
 ## [1.1.8](https://github.com/wu/keyop/compare/1.1.7...1.1.8) (2026-03-03)
 
 ### Bug Fixes
