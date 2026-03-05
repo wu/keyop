@@ -37,8 +37,9 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		//goland:noinspection GoUnhandledErrorResult
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	// Setup .keyop/certs
@@ -148,7 +149,9 @@ func TestService_ValidateConfig(t *testing.T) {
 		osProvider := deps.MustGetOsProvider()
 		home, _ := osProvider.UserHomeDir()
 		caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
-		_ = os.Remove(caPath)
+		if err := os.Remove(caPath); err != nil {
+			t.Logf("failed to remove %s: %v", caPath, err)
+		}
 
 		cfg := core.ServiceConfig{
 			Config: map[string]interface{}{
@@ -231,7 +234,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 		ClientCAs:    caCAPool,
 	}
 	server.StartTLS()
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	// Parse the server URL to get hostname and port
 	var hostname string
@@ -370,7 +373,7 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 		Certificates: []tls.Certificate{serverCert},
 	}
 	server.StartTLS()
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	// Parse the server URL to get hostname and port
 	var hostname string
@@ -428,7 +431,7 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 		Certificates: []tls.Certificate{serverCert},
 	}
 	server.StartTLS()
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	var hostname string
 	var port int

@@ -23,8 +23,9 @@ func testDeps(t *testing.T, osProvider core.OsProviderApi) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "speak_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		//goland:noinspection GoUnhandledErrorResult
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	if osProvider == nil {

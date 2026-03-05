@@ -32,7 +32,9 @@ func testDeps(t *testing.T) core.Dependencies {
 	}
 	t.Cleanup(func() {
 		//goland:noinspection GoUnhandledErrorResult
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	// Setup .keyop/certs
@@ -123,7 +125,9 @@ func TestService_ValidateConfig(t *testing.T) {
 		osProvider := deps.MustGetOsProvider()
 		home, _ := osProvider.UserHomeDir()
 		caPath := filepath.Join(home, ".keyop", "certs", "ca.crt")
-		_ = os.Remove(caPath)
+		if err := os.Remove(caPath); err != nil {
+			t.Logf("failed to remove %s: %v", caPath, err)
+		}
 
 		cfg := core.ServiceConfig{
 			Config: map[string]interface{}{
@@ -422,7 +426,11 @@ func TestService_UntrustedClientCert_Fails(t *testing.T) {
 
 	// Create an untrusted certificate (self-signed, not signed by our CA)
 	tmpDir, _ := os.MkdirTemp("", "untrusted_cert")
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 	err = util.GenerateTestCerts(tmpDir)
 	assert.NoError(t, err)
 

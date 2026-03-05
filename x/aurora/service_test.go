@@ -33,7 +33,9 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(dataDir)
+		if err := os.RemoveAll(dataDir); err != nil {
+			t.Logf("failed to remove %s: %v", dataDir, err)
+		}
 	})
 
 	messenger := core.NewMessenger(logger, osProvider)
@@ -112,9 +114,11 @@ func TestService_Check(t *testing.T) {
 				{0, 0, 0},
 			},
 		}
-		json.NewEncoder(w).Encode(data)
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	deps := testDeps(t)
 	cfg := core.ServiceConfig{
@@ -138,7 +142,7 @@ func TestService_Check(t *testing.T) {
 	var mu sync.Mutex
 
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe(context.Background(), "test", "aurora", "aurora", "aurora", 0, func(msg core.Message) error {
+	if err := messenger.Subscribe(context.Background(), "test", "aurora", "aurora", "aurora", 0, func(msg core.Message) error {
 		mu.Lock()
 		switch msg.Event {
 		case "aurora_check":
@@ -148,7 +152,9 @@ func TestService_Check(t *testing.T) {
 		}
 		mu.Unlock()
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("subscribe failed: %v", err)
+	}
 
 	err := svc.Check()
 	assert.NoError(t, err)

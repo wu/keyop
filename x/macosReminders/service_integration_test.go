@@ -67,5 +67,7 @@ func TestIntegration_FetchAndPublish_WithSwiftHelper(t *testing.T) {
 	}
 
 	// Clean up
-	_ = os.RemoveAll(tmpDir)
+	if err := os.RemoveAll(tmpDir); err != nil {
+		t.Logf("failed to remove %s: %v", tmpDir, err)
+	}
 }

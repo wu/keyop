@@ -31,7 +31,9 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	fakeOs := core.FakeOsProvider{
@@ -119,12 +121,16 @@ func TestService_ChatAndBatch(t *testing.T) {
 			t.Errorf("Expected /api/chat, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "Hello "}})
+		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "Hello "}}); err != nil {
+			t.Fatalf("failed to encode resp1: %v", err)
+		}
 		w.Write([]byte("\n"))
-		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "world!"}, Done: true})
+		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "world!"}, Done: true}); err != nil {
+			t.Fatalf("failed to encode resp2: %v", err)
+		}
 		w.Write([]byte("\n"))
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	u, _ := url.Parse(ts.URL)
 	host := u.Hostname()
@@ -195,7 +201,7 @@ func TestService_HistorySummarize(t *testing.T) {
 		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true})
 		w.Write([]byte("\n"))
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	u, _ := url.Parse(ts.URL)
 	host := u.Hostname()

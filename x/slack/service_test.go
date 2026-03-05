@@ -30,7 +30,9 @@ func testDeps(t *testing.T) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "slack_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	osProvider := core.OsProvider{}
@@ -129,7 +131,7 @@ func TestService_MessageHandler(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"ok": true}`)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",
@@ -172,7 +174,7 @@ func TestService_Check(t *testing.T) {
 			// Actually we can start the WS server first.
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	// 2. Mock WebSocket server
 	upgrader := websocket.Upgrader{}
@@ -219,7 +221,7 @@ func TestService_Check(t *testing.T) {
 			}
 		}
 	}))
-	defer wsServer.Close()
+	t.Cleanup(wsServer.Close)
 
 	// Re-mock apps.connections.open with the correct WS URL
 	wsURL := "ws" + wsServer.URL[4:] // Convert http:// to ws://

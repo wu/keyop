@@ -73,7 +73,7 @@ func (m *mockKodiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func TestService_Check(t *testing.T) {
 	mockKodi := &mockKodiHandler{}
 	server := httptest.NewServer(mockKodi)
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)

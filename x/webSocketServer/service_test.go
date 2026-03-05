@@ -693,7 +693,7 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 		<-ctx.Done()
 		c.Close()
 	}))
-	defer plainSrv.Close()
+	t.Cleanup(plainSrv.Close)
 
 	wsURL := strings.Replace(plainSrv.URL, "http", "ws", 1)
 	clientConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -983,7 +983,7 @@ func TestSendBatchAndWaitAck_FlushOnClose(t *testing.T) {
 		<-ctx.Done()
 		c.Close()
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	clientConn, _, err := websocket.DefaultDialer.Dial(
 		strings.Replace(srv.URL, "http", "ws", 1), nil)

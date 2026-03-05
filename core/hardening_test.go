@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessenger_DLQFailure_DoesNotAckOriginal(t *testing.T) {
@@ -20,7 +21,11 @@ func TestMessenger_DLQFailure_DoesNotAckOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	})
 
 	fl := &FakeLogger{}
 	// Use a fake OS provider to inject failure for DLQ channel only
@@ -57,10 +62,10 @@ func TestMessenger_DLQFailure_DoesNotAckOriginal(t *testing.T) {
 	source := "test-sub"
 
 	handlerCalled := make(chan struct{}, 1)
-	m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
 		handlerCalled <- struct{}{}
 		return errors.New("fail always")
-	})
+	}))
 
 	_ = m.Send(Message{ChannelName: channel, Text: "trigger"})
 
@@ -87,10 +92,10 @@ func TestMessenger_DLQFailure_DoesNotAckOriginal(t *testing.T) {
 	receivedAgain := make(chan struct{}, 1)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	m.Subscribe(ctx2, source, channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx2, source, channel, "test", "test", 0, func(msg Message) error {
 		receivedAgain <- struct{}{}
 		return nil // succeed this time
-	})
+	}))
 
 	select {
 	case <-receivedAgain:
@@ -105,7 +110,11 @@ func TestMessenger_DLQSuccess_AcksOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	})
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -119,18 +128,18 @@ func TestMessenger_DLQSuccess_AcksOriginal(t *testing.T) {
 	dlqChannel := "_dlq." + channel
 	source := "test-sub"
 
-	m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
 		return errors.New("fail always")
-	})
+	}))
 
 	_ = m.Send(Message{ChannelName: channel, Text: "to-dlq"})
 
 	// Wait for DLQ
 	dlqReceived := make(chan Message, 1)
-	m.Subscribe(ctx, "dlq-reader", dlqChannel, "test", "dlq-reader", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, "dlq-reader", dlqChannel, "test", "dlq-reader", 0, func(msg Message) error {
 		dlqReceived <- msg
 		return nil
-	})
+	}))
 
 	select {
 	case msg := <-dlqReceived:
@@ -142,10 +151,10 @@ func TestMessenger_DLQSuccess_AcksOriginal(t *testing.T) {
 	// Verify original is NOT re-delivered if we start a new subscriber
 	time.Sleep(500 * time.Millisecond)
 	receivedAgain := make(chan struct{}, 1)
-	m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
 		receivedAgain <- struct{}{}
 		return nil
-	})
+	}))
 
 	select {
 	case <-receivedAgain:
@@ -160,7 +169,11 @@ func TestMessenger_RetryCountContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	})
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -172,12 +185,12 @@ func TestMessenger_RetryCountContract(t *testing.T) {
 
 	var mu sync.Mutex
 	calls := 0
-	m.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg Message) error {
 		mu.Lock()
 		calls++
 		mu.Unlock()
 		return errors.New("fail")
-	})
+	}))
 
 	_ = m.Send(Message{ChannelName: "chan", Text: "retry-test"})
 
@@ -197,7 +210,11 @@ func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	})
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -212,7 +229,7 @@ func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	m.Subscribe(ctx, "sub", channel, "test", "test", 0, func(msg Message) error { return nil })
+	require.NoError(t, m.Subscribe(ctx, "sub", channel, "test", "test", 0, func(msg Message) error { return nil }))
 
 	assert.Eventually(t, func() bool {
 		fl.mu.RLock()
@@ -320,7 +337,11 @@ func TestMessenger_ConcurrentSubscribeAndSend_NoDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
+	})
 
 	m := NewMessenger(&FakeLogger{}, OsProvider{})
 	m.SetDataDir(tmpDir)
@@ -342,9 +363,11 @@ func TestMessenger_ConcurrentSubscribeAndSend_NoDeadlock(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			source := fmt.Sprintf("sub-%d", id)
-			_ = m.Subscribe(ctx, source, channel, "test", source, 0, func(msg Message) error {
+			if err := m.Subscribe(ctx, source, channel, "test", source, 0, func(msg Message) error {
 				return nil
-			})
+			}); err != nil {
+				t.Errorf("Subscribe error: %v", err)
+			}
 		}(i)
 	}
 

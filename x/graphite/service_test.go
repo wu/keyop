@@ -27,8 +27,9 @@ func testDeps(t *testing.T) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "graphite_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		//goland:noinspection GoUnhandledErrorResult
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
 	})
 
 	deps.SetOsProvider(core.OsProvider{})
@@ -148,7 +149,11 @@ func TestService_MessageHandler(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	//goland:noinspection GoUnhandledErrorResult
-	defer ln.Close()
+	t.Cleanup(func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close ln: %v", err)
+		}
+	})
 
 	addr := ln.Addr().(*net.TCPAddr)
 	host := addr.IP.String()
@@ -161,7 +166,11 @@ func TestService_MessageHandler(t *testing.T) {
 			return
 		}
 		//goland:noinspection GoUnhandledErrorResult
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("failed to close conn: %v", err)
+			}
+		}()
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err == nil {
@@ -209,7 +218,11 @@ func TestService_MessageHandler_UsesMessageTimestamp(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	//goland:noinspection GoUnhandledErrorResult
-	defer ln.Close()
+	t.Cleanup(func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close ln: %v", err)
+		}
+	})
 
 	addr := ln.Addr().(*net.TCPAddr)
 	host := addr.IP.String()
@@ -222,7 +235,11 @@ func TestService_MessageHandler_UsesMessageTimestamp(t *testing.T) {
 			return
 		}
 		//goland:noinspection GoUnhandledErrorResult
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("failed to close conn: %v", err)
+			}
+		}()
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err == nil {
@@ -299,7 +316,11 @@ func TestService_MessageHandler_SendError(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	//goland:noinspection GoUnhandledErrorResult
-	defer ln.Close()
+	t.Cleanup(func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("failed to close ln: %v", err)
+		}
+	})
 
 	addr := ln.Addr().(*net.TCPAddr)
 	host := addr.IP.String()

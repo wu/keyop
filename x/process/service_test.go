@@ -70,7 +70,11 @@ func TestProcessService(t *testing.T) {
 
 	pidFile := "test.pid"
 	//goland:noinspection GoUnhandledErrorResult
-	defer os.Remove(pidFile)
+	t.Cleanup(func() {
+		if err := os.Remove(pidFile); err != nil {
+			t.Logf("failed to remove %s: %v", pidFile, err)
+		}
+	})
 
 	cfg := core.ServiceConfig{
 		Name: "test-process",

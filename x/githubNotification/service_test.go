@@ -22,7 +22,9 @@ func testDeps(t *testing.T) core.Dependencies {
 	tmpDir, err := os.MkdirTemp("", "github_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	osProvider := core.OsProvider{}
@@ -103,9 +105,11 @@ func TestService_Check(t *testing.T) {
 				UpdatedAt: time.Now(),
 			},
 		}
-		json.NewEncoder(w).Encode(notifications)
+		if err := json.NewEncoder(w).Encode(notifications); err != nil {
+			t.Fatalf("failed to encode notifications: %v", err)
+		}
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	cfg := core.ServiceConfig{
 		Name: "githubNotification-test",
@@ -171,9 +175,11 @@ func TestService_Persistence(t *testing.T) {
 				UpdatedAt: newTime,
 			},
 		}
-		json.NewEncoder(w).Encode(notifications)
+		if err := json.NewEncoder(w).Encode(notifications); err != nil {
+			t.Fatalf("failed to encode notifications: %v", err)
+		}
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	svc.BaseURL = ts.URL
 	err = svc.Check()

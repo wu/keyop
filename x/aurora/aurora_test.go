@@ -18,9 +18,11 @@ func TestFetchOvationData(t *testing.T) {
 				{0, 0, 0},
 			},
 		}
-		json.NewEncoder(w).Encode(data)
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			t.Logf("failed to encode response: %v", err)
+		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	data, err := FetchOvationData(server.URL)
 	assert.NoError(t, err)
@@ -82,7 +84,7 @@ func TestFetchOvationData_Errors(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		_, err := FetchOvationData(server.URL)
 		assert.Error(t, err)
@@ -93,7 +95,7 @@ func TestFetchOvationData_Errors(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("invalid-json"))
 		}))
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		_, err := FetchOvationData(server.URL)
 		assert.Error(t, err)

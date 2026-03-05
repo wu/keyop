@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestPluginPayload struct {
@@ -79,14 +80,18 @@ func TestPayloadRegistry_Concurrency(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				typeName := fmt.Sprintf("type-%d-%d", id, j)
-				reg.Register(typeName, func() any { return map[string]int{"id": id, "j": j} })
+				if err := reg.Register(typeName, func() any { return map[string]int{"id": id, "j": j} }); err != nil {
+					t.Errorf("reg.Register error: %v", err)
+				}
 			}
 		}(i)
 
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				reg.Decode("nonexistent", map[string]string{"foo": "bar"})
+				if _, err := reg.Decode("nonexistent", map[string]string{"foo": "bar"}); err != nil {
+					t.Errorf("reg.Decode error: %v", err)
+				}
 				reg.KnownTypes()
 			}
 		}(i)
@@ -155,7 +160,11 @@ func TestRegistryConsistency_MessengerDecodeUsesConfiguredRegistry(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	fl := &FakeLogger{}
 	m := NewMessenger(fl, OsProvider{})
@@ -164,7 +173,7 @@ func TestRegistryConsistency_MessengerDecodeUsesConfiguredRegistry(t *testing.T)
 	// Create a new registry and set it
 	customReg := newDefaultRegistry(fl)
 	typeName := "custom.type.v1"
-	customReg.Register(typeName, func() any { return &TestPluginPayload{} })
+	require.NoError(t, customReg.Register(typeName, func() any { return &TestPluginPayload{} }))
 	m.SetPayloadRegistry(customReg)
 
 	// Verify messenger uses this registry for decoding
@@ -180,14 +189,14 @@ func TestRegistryConsistency_MessengerDecodeUsesConfiguredRegistry(t *testing.T)
 	defer cancel()
 
 	received := make(chan any, 1)
-	m.Subscribe(ctx, "sub", "chan", "type", "name", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, "sub", "chan", "type", "name", 0, func(msg Message) error {
 		received <- msg.Data
 		return nil
-	})
+	}))
 
 	msgBytes, _ := json.Marshal(env)
-	m.initializePersistentQueue("chan")
-	m.queues["chan"].Enqueue(string(msgBytes))
+	require.NoError(t, m.initializePersistentQueue("chan"))
+	require.NoError(t, m.queues["chan"].Enqueue(string(msgBytes)))
 
 	select {
 	case data := <-received:

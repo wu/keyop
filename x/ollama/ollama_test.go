@@ -25,12 +25,16 @@ func TestClient_Chat(t *testing.T) {
 			Message: Message{Role: "assistant", Content: " world!"},
 			Done:    true,
 		}
-		json.NewEncoder(w).Encode(resp1)
+		if err := json.NewEncoder(w).Encode(resp1); err != nil {
+			t.Fatalf("failed to encode resp1: %v", err)
+		}
 		w.Write([]byte("\n"))
-		json.NewEncoder(w).Encode(resp2)
+		if err := json.NewEncoder(w).Encode(resp2); err != nil {
+			t.Fatalf("failed to encode resp2: %v", err)
+		}
 		w.Write([]byte("\n"))
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	// Parse host and port from server URL
 	// httptest server uses localhost and a random port
@@ -72,10 +76,12 @@ func TestClient_Summarize(t *testing.T) {
 			Message: Message{Role: "assistant", Content: "This is a summary."},
 			Done:    true,
 		}
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
 		w.Write([]byte("\n"))
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	var port int
 	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
@@ -107,10 +113,12 @@ func TestClient_Chat_NoStream(t *testing.T) {
 			Message: Message{Role: "assistant", Content: "Hello world!"},
 			Done:    true,
 		}
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
 		w.Write([]byte("\n"))
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	var port int
 	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
@@ -151,7 +159,7 @@ func TestClient_Chat_NoStream_NoNewline(t *testing.T) {
 		w.Write(data)
 		// No trailing newline specifically
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	var port int
 	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
@@ -198,7 +206,7 @@ func TestClient_Chat_Stream_NoNewline(t *testing.T) {
 		w.Write(data)
 		// NO NEWLINE after second part
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	var port int
 	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)

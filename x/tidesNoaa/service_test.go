@@ -310,7 +310,7 @@ func TestFetchDayRecords(t *testing.T) {
 		server := mockNoaaServer(t, map[string][]TideRecord{
 			today.Format(noaaDateFormat): records,
 		}, "")
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		got, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestFetchDayRecords(t *testing.T) {
 
 	t.Run("propagates API-level error", func(t *testing.T) {
 		server := mockNoaaServer(t, nil, "Station ID not found")
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "INVALID", today)
 		require.Error(t, err)
@@ -332,7 +332,7 @@ func TestFetchDayRecords(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}))
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.Error(t, err)
@@ -343,7 +343,7 @@ func TestFetchDayRecords(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"predictions": []TideRecord{}})
 		}))
-		defer server.Close()
+		t.Cleanup(server.Close)
 
 		_, err := fetchDayRecords(&core.FakeLogger{}, server.URL, "9414290", today)
 		require.Error(t, err)
@@ -894,7 +894,7 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 		recordsByDate[day.Format(noaaDateFormat)] = buildRecords(day.Truncate(24*time.Hour), 240)
 	}
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -953,7 +953,7 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 		recordsByDate[now.AddDate(0, 0, i).Format(noaaDateFormat)] = buildRecords(now.AddDate(0, 0, i).Truncate(24*time.Hour), 10)
 	}
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -1168,7 +1168,7 @@ func runHighLowAlertTest(t *testing.T, base time.Time, records []TideRecord, wan
 		recordsByDate[base.AddDate(0, 0, i).Format(noaaDateFormat)] = buildRecords(base.AddDate(0, 0, i).Truncate(24*time.Hour), 10)
 	}
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -1215,7 +1215,7 @@ func TestCheck_NoDoublePeakAlert(t *testing.T) {
 		recordsByDate[base.AddDate(0, 0, i).Format(noaaDateFormat)] = buildRecords(base.AddDate(0, 0, i).Truncate(24*time.Hour), 10)
 	}
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -1265,7 +1265,7 @@ func TestCheck_FetchesMissingDayFiles(t *testing.T) {
 	recordsByDate[todayKey] = records
 
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -1298,7 +1298,7 @@ func TestCheck_RefreshesStaleFile(t *testing.T) {
 	recordsByDate[now.Format(noaaDateFormat)] = freshRecords
 
 	server := mockNoaaServer(t, recordsByDate, "")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}
@@ -1323,7 +1323,7 @@ func TestCheck_RefreshesStaleFile(t *testing.T) {
 
 func TestCheck_PropagatesTodayFetchError(t *testing.T) {
 	server := mockNoaaServer(t, nil, "No data was found.")
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	osP := newMockOsProvider(t)
 	messenger := &testutil.FakeMessenger{}

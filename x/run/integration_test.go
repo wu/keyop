@@ -49,7 +49,11 @@ func (m *mockPlugin) RegisterPayloads(reg core.PayloadRegistry) error {
 func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "keyop-init-test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	// We can't easily use real plugins in a unit test without compiling .so files.
 	// But we can mock LoadPlugins and loadPlugin behavior or use a modified test-friendly version.
@@ -129,7 +133,11 @@ func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 func TestPluginPayloadRegistration_BeforeSubscribers(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "keyop-plugin-test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	logger := &core.FakeLogger{}
 	messenger := core.NewMessenger(logger, core.OsProvider{})
@@ -184,7 +192,11 @@ func TestPluginPayloadRegistration_BeforeSubscribers(t *testing.T) {
 func TestMissingPluginPayloadType_FallbackStillProcesses(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "keyop-fallback-test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	logger := &core.FakeLogger{}
 	messenger := core.NewMessenger(logger, core.OsProvider{})

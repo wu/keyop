@@ -24,7 +24,9 @@ func TestNwsWeatherService(t *testing.T) {
 					"forecast": "http://" + r.Host + "/gridpoints/MPX/107,71/forecast",
 				},
 			}
-			json.NewEncoder(w).Encode(data)
+			if err := json.NewEncoder(w).Encode(data); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
 			return
 		}
 		if r.URL.Path == "/points/46.0000,-94.0000" {
@@ -33,7 +35,9 @@ func TestNwsWeatherService(t *testing.T) {
 					"forecast": "http://" + r.Host + "/gridpoints/MPX/123,45/forecast",
 				},
 			}
-			json.NewEncoder(w).Encode(data)
+			if err := json.NewEncoder(w).Encode(data); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
 			return
 		}
 		if r.URL.Path == "/gridpoints/MPX/107,71/forecast" {
@@ -49,7 +53,9 @@ func TestNwsWeatherService(t *testing.T) {
 					},
 				},
 			}
-			json.NewEncoder(w).Encode(data)
+			if err := json.NewEncoder(w).Encode(data); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
 			return
 		}
 		if r.URL.Path == "/gridpoints/MPX/123,45/forecast" {
@@ -65,12 +71,14 @@ func TestNwsWeatherService(t *testing.T) {
 					},
 				},
 			}
-			json.NewEncoder(w).Encode(data)
+			if err := json.NewEncoder(w).Encode(data); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}

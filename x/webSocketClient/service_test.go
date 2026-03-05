@@ -215,8 +215,12 @@ func setupClientBatchTest(t *testing.T, handler http.HandlerFunc) (wsURL string,
 	url := strings.Replace(server.URL, "https", "wss", 1) + "/ws"
 	return url, dir, func() {
 		server.Close()
-		os.Setenv("HOME", oldHome)
-		os.RemoveAll(dir)
+		if err := os.Setenv("HOME", oldHome); err != nil {
+			t.Logf("failed to restore HOME: %v", err)
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("failed to remove tmp dir %s: %v", dir, err)
+		}
 	}
 }
 
@@ -1235,7 +1239,9 @@ func setupWrongCAServer(t *testing.T, clientDir string, handler http.HandlerFunc
 	url := strings.Replace(server.URL, "https", "wss", 1) + "/ws"
 	return url, func() {
 		server.Close()
-		os.RemoveAll(wrongCertsDir)
+		if err := os.RemoveAll(wrongCertsDir); err != nil {
+			t.Logf("failed to remove %s: %v", wrongCertsDir, err)
+		}
 	}
 }
 
@@ -1390,7 +1396,7 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 	server := httptest.NewUnstartedServer(handler)
 	server.TLS = tlsCfg
 	server.StartTLS()
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	wsURL := strings.Replace(server.URL, "https", "wss", 1) + "/ws"
 	host := strings.TrimPrefix(wsURL, "wss://")
@@ -1536,7 +1542,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	server := httptest.NewUnstartedServer(handler)
 	server.TLS = tlsCfg
 	server.StartTLS()
-	defer server.Close()
+	t.Cleanup(server.Close)
 
 	wsURL := strings.Replace(server.URL, "https", "wss", 1) + "/ws"
 	host := strings.TrimPrefix(wsURL, "wss://")

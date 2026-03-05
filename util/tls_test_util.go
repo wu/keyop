@@ -67,7 +67,9 @@ func generateCACert(dir string) (*rsa.PrivateKey, *x509.Certificate, error) {
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
 		return nil, nil, err
 	}
-	certOut.Close()
+	if err := certOut.Close(); err != nil {
+		return nil, nil, err
+	}
 
 	caCert, err := x509.ParseCertificate(derBytes)
 	if err != nil {
@@ -110,7 +112,9 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caPriv *rsa.
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
 		return err
 	}
-	certOut.Close()
+	if err := certOut.Close(); err != nil {
+		return err
+	}
 
 	keyOut, err := os.OpenFile(filepath.Join(dir, name+".key"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
@@ -123,7 +127,9 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caPriv *rsa.
 	if err := pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}); err != nil {
 		return err
 	}
-	keyOut.Close()
+	if err := keyOut.Close(); err != nil {
+		return err
+	}
 
 	return nil
 }

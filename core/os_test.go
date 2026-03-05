@@ -238,9 +238,17 @@ func TestFakeFile(t *testing.T) {
 		// Let's use a temporary file to provide a real ReadWriteSeeker for the test
 		tmp, _ := os.CreateTemp("", "fakefiletest")
 		//goland:noinspection GoUnhandledErrorResult
-		defer os.Remove(tmp.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmp.Name()); err != nil {
+				t.Logf("failed to remove %s: %v", tmp.Name(), err)
+			}
+		})
 		//goland:noinspection GoUnhandledErrorResult
-		defer tmp.Close()
+		t.Cleanup(func() {
+			if err := tmp.Close(); err != nil {
+				t.Logf("failed to close tmp file: %v", err)
+			}
+		})
 
 		f := &FakeFile{
 			ReadWriteSeeker: tmp,

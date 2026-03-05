@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessenger_DeadLetterQueue(t *testing.T) {
@@ -16,7 +18,11 @@ func TestMessenger_DeadLetterQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	logger := &FakeLogger{}
 	osProvider := &OsProvider{}
@@ -33,10 +39,10 @@ func TestMessenger_DeadLetterQueue(t *testing.T) {
 	source := "test-subscriber"
 
 	failCount := 0
-	m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, source, channel, "test", "test", 0, func(msg Message) error {
 		failCount++
 		return errors.New("permanent failure")
-	})
+	}))
 
 	// Send message
 	msg := Message{
@@ -50,10 +56,10 @@ func TestMessenger_DeadLetterQueue(t *testing.T) {
 	// Wait for message to hit DLQ
 	// 1 initial try + 2 retries = 3 attempts total. Then DLQ.
 	dlqReceived := make(chan Message, 1)
-	m.Subscribe(ctx, "dlq-reader", dlqChannel, "test", "dlq-reader", 0, func(dlqMsg Message) error {
+	require.NoError(t, m.Subscribe(ctx, "dlq-reader", dlqChannel, "test", "dlq-reader", 0, func(dlqMsg Message) error {
 		dlqReceived <- dlqMsg
 		return nil
-	})
+	}))
 
 	select {
 	case dlqMsg := <-dlqReceived:
@@ -76,7 +82,11 @@ func TestMessenger_BackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %v: %v", tmpDir, err)
+		}
+	})
 
 	logger := &FakeLogger{}
 	osProvider := &OsProvider{}
@@ -107,10 +117,10 @@ func TestMessenger_BackwardCompatibility(t *testing.T) {
 	defer cancel()
 
 	received := make(chan Message, 1)
-	m.Subscribe(ctx, "compat-sub", channel, "test", "test", 0, func(msg Message) error {
+	require.NoError(t, m.Subscribe(ctx, "compat-sub", channel, "test", "test", 0, func(msg Message) error {
 		received <- msg
 		return nil
-	})
+	}))
 
 	select {
 	case msg := <-received:

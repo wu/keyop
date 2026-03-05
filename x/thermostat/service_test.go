@@ -28,8 +28,9 @@ func testDeps(t *testing.T) core.Dependencies {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		//goland:noinspection GoUnhandledErrorResult
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove %s: %v", tmpDir, err)
+		}
 	})
 
 	deps.SetOsProvider(core.OsProvider{})
