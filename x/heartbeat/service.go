@@ -1,48 +1,58 @@
+// Package heartbeat implements a service that emits heartbeat uptime events.
 package heartbeat
 
 import (
 	"fmt"
 	"keyop/core"
 	"keyop/util"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-var startTime time.Time
-var restartNotified bool
-
-func init() {
-	// capture the service start time for reporting uptime
-	startTime = time.Now()
-}
-
 // HeartbeatEvent represents a heartbeat from a service.
+//
+// Note: type name is intentionally HeartbeatEvent for clarity when used across tests
+// and payload registration.
+//
+//nolint:revive
+//goland:noinspection GoNameStartsWithPackageName
 type HeartbeatEvent struct {
 	Now           time.Time `json:"now"`
 	Uptime        string    `json:"uptime"`
 	UptimeSeconds int64     `json:"uptimeSeconds"`
 }
 
+// PayloadType returns the canonical payload type for heartbeat events.
 func (h HeartbeatEvent) PayloadType() string { return "service.heartbeat.v1" }
 
+// Service implements the heartbeat service which emits uptime events and a
+// one-time restart alert per instance.
 type Service struct {
-	Deps core.Dependencies
-	Cfg  core.ServiceConfig
+	Deps            core.Dependencies
+	Cfg             core.ServiceConfig
+	startedAt       time.Time
+	restartNotified bool
+	mu              sync.Mutex
 }
 
+// NewService creates a new heartbeat service instance with an instance-scoped runtime state.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-	return Service{
-		Deps: deps,
-		Cfg:  cfg,
+	return &Service{
+		Deps:      deps,
+		Cfg:       cfg,
+		startedAt: time.Now(),
 	}
 }
 
-func (svc Service) Name() string {
+// Name returns the canonical service name.
+func (svc *Service) Name() string {
 	return "heartbeat"
 }
 
-func (svc Service) RegisterPayloads(reg core.PayloadRegistry) error {
+// RegisterPayloads registers the heartbeat payload types with the provided registry.
+func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
 	if err := reg.Register("heartbeat", func() any { return &HeartbeatEvent{} }); err != nil {
 		if !core.IsDuplicatePayloadRegistration(err) {
 			return fmt.Errorf("failed to register heartbeat alias: %w", err)
@@ -56,19 +66,22 @@ func (svc Service) RegisterPayloads(reg core.PayloadRegistry) error {
 	return nil
 }
 
-func (svc Service) ValidateConfig() []error {
+// ValidateConfig returns configuration validation errors (none required for heartbeat).
+func (svc *Service) ValidateConfig() []error {
 	return nil
 }
 
-func (svc Service) Initialize() error {
+// Initialize performs any initialization for the service (no-op for heartbeat).
+func (svc *Service) Initialize() error {
 	return nil
 }
 
-func (svc Service) Check() error {
+// Check emits heartbeat events and a one-time restart event per instance.
+func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
-	uptime := time.Since(startTime)
+	uptime := time.Since(svc.startedAt)
 
 	metricName, _ := svc.Cfg.Config["metricName"].(string)
 	if metricName == "" {
@@ -85,8 +98,16 @@ func (svc Service) Check() error {
 
 	// generate correlation ID for this check to tie together the events and metrics in the backend
 	correlationID := uuid.New().String()
-	if !restartNotified {
-		// send an alert on service startup
+
+	// Send a restart event only once per service instance.
+	svc.mu.Lock()
+	shouldSendRestart := !svc.restartNotified
+	if shouldSendRestart {
+		svc.restartNotified = true
+	}
+	svc.mu.Unlock()
+
+	if shouldSendRestart {
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 		err := messenger.Send(core.Message{
 			Correlation: correlationID,
@@ -99,7 +120,6 @@ func (svc Service) Check() error {
 		if err != nil {
 			logger.Error("Failed to send restart alert", "error", err)
 		}
-		restartNotified = true
 	}
 
 	eventErr := messenger.Send(core.Message{

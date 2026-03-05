@@ -36,17 +36,13 @@ func makeCfg(name string, extraConfig map[string]interface{}) core.ServiceConfig
 }
 
 // TestHeartbeatCheck verifies the messages produced by Check().
-// Because restartNotified is a package-level var, the very first call to Check()
-// across all tests will also emit a "restart" event.
+// The restart event should be emitted once per service instance on the first check.
 func TestHeartbeatCheck(t *testing.T) {
-	// Reset so this test controls the restart message.
-	restartNotified = false
-
 	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
-	svc := NewService(deps, cfg).(Service)
+	svc := NewService(deps, cfg).(*Service)
 	err := svc.Check()
 	require.NoError(t, err)
 
@@ -81,8 +77,6 @@ func TestHeartbeatCheck(t *testing.T) {
 	hb, ok := uptime.Data.(HeartbeatEvent)
 	assert.True(t, ok, "expected HeartbeatEvent in Data")
 	assert.NotEmpty(t, hb.Uptime)
-	// UptimeSeconds might be zero if test runs very fast after start
-	// assert.NotZero(t, hb.UptimeSeconds)
 
 	// uptime_metric event
 	metric, ok := events["uptime_metric"]
@@ -91,18 +85,19 @@ func TestHeartbeatCheck(t *testing.T) {
 }
 
 func TestHeartbeatCheck_SubsequentCall_NoRestart(t *testing.T) {
-	// Ensure restartNotified is true so the restart message is suppressed.
-	restartNotified = true
-
 	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
-	svc := NewService(deps, cfg).(Service)
-	err := svc.Check()
-	require.NoError(t, err)
+	svc := NewService(deps, cfg).(*Service)
 
-	// Only uptime + uptime-metric = 2 messages.
+	// First call sets the instance restart state and may emit a restart event.
+	require.NoError(t, svc.Check())
+	// Clear captured messages so we can assert on the subsequent check only.
+	messenger.Reset()
+
+	// Second call should not emit a restart event; only uptime messages are expected.
+	require.NoError(t, svc.Check())
 	require.Len(t, messenger.SentMessages, 2)
 
 	events := make(map[string]core.Message)
@@ -115,18 +110,18 @@ func TestHeartbeatCheck_SubsequentCall_NoRestart(t *testing.T) {
 }
 
 func TestHeartbeatCheck_CustomMetricName(t *testing.T) {
-	restartNotified = true
-
 	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", map[string]interface{}{
 		"metricName": "custom.heartbeat.name",
 	})
 
-	svc := NewService(deps, cfg).(Service)
-	err := svc.Check()
-	require.NoError(t, err)
+	svc := NewService(deps, cfg).(*Service)
+	// Prime the instance to consume the restart event, then clear messages.
+	require.NoError(t, svc.Check())
+	messenger.Reset()
 
+	require.NoError(t, svc.Check())
 	require.Len(t, messenger.SentMessages, 2)
 	for _, msg := range messenger.SentMessages {
 		assert.Equal(t, "custom.heartbeat.name", msg.MetricName)
@@ -134,31 +129,34 @@ func TestHeartbeatCheck_CustomMetricName(t *testing.T) {
 }
 
 func TestHeartbeatCheck_DefaultMetricName(t *testing.T) {
-	restartNotified = true
-
 	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("my-heartbeat", nil)
 
-	svc := NewService(deps, cfg).(Service)
-	err := svc.Check()
-	require.NoError(t, err)
+	svc := NewService(deps, cfg).(*Service)
+	// Prime the instance to consume the restart event, then clear messages.
+	require.NoError(t, svc.Check())
+	messenger.Reset()
+
+	require.NoError(t, svc.Check())
 
 	for _, msg := range messenger.SentMessages {
-		if msg.Event == "uptime" || msg.Event == "uptime-metric" {
+		if msg.Event == "uptime_check" || msg.Event == "uptime_metric" {
 			assert.Equal(t, "my-heartbeat", msg.MetricName)
 		}
 	}
 }
 
 func TestHeartbeatCheck_CorrelationShared(t *testing.T) {
-	restartNotified = true
-
 	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
-	svc := NewService(deps, cfg).(Service)
+	svc := NewService(deps, cfg).(*Service)
+	// Prime and clear restart event.
+	require.NoError(t, svc.Check())
+	messenger.Reset()
+
 	require.NoError(t, svc.Check())
 
 	require.Len(t, messenger.SentMessages, 2)
