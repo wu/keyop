@@ -61,11 +61,12 @@ func generateCACert(dir string) (*rsa.PrivateKey, *x509.Certificate, error) {
 		return nil, nil, err
 	}
 
-	certOut, err := os.Create(filepath.Join(dir, "ca.crt"))
+	certOut, err := os.Create(filepath.Join(dir, "ca.crt")) //nolint:gosec
 	if err != nil {
 		return nil, nil, err
 	}
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		_ = certOut.Close()
 		return nil, nil, err
 	}
 	if err := certOut.Close(); err != nil {
@@ -106,18 +107,19 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caPriv *rsa.
 		return err
 	}
 
-	certOut, err := os.Create(filepath.Join(dir, name+".crt"))
+	certOut, err := os.Create(filepath.Join(dir, name+".crt")) //nolint:gosec
 	if err != nil {
 		return err
 	}
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		_ = certOut.Close()
 		return err
 	}
 	if err := certOut.Close(); err != nil {
 		return err
 	}
 
-	keyOut, err := os.OpenFile(filepath.Join(dir, name+".key"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(filepath.Join(dir, name+".key"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) //nolint:gosec
 	if err != nil {
 		return err
 	}
@@ -126,6 +128,7 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caPriv *rsa.
 		return err
 	}
 	if err := pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}); err != nil {
+		_ = keyOut.Close()
 		return err
 	}
 	if err := keyOut.Close(); err != nil {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Service struct {
@@ -163,9 +164,10 @@ func (svc Service) Initialize() error {
 	}
 
 	server := &http.Server{
-		Addr:      addr,
-		Handler:   mux,
-		TLSConfig: tlsConfig,
+		ReadHeaderTimeout: 5 * time.Second,
+		Addr:              addr,
+		Handler:           mux,
+		TLSConfig:         tlsConfig,
 	}
 
 	logger.Info("starting https server with mutual authentication", "addr", addr)

@@ -44,12 +44,10 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 	err = m.Subscribe(ctx, "test2", "alpha", "testType", "test2", 0, func(msg Message) error { ch2Msg = msg; return nil })
 	assert.NoError(t, err)
 
-	// Send in a goroutine to avoid blocking on unbuffered channels
-	go func() {
-		if err := m.Send(Message{ChannelName: "alpha", Text: "hello"}); err != nil {
-			t.Fatalf("Send failed: %v", err)
-		}
-	}()
+	// Send synchronously
+	if err := m.Send(Message{ChannelName: "alpha", Text: "hello"}); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
@@ -84,11 +82,9 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send to channel "a" only
-	go func() {
-		if err := m.Send(Message{ChannelName: "a", Text: "foo"}); err != nil {
-			t.Fatalf("Send failed: %v", err)
-		}
-	}()
+	if err := m.Send(Message{ChannelName: "a", Text: "foo"}); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
@@ -221,11 +217,9 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	}
 	p := payload{K: "v", N: 123}
 
-	go func() {
-		if err := m.Send(Message{ChannelName: "json", Text: "with-data", Data: p}); err != nil {
-			t.Fatalf("Send failed: %v", err)
-		}
-	}()
+	if err := m.Send(Message{ChannelName: "json", Text: "with-data", Data: p}); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
@@ -294,11 +288,9 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 	err = m.Subscribe(context.Background(), "test", "test", "testType", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
-	go func() {
-		if err := m.Send(Message{ChannelName: "test", Text: "ping"}); err != nil {
-			t.Fatalf("Send failed: %v", err)
-		}
-	}()
+	if err := m.Send(Message{ChannelName: "test", Text: "ping"}); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
 
 	time.Sleep(1 * time.Second)
 
@@ -516,8 +508,11 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	err = m2.Subscribe(ctx3, "test-source", "handler-test-err", "testType", "test", 0, func(msg Message) error { return handlerErr })
 	assert.NoError(t, err)
 
-	_ = m2.Send(Message{ChannelName: "handler-test-err", Text: "trigger"})
+	if err := m2.Send(Message{ChannelName: "handler-test-err", Text: "trigger"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
 	assert.Eventually(t, func() bool {
 		lastMsg := m2.logger.(*FakeLogger).LastErrMsg()
 		return lastMsg == "Message handler returned error" || lastMsg == "Max retry attempts reached, moving to DLQ"
@@ -608,8 +603,11 @@ func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "retry-test-chan", Text: "retry-me"})
+	if err := m.Send(Message{ChannelName: "retry-test-chan", Text: "retry-me"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
 	assert.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
@@ -650,9 +648,14 @@ func TestMessenger_Subscribe_OrderPreservedWithRetries(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_ = m.Send(Message{ChannelName: "order-test-chan", Text: "first"})
-	_ = m.Send(Message{ChannelName: "order-test-chan", Text: "second"})
+	if err := m.Send(Message{ChannelName: "order-test-chan", Text: "first"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
+	if err := m.Send(Message{ChannelName: "order-test-chan", Text: "second"}); err != nil {
+		assert.NoError(t, err)
+	}
 	assert.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
@@ -697,23 +700,26 @@ func TestMessenger_Subscribe_MaxAge(t *testing.T) {
 		Text:        "too old",
 		Timestamp:   time.Now().Add(-2 * time.Hour),
 	}
-	_ = m.Send(oldMsg)
-
+	if err := m.Send(oldMsg); err != nil {
+		assert.NoError(t, err)
+	}
 	// Send a message that is 30 minutes old (should be received)
 	recentMsg := Message{
 		ChannelName: "maxage-test-chan",
 		Text:        "recent",
 		Timestamp:   time.Now().Add(-30 * time.Minute),
 	}
-	_ = m.Send(recentMsg)
-
+	if err := m.Send(recentMsg); err != nil {
+		assert.NoError(t, err)
+	}
 	// Send a message with zero timestamp (should be assigned current time and received)
 	newMsg := Message{
 		ChannelName: "maxage-test-chan",
 		Text:        "new",
 	}
-	_ = m.Send(newMsg)
-
+	if err := m.Send(newMsg); err != nil {
+		assert.NoError(t, err)
+	}
 	time.Sleep(1 * time.Second)
 
 	mu.Lock()
@@ -754,9 +760,12 @@ func TestMessenger_Stats(t *testing.T) {
 	defer cancel()
 
 	handler := func(m Message) error { return nil }
-	_ = m.Subscribe(ctx, "sub1", "chan1", "test", "test", 0, handler)
-	_ = m.Subscribe(ctx, "sub2", "chan2", "test", "test", 0, handler)
-
+	if err := m.Subscribe(ctx, "sub1", "chan1", "test", "test", 0, handler); err != nil {
+		assert.NoError(t, err)
+	}
+	if err := m.Subscribe(ctx, "sub2", "chan2", "test", "test", 0, handler); err != nil {
+		assert.NoError(t, err)
+	}
 	err1 := m.Send(msg1)
 	err2 := m.Send(msg2)
 	err3 := m.Send(msg3)
