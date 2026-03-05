@@ -207,7 +207,7 @@ func TestStartKernelStateCache(t *testing.T) {
 
 		// Set last run time to 30 seconds ago
 		lastRun := time.Now().Add(-30 * time.Second)
-		stateStore.Save("last_check_test-service", lastRun)
+		assert.NoError(t, stateStore.Save("last_check_test-service", lastRun))
 
 		runCount := 0
 		interval := 60 * time.Second
@@ -227,7 +227,11 @@ func TestStartKernelStateCache(t *testing.T) {
 		}}
 
 		// Start kernel in a goroutine because it blocks
-		go StartKernel(deps, tasks)
+		go func() {
+			if err := StartKernel(deps, tasks); err != nil {
+				t.Logf("StartKernel error: %v", err)
+			}
+		}()
 
 		// It should NOT run immediately.
 		// Since last run was 30s ago and interval is 60s, it should run in about 30s (+ jitter).
@@ -239,7 +243,7 @@ func TestStartKernelStateCache(t *testing.T) {
 
 		// Check if state was updated
 		var updatedRun time.Time
-		stateStore.Load("last_check_test-service", &updatedRun)
+		assert.NoError(t, stateStore.Load("last_check_test-service", &updatedRun))
 		assert.True(t, updatedRun.After(lastRun), "State should have been updated")
 	})
 }

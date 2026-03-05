@@ -150,17 +150,17 @@ func TestPluginPayloadRegistration_BeforeSubscribers(t *testing.T) {
 	type CustomPayload struct {
 		Name string `json:"name"`
 	}
-	reg.Register(pluginPayloadType, func() any { return &CustomPayload{} })
+	require.NoError(t, reg.Register(pluginPayloadType, func() any { return &CustomPayload{} }))
 
 	// Start subscriber
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	received := make(chan any, 1)
-	messenger.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg core.Message) error {
+	require.NoError(t, messenger.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg core.Message) error {
 		received <- msg.Data
 		return nil
-	})
+	}))
 
 	// Send message with plugin payload-type
 	env := core.Envelope{
@@ -177,7 +177,7 @@ func TestPluginPayloadRegistration_BeforeSubscribers(t *testing.T) {
 
 	// Send raw envelope to queue
 	q, _ := core.NewPersistentQueue("chan", tmpDir, core.OsProvider{}, logger)
-	q.Enqueue(string(envBytes))
+	require.NoError(t, q.Enqueue(string(envBytes)))
 
 	select {
 	case data := <-received:
@@ -208,10 +208,10 @@ func TestMissingPluginPayloadType_FallbackStillProcesses(t *testing.T) {
 	defer cancel()
 
 	received := make(chan any, 1)
-	messenger.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg core.Message) error {
+	require.NoError(t, messenger.Subscribe(ctx, "sub", "chan", "test", "test", 0, func(msg core.Message) error {
 		received <- msg.Data
 		return nil
-	})
+	}))
 
 	// Send message with missing payload-type
 	env := core.Envelope{
@@ -225,7 +225,7 @@ func TestMissingPluginPayloadType_FallbackStillProcesses(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	q, _ := core.NewPersistentQueue("chan", tmpDir, core.OsProvider{}, logger)
-	q.Enqueue(string(envBytes))
+	require.NoError(t, q.Enqueue(string(envBytes)))
 
 	select {
 	case data := <-received:

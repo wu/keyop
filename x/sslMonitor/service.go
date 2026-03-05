@@ -72,7 +72,9 @@ func (svc *Service) Check() error {
 	})
 	if err != nil {
 		logger.Error("failed to connect to host", "url", svc.url, "error", err)
-		svc.sendStatus(messenger, "CRITICAL", fmt.Sprintf("Failed to connect to %s: %v", svc.url, err))
+		if sendErr := svc.sendStatus(messenger, "CRITICAL", fmt.Sprintf("Failed to connect to %s: %v", svc.url, err)); sendErr != nil {
+			logger.Error("sslMonitor: failed to send status", "error", sendErr)
+		}
 		return err
 	}
 	defer func() {
@@ -85,7 +87,9 @@ func (svc *Service) Check() error {
 	if len(certs) == 0 {
 		err := fmt.Errorf("no certificates found for %s", svc.url)
 		logger.Error(err.Error())
-		svc.sendStatus(messenger, "CRITICAL", err.Error())
+		if sendErr := svc.sendStatus(messenger, "CRITICAL", err.Error()); sendErr != nil {
+			logger.Error("sslMonitor: failed to send status", "error", sendErr)
+		}
 		return err
 	}
 

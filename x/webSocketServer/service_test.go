@@ -292,7 +292,12 @@ func setupTestServer(t *testing.T, svc *Service, certDir string) (*websocket.Con
 	conn, _, err := dialer.Dial(wsURL, nil)
 	require.NoError(t, err)
 
-	return conn, func() { conn.Close(); srv.Close() }
+	return conn, func() {
+		if err := conn.Close(); err != nil {
+			t.Logf("failed to close conn: %v", err)
+		}
+		srv.Close()
+	}
 }
 
 // doHandshake performs the hello/welcome exchange on a raw client conn.
@@ -399,16 +404,18 @@ func TestHandleConnection(t *testing.T) {
 	testMsg2 := core.Message{Text: "world", ChannelName: "test-channel"}
 	messenger.subscribeChan <- testMsg2
 
-	conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
+	safeSetReadDeadline(t, conn2, time.Now().Add(5 * time.Second))
 	require.NoError(t, conn2.ReadJSON(&received))
-	conn2.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn2)
 	assert.Equal(t, "batch", received.Type)
 	assert.NotEmpty(t, received.BatchID)
 	require.Len(t, received.Items, 1)
 	assert.Equal(t, "world", received.Items[0].Payload.Text)
 
 	require.NoError(t, conn2.WriteJSON(wsMessage{V: 1, Type: "ack", BatchID: received.BatchID}))
-	conn2.Close()
+	if err := conn2.Close(); err != nil {
+		t.Logf("failed to close conn2: %v", err)
+	}
 }
 
 // TestHandleConnection_VersionMismatch verifies the server sends an error frame and closes

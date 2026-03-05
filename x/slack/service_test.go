@@ -124,12 +124,16 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 
 		var payload map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&payload)
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Logf("failed to decode payload: %v", err)
+		}
 		assert.Equal(t, "C12345", payload["channel"])
 		assert.Equal(t, "hello slack", payload["text"])
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok": true}`)
+		if _, err := fmt.Fprint(w, `{"ok": true}`); err != nil {
+			t.Logf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(server.Close)
 
@@ -144,7 +148,7 @@ func TestService_MessageHandler(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	svc.Initialize()
+	require.NoError(t, svc.Initialize())
 	svc.BaseURL = server.URL
 
 	msg := core.Message{
@@ -204,7 +208,10 @@ func TestService_Check(t *testing.T) {
 				EnvelopeID string          `json:"envelope_id"`
 				Payload    json.RawMessage `json:"payload"`
 			}
-			json.Unmarshal(msg, &envelope)
+			if err := json.Unmarshal(msg, &envelope); err != nil {
+				t.Logf("failed to unmarshal ws message: %v", err)
+				continue
+			}
 			if envelope.EnvelopeID != "" {
 				wsReceived <- envelope.EnvelopeID
 			}
@@ -214,7 +221,9 @@ func TestService_Check(t *testing.T) {
 				wsMu.Lock()
 				for _, other := range wsConns {
 					if other != conn {
-						other.WriteMessage(websocket.TextMessage, msg)
+						if err := other.WriteMessage(websocket.TextMessage, msg); err != nil {
+							t.Logf("failed to write to other ws conn: %v", err)
+						}
 					}
 				}
 				wsMu.Unlock()
@@ -231,24 +240,34 @@ func TestService_Check(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/apps.connections.open":
-			fmt.Fprintf(w, `{"ok": true, "url": "%s"}`, wsURL)
+			if _, err := fmt.Fprintf(w, `{"ok": true, "url": "%s"}`, wsURL); err != nil {
+				t.Logf("failed to write apps.connections.open response: %v", err)
+			}
 		case "/conversations.info":
 			assert.Equal(t, "GET", r.Method)
 			assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 			channelID := r.URL.Query().Get("channel")
 			if channelID == "C999" {
-				fmt.Fprint(w, `{"ok": true, "channel": {"name": "general"}}`)
+				if _, err := fmt.Fprint(w, `{"ok": true, "channel": {"name": "general"}}`); err != nil {
+					t.Logf("failed to write conversations.info response: %v", err)
+				}
 			} else {
-				fmt.Fprint(w, `{"ok": false, "error": "channel_not_found"}`)
+				if _, err := fmt.Fprint(w, `{"ok": false, "error": "channel_not_found"}`); err != nil {
+					t.Logf("failed to write conversations.info error response: %v", err)
+				}
 			}
 		case "/users.info":
 			assert.Equal(t, "GET", r.Method)
 			assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 			userID := r.URL.Query().Get("user")
 			if userID == "U123" {
-				fmt.Fprint(w, `{"ok": true, "user": {"name": "jdoe", "real_name": "John Doe"}}`)
+			if _, err := fmt.Fprint(w, `{"ok": true, "user": {"name": "jdoe", "real_name": "John Doe"}}`); err != nil {
+				t.Logf("failed to write users.info response: %v", err)
+			}
 			} else {
-				fmt.Fprint(w, `{"ok": false, "error": "user_not_found"}`)
+				if _, err := fmt.Fprint(w, `{"ok": false, "error": "user_not_found"}`); err != nil {
+					t.Logf("failed to write users.info error response: %v", err)
+				}
 			}
 		}
 	}))
@@ -269,10 +288,10 @@ func TestService_Check(t *testing.T) {
 
 	receivedMessage := make(chan string, 1)
 	messenger := deps.MustGetMessenger()
-	messenger.Subscribe(context.Background(), "test-subscriber", "slack-test", "slack", "test", 0, func(msg core.Message) error {
+	require.NoError(t, messenger.Subscribe(context.Background(), "test-subscriber", "slack-test", "slack", "test", 0, func(msg core.Message) error {
 		receivedMessage <- msg.Text
 		return nil
-	})
+	}))
 
 	// Run Check in a goroutine
 	errCh := make(chan error, 1)
