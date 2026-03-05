@@ -21,6 +21,7 @@ func InitializeDependencies(console bool) core.Dependencies {
 	}
 	time.Local = location
 
+	// 1. Initial creation of core dependencies
 	deps := core.Dependencies{}
 
 	deps.SetOsProvider(core.OsProvider{})
@@ -74,6 +75,7 @@ func InitializeDependencies(console bool) core.Dependencies {
 	deps.SetContext(ctx)
 	deps.SetCancel(cancel)
 
+	// 2. Setup storage and messaging (Authoritative Registry is core.GetPayloadRegistry())
 	dataDir := filepath.Join(home, ".keyop", "data")
 	deps.SetStateStore(core.NewFileStateStore(dataDir, deps.MustGetOsProvider()))
 

@@ -18,19 +18,22 @@ This utility is a work in progress.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := deps.MustGetLogger()
 
-			// load plugins before loading service configs
+			// 3. Load plugins (and register their payload types)
+			// This must happen after registry is created (in InitializeDependencies)
+			// and before services/subscribers start.
 			if err := LoadPlugins(deps); err != nil {
 				logger.Error("plugin load", "error", err)
 				return err
 			}
 
-			// load the service configuration before calling the run method
+			// 4. Load the service configuration
 			svcs, err := loadServiceConfigs(deps)
 			if err != nil {
 				logger.Error("config load", "error", err)
 				return err
 			}
 
+			// 5. Start services/subscribers
 			return run(deps, svcs)
 		},
 	}

@@ -113,3 +113,11 @@ func (p *PreprocessMessenger) SetHostname(hostname string) {
 func (p *PreprocessMessenger) GetStats() MessengerStats {
 	return p.inner.GetStats()
 }
+
+func (p *PreprocessMessenger) GetPayloadRegistry() PayloadRegistry {
+	return p.inner.GetPayloadRegistry()
+}
+
+func (p *PreprocessMessenger) SetPayloadRegistry(reg PayloadRegistry) {
+	p.inner.SetPayloadRegistry(reg)
+}

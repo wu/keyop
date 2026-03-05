@@ -1,54 +1,16 @@
 package pingMonitor
 
 import (
-	"context"
 	"errors"
 	"keyop/core"
+	"keyop/core/testutil"
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-type mockMessenger struct {
-	messages []core.Message
-	mu       sync.Mutex
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(_ string, _ string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(_ string) {}
-
-func (m *mockMessenger) SetHostname(_ string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 func TestCheck(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -56,7 +18,7 @@ func TestCheck(t *testing.T) {
 	t.Run("successful ping", func(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
@@ -85,11 +47,11 @@ func TestCheck(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		assert.Len(t, messenger.messages, 2)
+		assert.Len(t, messenger.SentMessages, 2)
 
 		foundEvent := false
 		foundMetric := false
-		for _, msg := range messenger.messages {
+		for _, msg := range messenger.SentMessages {
 			if msg.Event == "ping_status" {
 				foundEvent = true
 				assert.Contains(t, msg.Text, "successful")
@@ -108,7 +70,7 @@ func TestCheck(t *testing.T) {
 	t.Run("successful ping with custom metric name", func(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
@@ -139,7 +101,7 @@ func TestCheck(t *testing.T) {
 		assert.NoError(t, err)
 
 		foundMetric := false
-		for _, msg := range messenger.messages {
+		for _, msg := range messenger.SentMessages {
 			if msg.Event == "ping_metric" {
 				foundMetric = true
 				assert.Equal(t, 12.3, msg.Metric)
@@ -152,7 +114,7 @@ func TestCheck(t *testing.T) {
 	t.Run("failed ping sets status", func(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
@@ -180,9 +142,9 @@ func TestCheck(t *testing.T) {
 		svc := NewService(deps, cfg)
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.Len(t, messenger.messages, 1)
-		assert.Equal(t, "net-mon", messenger.messages[0].ChannelName)
-		assert.Contains(t, messenger.messages[0].Text, "unreachable.host")
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "net-mon", messenger.SentMessages[0].ChannelName)
+		assert.Contains(t, messenger.SentMessages[0].Text, "unreachable.host")
 	})
 }
 

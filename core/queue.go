@@ -58,11 +58,6 @@ func NewPersistentQueue(name string, dir string, osProvider OsProviderApi, logge
 }
 
 func (pq *PersistentQueue) Enqueue(entry string) error {
-	pq.mu.Lock()
-	defer pq.mu.Unlock()
-
-	pq.logger.Debug("Enqueue called", "entry", entry)
-
 	dateStr := time.Now().Format("20060102")
 	fileName := filepath.Join(pq.dir, fmt.Sprintf("%s_queue_%s.log", pq.name, dateStr))
 
@@ -80,7 +75,9 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 		return err
 	}
 
+	pq.mu.Lock()
 	pq.cond.Broadcast()
+	pq.mu.Unlock()
 	return nil
 }
 

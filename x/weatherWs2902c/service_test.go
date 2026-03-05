@@ -1,51 +1,17 @@
 package weatherWs2902c
 
 import (
-	"context"
 	"keyop/core"
+	"keyop/core/testutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
 
-type MockMessenger struct {
-	LastMessage core.Message
-	Messages    []core.Message
-}
-
-func (m *MockMessenger) Send(msg core.Message) error {
-	m.LastMessage = msg
-	m.Messages = append(m.Messages, msg)
-	return nil
-}
-
-func (m *MockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *MockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *MockMessenger) SetDataDir(dir string) {}
-
-func (m *MockMessenger) SetHostname(hostname string) {}
-
-func (m *MockMessenger) GetStats() core.MessengerStats { return core.MessengerStats{} }
-
 func TestHandleWeather(t *testing.T) {
-	mockMessenger := &MockMessenger{}
+	mockMessenger := testutil.NewFakeMessenger()
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	deps.SetMessenger(mockMessenger)
@@ -86,7 +52,7 @@ func TestHandleWeather(t *testing.T) {
 
 	// Find the main weatherData message
 	var receivedData *WeatherData
-	for _, m := range mockMessenger.Messages {
+	for _, m := range mockMessenger.SentMessages {
 		if m.Data != nil {
 			if data, ok := m.Data.(*WeatherData); ok {
 				receivedData = data
@@ -105,7 +71,7 @@ func TestHandleWeather(t *testing.T) {
 
 	// Verify individual metric publication with default names
 	foundOutTemp := false
-	for _, msg := range mockMessenger.Messages {
+	for _, msg := range mockMessenger.SentMessages {
 		if msg.MetricName == "outTemp" {
 			foundOutTemp = true
 			if msg.Metric != 72.5 {
@@ -119,7 +85,7 @@ func TestHandleWeather(t *testing.T) {
 }
 
 func TestHandleWeatherWithConfiguredMetrics(t *testing.T) {
-	mockMessenger := &MockMessenger{}
+	mockMessenger := testutil.NewFakeMessenger()
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	deps.SetMessenger(mockMessenger)
@@ -151,7 +117,7 @@ func TestHandleWeatherWithConfiguredMetrics(t *testing.T) {
 	svc.handleWeather(w, req)
 
 	foundCustomTemp := false
-	for _, msg := range mockMessenger.Messages {
+	for _, msg := range mockMessenger.SentMessages {
 		if msg.MetricName == "customTempMetric" {
 			foundCustomTemp = true
 			if msg.Metric != 72.5 {

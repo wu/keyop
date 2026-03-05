@@ -5,45 +5,13 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
-
-type mockMessenger struct {
-	messages []core.Message
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(_ string, _ string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(_ string) {}
-
-func (m *mockMessenger) SetHostname(_ string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 type readWriteSeeker struct {
 	*bytes.Reader
@@ -78,7 +46,7 @@ func TestCheck_Linux(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	cfg := core.ServiceConfig{
@@ -126,7 +94,7 @@ func TestCheck_Linux(t *testing.T) {
 
 	// Check for CPU metric (60.0%)
 	foundCpu := false
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.MetricName == "cpu_test.cpu" {
 			if msg.Metric == 60.0 {
 				foundCpu = true
@@ -135,7 +103,7 @@ func TestCheck_Linux(t *testing.T) {
 	}
 
 	if !foundCpu {
-		t.Errorf("CPU metric not found or incorrect value: %v", messenger.messages)
+		t.Errorf("CPU metric not found or incorrect value: %v", messenger.SentMessages)
 	}
 }
 
@@ -156,7 +124,7 @@ func TestCheck_Darwin(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	cfg := core.ServiceConfig{
@@ -177,14 +145,14 @@ func TestCheck_Darwin(t *testing.T) {
 
 	// CPU: 100 - 85 = 15%
 	foundCpu := false
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.MetricName == "cpu_test.cpu" && msg.Metric == 15.0 {
 			foundCpu = true
 		}
 	}
 
 	if !foundCpu {
-		t.Errorf("CPU metric not found or incorrect value: %v", messenger.messages)
+		t.Errorf("CPU metric not found or incorrect value: %v", messenger.SentMessages)
 	}
 }
 
@@ -196,7 +164,7 @@ func TestCheck_ErrorHandling(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	cfg := core.ServiceConfig{
 		Name: "cpu_test",
@@ -219,7 +187,7 @@ func TestCheck_UnsupportedPlatform(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	cfg := core.ServiceConfig{
 		Name: "cpu_test",
@@ -458,7 +426,9 @@ func TestGetDarwinUsage_CommandError(t *testing.T) {
 
 // ── Check — messenger.Send error ────────────────────────────────────────────
 
-type errorMessenger struct{}
+type errorMessenger struct {
+	payloadRegistry core.PayloadRegistry
+}
 
 func (e *errorMessenger) Send(_ core.Message) error { return fmt.Errorf("send failed") }
 func (e *errorMessenger) Subscribe(_ context.Context, _, _, _, _ string, _ time.Duration, _ func(core.Message) error) error {
@@ -472,6 +442,10 @@ func (e *errorMessenger) SeekToEnd(_, _ string) error                  { return 
 func (e *errorMessenger) SetDataDir(_ string)                          {}
 func (e *errorMessenger) SetHostname(_ string)                         {}
 func (e *errorMessenger) GetStats() core.MessengerStats                { return core.MessengerStats{} }
+
+func (e *errorMessenger) GetPayloadRegistry() core.PayloadRegistry { return e.payloadRegistry }
+
+func (e *errorMessenger) SetPayloadRegistry(r core.PayloadRegistry) { e.payloadRegistry = r }
 
 func TestCheck_SendError(t *testing.T) {
 	if runtime.GOOS != "darwin" {

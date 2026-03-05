@@ -3,6 +3,7 @@ package moon
 import (
 	"context"
 	"keyop/core"
+	"keyop/core/testutil"
 	"log/slog"
 	"os"
 	"sync"
@@ -13,6 +14,8 @@ import (
 )
 
 type mockMessenger struct {
+	payloadRegistry core.PayloadRegistry
+
 	messages []core.Message
 	mu       sync.Mutex
 }
@@ -43,6 +46,14 @@ func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
 func (m *mockMessenger) SetDataDir(dir string) {}
 
 func (m *mockMessenger) SetHostname(hostname string) {}
+
+func (m *mockMessenger) GetPayloadRegistry() core.PayloadRegistry {
+	return m.payloadRegistry
+}
+
+func (m *mockMessenger) SetPayloadRegistry(r core.PayloadRegistry) {
+	m.payloadRegistry = r
+}
 
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
@@ -82,7 +93,7 @@ func TestMoonService(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	state := &mockStateStore{data: make(map[string]interface{})}
 	deps.SetStateStore(state)
@@ -102,25 +113,22 @@ func TestMoonService(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("Check sends events and initial alert", func(t *testing.T) {
-		messenger.mu.Lock()
-		messenger.messages = nil
-		messenger.mu.Unlock()
+		messenger.Reset()
 
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		messenger.mu.Lock()
-		defer messenger.mu.Unlock()
-		assert.Equal(t, 2, len(messenger.messages)) // 1 event + 1 initial alert
+		msgs := messenger.Messages()
+		assert.Equal(t, 2, len(msgs)) // 1 event + 1 initial alert
 
 		var eventMsg *core.Message
 		var alertMsg *core.Message
-		for i, m := range messenger.messages {
+		for i, m := range msgs {
 			switch m.Event {
 			case "moon_phase":
-				eventMsg = &messenger.messages[i]
+				eventMsg = &msgs[i]
 			case "moon_phase_change":
-				alertMsg = &messenger.messages[i]
+				alertMsg = &msgs[i]
 			}
 		}
 		assert.NotNil(t, eventMsg)
@@ -130,25 +138,22 @@ func TestMoonService(t *testing.T) {
 	})
 
 	t.Run("Check sends only event if phase name hasn't changed", func(t *testing.T) {
-		messenger.mu.Lock()
-		messenger.messages = nil
-		messenger.mu.Unlock()
+		messenger.Reset()
 
 		// svc.lastMoonPhase is already set from previous run
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		messenger.mu.Lock()
-		defer messenger.mu.Unlock()
+		msgs := messenger.Messages()
 		// Unless we are exactly at the boundary, it should only be the event message
 		// Since we just called it, it's very likely the same phase name.
 		// If it DID change, it's fine too, but usually it won't in a few milliseconds.
-		if len(messenger.messages) > 1 {
+		if len(msgs) > 1 {
 			// Phase changed exactly between calls, which is possible but rare.
-			assert.Equal(t, 2, len(messenger.messages))
+			assert.Equal(t, 2, len(msgs))
 		} else {
-			assert.Equal(t, 1, len(messenger.messages))
-			assert.Equal(t, "test-moon", messenger.messages[0].ChannelName)
+			assert.Equal(t, 1, len(msgs))
+			assert.Equal(t, "test-moon", msgs[0].ChannelName)
 		}
 	})
 
@@ -163,19 +168,16 @@ func TestMoonService(t *testing.T) {
 		assert.NoError(t, err)
 
 		// 3. Check again, should NOT send alert if phase name is same
-		messenger.mu.Lock()
-		messenger.messages = nil
-		messenger.mu.Unlock()
+		messenger.Reset()
 
 		err = newSvc.Check()
 		assert.NoError(t, err)
 
-		messenger.mu.Lock()
-		defer messenger.mu.Unlock()
+		msgs := messenger.Messages()
 		// Only event message, no alert because phase name is same as persisted
-		assert.Equal(t, 1, len(messenger.messages), "Should not send redundant alert after restart")
-		if len(messenger.messages) > 0 {
-			assert.Equal(t, "test-moon", messenger.messages[0].ChannelName)
+		assert.Equal(t, 1, len(msgs), "Should not send redundant alert after restart")
+		if len(msgs) > 0 {
+			assert.Equal(t, "test-moon", msgs[0].ChannelName)
 		}
 	})
 }

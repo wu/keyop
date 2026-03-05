@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"log/slog"
 	"os"
 	"sync"
@@ -14,6 +15,8 @@ import (
 )
 
 type mockMessenger struct {
+	payloadRegistry core.PayloadRegistry
+
 	messages []core.Message
 	mu       sync.Mutex
 }
@@ -45,6 +48,14 @@ func (m *mockMessenger) SetDataDir(dir string) {}
 
 func (m *mockMessenger) SetHostname(hostname string) {}
 
+func (m *mockMessenger) GetPayloadRegistry() core.PayloadRegistry {
+	return m.payloadRegistry
+}
+
+func (m *mockMessenger) SetPayloadRegistry(r core.PayloadRegistry) {
+	m.payloadRegistry = r
+}
+
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
 }
@@ -54,7 +65,7 @@ func TestProcessService(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 	deps.SetOsProvider(core.OsProvider{}) // Use real OS for process execution
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	pidFile := "test.pid"
@@ -88,16 +99,16 @@ func TestProcessService(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%d", svc.cmd.Process.Pid), string(pidData))
 
-		assert.Len(t, messenger.messages, 1)
-		assert.Contains(t, messenger.messages[0].Text, "status started")
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Contains(t, messenger.SentMessages[0].Text, "status started")
 	})
 
 	t.Run("Process still running", func(t *testing.T) {
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.Len(t, messenger.messages, 1)
-		assert.Contains(t, messenger.messages[0].Text, "status running")
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Contains(t, messenger.SentMessages[0].Text, "status running")
 	})
 
 	t.Run("Restart process if died", func(t *testing.T) {
@@ -108,12 +119,12 @@ func TestProcessService(t *testing.T) {
 		//goland:noinspection GoUnhandledErrorResult
 		svc.cmd.Process.Wait()
 
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		err = svc.Check()
 		assert.NoError(t, err)
 		assert.NotEqual(t, oldPid, svc.cmd.Process.Pid)
-		assert.Len(t, messenger.messages, 1)
-		assert.Contains(t, messenger.messages[0].Text, "status restarted")
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Contains(t, messenger.SentMessages[0].Text, "status restarted")
 
 		// Check PID file updated
 		pidData, err := os.ReadFile(pidFile)

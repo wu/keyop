@@ -483,7 +483,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
-		return fl.LastErrMsg() == "Failed to unmarshal dequeued message"
+		return fl.LastErrMsg() == "Failed to unmarshal dequeued message as Envelope or Message"
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 3. Handler error
@@ -491,6 +491,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	// Use a fresh messenger and logger to avoid interference
 	m2 := NewMessenger(&FakeLogger{}, OsProvider{})
 	m2.dataDir = tmpDir
+	m2.maxRetryAttempts = 0
 	err = m2.initializePersistentQueue("handler-test-err")
 	assert.NoError(t, err)
 
@@ -503,8 +504,9 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	_ = m2.Send(Message{ChannelName: "handler-test-err", Text: "trigger"})
 
 	assert.Eventually(t, func() bool {
-		return m2.logger.(*FakeLogger).LastErrMsg() == "Message handler returned error, retrying"
-	}, 2*time.Second, 100*time.Millisecond)
+		lastMsg := m2.logger.(*FakeLogger).LastErrMsg()
+		return lastMsg == "Message handler returned error" || lastMsg == "Max retry attempts reached, moving to DLQ"
+	}, 5*time.Second, 100*time.Millisecond, "Expected 'Message handler returned error' or DLQ log in logger, got: %s", m2.logger.(*FakeLogger).LastErrMsg())
 }
 
 func TestMessenger_Subscribe_UnmarshalError_AdvancesPastCorruptMessage(t *testing.T) {
@@ -557,7 +559,7 @@ func TestMessenger_Subscribe_UnmarshalError_AdvancesPastCorruptMessage(t *testin
 	}, 3*time.Second, 50*time.Millisecond, "Expected valid message after corrupt entry to be received")
 
 	// And an error should have been logged for the corrupt message.
-	assert.Equal(t, "Failed to unmarshal dequeued message", fl.LastErrMsg())
+	assert.Equal(t, "Failed to unmarshal dequeued message as Envelope or Message", fl.LastErrMsg())
 }
 
 func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {

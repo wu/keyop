@@ -158,6 +158,8 @@ func TestInitialize(t *testing.T) {
 }
 
 type fakeMessenger struct {
+	payloadRegistry core.PayloadRegistry
+
 	mu                 sync.Mutex
 	messages           []core.Message
 	subscribeChan      chan core.Message
@@ -231,6 +233,14 @@ func (f *fakeMessenger) SetHostname(_ string) {}
 
 func (f *fakeMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
+}
+
+func (f *fakeMessenger) GetPayloadRegistry() core.PayloadRegistry {
+	return f.payloadRegistry
+}
+
+func (f *fakeMessenger) SetPayloadRegistry(r core.PayloadRegistry) {
+	f.payloadRegistry = r
 }
 
 // setupTestServer creates a TLS test server that calls svc.handleConnection for each

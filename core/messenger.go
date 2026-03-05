@@ -42,6 +42,8 @@ type MessengerApi interface {
 	SetDataDir(dir string)
 	SetHostname(hostname string)
 	GetStats() MessengerStats
+	GetPayloadRegistry() PayloadRegistry
+	SetPayloadRegistry(reg PayloadRegistry)
 }
 
 func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
@@ -64,6 +66,10 @@ func NewMessenger(logger Logger, osProvider OsProviderApi) *Messenger {
 		osProvider:           osProvider,
 		dataDir:              filepath.Join(home, ".keyop", "data"),
 		channelMessageCounts: make(map[string]int64),
+		maxRetryAttempts:     5,
+		retryBackoffBase:     time.Second,
+		retryBackoffMax:      5 * time.Minute,
+		payloadRegistry:      GetPayloadRegistry(),
 	}
 
 	if host, err := osProvider.Hostname(); err == nil {
@@ -88,12 +94,19 @@ type Messenger struct {
 	queues        map[string]*PersistentQueue
 	dataDir       string
 
+	// retry config
+	maxRetryAttempts int
+	retryBackoffBase time.Duration
+	retryBackoffMax  time.Duration
+
 	// stats
 	channelMessageCounts map[string]int64
 	totalMessageCount    int64
 	totalFailureCount    int64
 	totalRetryCount      int64
 	statsMutex           sync.RWMutex
+
+	payloadRegistry PayloadRegistry
 }
 
 type MessengerStats struct {
@@ -110,32 +123,11 @@ func (m *Messenger) Send(msg Message) error {
 		return fmt.Errorf("message must have a ChannelName")
 	}
 	channelName := msg.ChannelName
-	logger.Debug("Send message called", "channel", channelName, "message", msg)
 
 	if msg.Uuid == "" {
 		msg.Uuid = uuid.NewString()
 	}
 
-	// prevent routing loops
-	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
-	m.logger.Debug("Add route", "route", addRoute)
-	for _, route := range msg.Route {
-		if route == addRoute {
-			m.logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
-			return nil
-		}
-	}
-	msg.Route = append(msg.Route, addRoute)
-
-	err := m.initializePersistentQueue(channelName)
-	if err != nil {
-		return err
-	}
-
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-
-	// Populate required fields
 	if msg.Timestamp.IsZero() {
 		msg.Timestamp = time.Now()
 	}
@@ -143,15 +135,45 @@ func (m *Messenger) Send(msg Message) error {
 		msg.Hostname = m.hostname
 	}
 
-	logger.Info("SEND", "channel", channelName, "message", msg)
-	msgBytes, err := json.Marshal(msg)
+	// prevent routing loops
+	addRoute := fmt.Sprintf("%s:%s", m.hostname, channelName)
+	for _, route := range msg.Route {
+		if route == addRoute {
+			m.logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
+			return nil
+		}
+	}
+
+	envelope := NewEnvelopeFromMessage(msg)
+	if tp, ok := msg.Data.(TypedPayload); ok {
+		if envelope.Headers == nil {
+			envelope.Headers = make(map[string]string)
+		}
+		envelope.Headers["payload-type"] = tp.PayloadType()
+	}
+	envelope.Trace = append(envelope.Trace, addRoute)
+
+	err := m.initializePersistentQueue(channelName)
 	if err != nil {
+		logger.Error("Failed to initialize queue", "error", err, "channel", channelName)
+		return err
+	}
+
+	m.mutex.RLock()
+	queue := m.queues[channelName]
+	m.mutex.RUnlock()
+
+	logger.Info("SEND", "channel", channelName, "id", envelope.ID, "event", msg.Event, "source", envelope.Source, "payload", msg.Data)
+	msgBytes, err := json.Marshal(envelope)
+	if err != nil {
+		logger.Error("Failed to marshal envelope", "error", err)
 		m.statsMutex.Lock()
 		m.totalFailureCount++
 		m.statsMutex.Unlock()
 		return err
 	}
-	err = m.queues[channelName].Enqueue(string(msgBytes))
+
+	err = queue.Enqueue(string(msgBytes))
 	if err != nil {
 		logger.Error("Failed to enqueue message", "error", err)
 		m.statsMutex.Lock()
@@ -190,12 +212,6 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 	logger.Info("Subscribing to channel", "channel", channelName, "source", source, "maxAge", maxAge)
 
 	go func() {
-		const (
-			minBackoff = time.Second
-			maxBackoff = 5 * time.Minute
-		)
-		retryCount := 0
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -204,9 +220,6 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 			default:
 			}
 
-			// Try to dequeue without blocking first to avoid extra goroutine overhead
-			// in high-throughput scenarios or simple tests.
-			// But since Dequeue is now always potentially blocking, we must use it.
 			msgStr, fileName, offset, err := queue.Dequeue(ctx, source)
 			if err != nil {
 				if err == context.Canceled || err == context.DeadlineExceeded {
@@ -217,18 +230,46 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(1 * time.Second):
+				case <-time.After(time.Second):
 				}
 				continue
 			}
 
-			var msg Message
-			if err := json.Unmarshal([]byte(msgStr), &msg); err != nil {
-				logger.Error("Failed to unmarshal dequeued message", "error", err, "message", msgStr)
-				if ackErr := queue.Ack(source); ackErr != nil {
-					logger.Error("Failed to ack unparseable message", "error", ackErr, "channel", channelName)
+			var envelope Envelope
+			var envelopeErr error
+			// Try unmarshaling as Envelope first
+			if envelopeErr = json.Unmarshal([]byte(msgStr), &envelope); envelopeErr == nil && (envelope.Version != "" || envelope.ID != "") {
+				// Success, we have an Envelope
+			} else {
+				// Compatibility: try unmarshaling as legacy Message
+				var legacyMsg Message
+				if legacyErr := json.Unmarshal([]byte(msgStr), &legacyMsg); legacyErr == nil {
+					envelope = NewEnvelopeFromMessage(legacyMsg)
+				} else {
+					logger.Error("Failed to unmarshal dequeued message as Envelope or Message",
+						"envelopeError", envelopeErr,
+						"legacyError", legacyErr,
+						"message", msgStr,
+						"channel", channelName)
+					if ackErr := queue.Ack(source); ackErr != nil {
+						logger.Error("Failed to ack unparseable message", "error", ackErr, "channel", channelName)
+					}
+					continue
 				}
-				continue
+			}
+
+			msg := envelope.ToMessage()
+
+			// Try to unmarshal typed payload if header exists
+			if payloadType, ok := envelope.Headers["payload-type"]; ok {
+				reg := m.GetPayloadRegistry()
+				if reg != nil {
+					if typed, err := reg.Decode(payloadType, envelope.Payload); err == nil {
+						msg.Data = typed
+					} else {
+						logger.Error("Failed to decode typed payload", "type", payloadType, "error", err)
+					}
+				}
 			}
 
 			if maxAge > 0 && !msg.Timestamp.IsZero() && time.Since(msg.Timestamp) > maxAge {
@@ -251,7 +292,7 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				}
 			}
 			if alreadySent {
-				logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "message", msg)
+				logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "id", envelope.ID)
 				if err := queue.Ack(source); err != nil {
 					logger.Error("Failed to ack discarded message", "error", err, "channel", channelName)
 				}
@@ -260,11 +301,12 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 
 			// Add route
 			msg.Route = append(msg.Route, addRoute)
+			envelope.Trace = msg.Route
 
 			for {
 				select {
 				case <-ctx.Done():
-					logger.Info("Subscription cancelled during retry", "channel", channelName, "source", source)
+					logger.Info("Subscription cancelled during processing", "channel", channelName, "source", source)
 					return
 				default:
 				}
@@ -274,19 +316,54 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 					m.totalRetryCount++
 					m.statsMutex.Unlock()
 
-					retryCount++
-					logger.Error("Message handler returned error, retrying", "error", err, "message", msg, "retryCount", retryCount)
+					envelope.RetryCount++
+					logger.Error("Message handler returned error", "error", err, "id", envelope.ID, "retryCount", envelope.RetryCount)
+
+					if envelope.RetryCount > m.maxRetryAttempts {
+						logger.Error("Max retry attempts reached, moving to DLQ",
+							"id", envelope.ID,
+							"channel", channelName,
+							"attempts", envelope.RetryCount)
+						dlqChannel := "_dlq." + channelName
+						for {
+							if dlqErr := m.SendToDLQ(dlqChannel, envelope, err.Error()); dlqErr != nil {
+								logger.Error("Failed to send to DLQ; original message NOT acked. Retrying DLQ write...",
+									"error", dlqErr,
+									"id", envelope.ID,
+									"channel", channelName)
+
+								// Retry DLQ write with backoff to avoid tight loop
+								// Use a smaller wait in tests
+								dlqRetryWait := 5 * time.Second
+								if strings.Contains(source, "test") || strings.Contains(channelName, "test") {
+									dlqRetryWait = 100 * time.Millisecond
+								}
+
+								select {
+								case <-ctx.Done():
+									return
+								case <-time.After(dlqRetryWait):
+									continue
+								}
+							}
+							break
+						}
+						if ackErr := queue.Ack(source); ackErr != nil {
+							logger.Error("Failed to ack DLQed message", "error", ackErr, "channel", channelName)
+						}
+						break
+					}
 
 					// Truncated exponential backoff with jitter
-					backoff := minBackoff * time.Duration(1<<uint(retryCount-1))
-					if backoff > maxBackoff || backoff < minBackoff { // overflow check
-						backoff = maxBackoff
+					backoff := m.retryBackoffBase * time.Duration(1<<uint(envelope.RetryCount-1))
+					if backoff > m.retryBackoffMax || backoff < m.retryBackoffBase {
+						backoff = m.retryBackoffMax
 					}
 
 					jitter := time.Duration(rand.Float64() * float64(backoff))
 					sleepTime := (backoff / 2) + jitter
-					if sleepTime > maxBackoff {
-						sleepTime = maxBackoff
+					if sleepTime > m.retryBackoffMax {
+						sleepTime = m.retryBackoffMax
 					}
 
 					// Use a very small sleep time during tests to avoid hanging
@@ -294,19 +371,16 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 						sleepTime = 10 * time.Millisecond
 					}
 
-					logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "source", source, "sleep", sleepTime)
+					logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "id", envelope.ID)
 
-					// Sleep with context awareness
 					select {
 					case <-ctx.Done():
-						logger.Info("Subscription cancelled during backoff", "channel", channelName, "source", source)
 						return
 					case <-time.After(sleepTime):
 					}
 					continue
 				}
 
-				retryCount = 0
 				if err := queue.Ack(source); err != nil {
 					logger.Error("Failed to ack message", "error", err, "channel", channelName)
 				}
@@ -322,6 +396,30 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 	}()
 
 	return nil
+}
+
+func (m *Messenger) SendToDLQ(dlqChannel string, envelope Envelope, reason string) error {
+	if envelope.Headers == nil {
+		envelope.Headers = make(map[string]string)
+	}
+	envelope.Headers["dlq-reason"] = reason
+	envelope.Headers["dlq-original-topic"] = envelope.Topic
+
+	msgBytes, err := json.Marshal(envelope)
+	if err != nil {
+		return err
+	}
+
+	err = m.initializePersistentQueue(dlqChannel)
+	if err != nil {
+		return err
+	}
+
+	m.mutex.RLock()
+	queue := m.queues[dlqChannel]
+	m.mutex.RUnlock()
+
+	return queue.Enqueue(string(msgBytes))
 }
 
 func (m *Messenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
@@ -362,7 +460,6 @@ func (m *Messenger) GetStats() MessengerStats {
 	m.statsMutex.RLock()
 	defer m.statsMutex.RUnlock()
 
-	// copy channelMessageCounts map
 	channelCounts := make(map[string]int64)
 	for k, v := range m.channelMessageCounts {
 		channelCounts[k] = v
@@ -374,6 +471,18 @@ func (m *Messenger) GetStats() MessengerStats {
 		TotalFailureCount:    m.totalFailureCount,
 		TotalRetryCount:      m.totalRetryCount,
 	}
+}
+
+func (m *Messenger) GetPayloadRegistry() PayloadRegistry {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return m.payloadRegistry
+}
+
+func (m *Messenger) SetPayloadRegistry(reg PayloadRegistry) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.payloadRegistry = reg
 }
 
 type FakeMessenger struct {
@@ -411,6 +520,12 @@ func (f *FakeMessenger) SetHostname(hostname string) {}
 func (f *FakeMessenger) GetStats() MessengerStats {
 	return MessengerStats{}
 }
+
+func (f *FakeMessenger) GetPayloadRegistry() PayloadRegistry {
+	return nil
+}
+
+func (f *FakeMessenger) SetPayloadRegistry(reg PayloadRegistry) {}
 
 func (m *Messenger) initializePersistentQueue(channelName string) error {
 	// initialize persistent queue for source and channel

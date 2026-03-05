@@ -1,9 +1,9 @@
 package kodi
 
 import (
-	"context"
 	"encoding/json"
 	"keyop/core"
+	"keyop/core/testutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,7 +96,7 @@ func TestService_Check(t *testing.T) {
 	stateStore := core.NewFileStateStore(tmpDir, osProvider)
 	deps.SetStateStore(stateStore)
 
-	messenger := &fakeMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	cfg := core.ServiceConfig{
@@ -117,7 +116,7 @@ func TestService_Check(t *testing.T) {
 	t.Run("Initially nothing playing", func(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.Empty(t, messenger.messages)
+		assert.Empty(t, messenger.SentMessages)
 
 		mockKodi.mu.RLock()
 		assert.Equal(t, "kodi", mockKodi.lastUsername)
@@ -144,7 +143,7 @@ func TestService_Check(t *testing.T) {
 	})
 
 	t.Run("Movie starts playing", func(t *testing.T) {
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		mockKodi.mu.Lock()
 		mockKodi.activePlayer = &activePlayer{PlayerID: 1, Type: "video"}
 		mockKodi.playingItem = &itemDetails{}
@@ -157,19 +156,19 @@ func TestService_Check(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		require.Len(t, messenger.messages, 1)
-		assert.Equal(t, "kodi-events", messenger.messages[0].ChannelName)
-		assert.Contains(t, messenger.messages[0].Text, "Movie started: The Matrix")
-		data := messenger.messages[0].Data.(map[string]string)
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "kodi-events", messenger.SentMessages[0].ChannelName)
+		assert.Contains(t, messenger.SentMessages[0].Text, "Movie started: The Matrix")
+		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "The Matrix", data["title"])
 		assert.Equal(t, "playing", data["status"])
 		assert.Equal(t, "00:01:30", data["time"])
 
-		messenger.messages = nil
+		messenger.SentMessages = nil
 	})
 
 	t.Run("Same movie still playing", func(t *testing.T) {
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		mockKodi.mu.Lock()
 		mockKodi.playerProps.Time.Minutes = 2
 		mockKodi.playerProps.Time.Seconds = 0
@@ -178,14 +177,14 @@ func TestService_Check(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		require.Len(t, messenger.messages, 1)
-		assert.Contains(t, messenger.messages[0].Text, "Movie playing: The Matrix (00:02:00)")
-		data := messenger.messages[0].Data.(map[string]string)
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Contains(t, messenger.SentMessages[0].Text, "Movie playing: The Matrix (00:02:00)")
+		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "00:02:00", data["time"])
 	})
 
 	t.Run("Movie changes", func(t *testing.T) {
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		mockKodi.mu.Lock()
 		mockKodi.playingItem.Item.Title = "Inception"
 		mockKodi.playerProps.Time.Minutes = 0
@@ -195,14 +194,14 @@ func TestService_Check(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		require.Len(t, messenger.messages, 1)
-		assert.Contains(t, messenger.messages[0].Text, "Movie started: Inception")
-		data := messenger.messages[0].Data.(map[string]string)
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Contains(t, messenger.SentMessages[0].Text, "Movie started: Inception")
+		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "00:00:10", data["time"])
 	})
 
 	t.Run("Movie stops playing", func(t *testing.T) {
-		messenger.messages = nil
+		messenger.SentMessages = nil
 		mockKodi.mu.Lock()
 		mockKodi.activePlayer = nil
 		mockKodi.playingItem = nil
@@ -211,10 +210,10 @@ func TestService_Check(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		require.Len(t, messenger.messages, 1)
-		assert.Equal(t, "kodi-events", messenger.messages[0].ChannelName)
-		assert.Contains(t, messenger.messages[0].Text, "Movie stopped: Inception")
-		data := messenger.messages[0].Data.(map[string]string)
+		require.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "kodi-events", messenger.SentMessages[0].ChannelName)
+		assert.Contains(t, messenger.SentMessages[0].Text, "Movie stopped: Inception")
+		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "Inception", data["title"])
 		assert.Equal(t, "stopped", data["status"])
 	})
@@ -244,37 +243,4 @@ func TestService_Check(t *testing.T) {
 		errs := svc.(*Service).ValidateConfig()
 		assert.Empty(t, errs)
 	})
-}
-
-type fakeMessenger struct {
-	messages []core.Message
-}
-
-func (f *fakeMessenger) Send(msg core.Message) error {
-	f.messages = append(f.messages, msg)
-	return nil
-}
-
-func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (f *fakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (f *fakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (f *fakeMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (f *fakeMessenger) SetDataDir(dir string) {}
-
-func (f *fakeMessenger) SetHostname(hostname string) {}
-
-func (f *fakeMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
 }

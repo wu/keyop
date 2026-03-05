@@ -77,6 +77,13 @@ func LoadPlugins(deps core.Dependencies) error {
 		}
 	}
 
+	// Log registered payload types after all plugins have registered
+	reg := deps.MustGetMessenger().GetPayloadRegistry()
+	if reg != nil {
+		types := reg.KnownTypes()
+		logger.Info("Payload registration complete", "total_types", len(types), "types", types)
+	}
+
 	return nil
 }
 
@@ -86,17 +93,46 @@ func loadPlugin(info PluginInfo, deps core.Dependencies) error {
 		return fmt.Errorf("could not open plugin: %w", err)
 	}
 
+	// 1. Try to register payloads if it's a RuntimePlugin
+	// We need a way to get the plugin instance.
+	// Common pattern is a 'GetPlugin' or looking up the service constructor and checking if it's a plugin.
+	// However, usually we lookup a symbol that returns the plugin interface.
+
+	// Let's see if there's a "Plugin" symbol or if NewService returns something that implements RuntimePlugin.
+	// Given the current structure, we register the constructor in ServiceRegistry.
+
 	symbol, err := p.Lookup("NewService")
 	if err != nil {
 		return fmt.Errorf("could not find NewService symbol: %w", err)
 	}
 
-	newService, ok := symbol.(func(core.Dependencies, core.ServiceConfig) core.Service)
+	newServiceFunc, ok := symbol.(func(core.Dependencies, core.ServiceConfig) core.Service)
 	if !ok {
 		return fmt.Errorf("NewService has wrong signature")
 	}
 
-	ServiceRegistry[info.Name] = newService
+	// To register payloads, we need an instance of the plugin.
+	// Since NewService might be called multiple times for different service instances,
+	// we should ideally have a one-time registration.
+	// Let's try to invoke NewService with a dummy config to see if it implements RuntimePlugin.
+	dummySvc := newServiceFunc(deps, core.ServiceConfig{Name: "discovery-" + info.Name})
+	if rtPlugin, ok := dummySvc.(core.RuntimePlugin); ok {
+		reg := deps.MustGetMessenger().GetPayloadRegistry()
+		if reg != nil {
+			if err := rtPlugin.RegisterPayloads(reg); err != nil {
+				deps.MustGetLogger().Error("Plugin failed payload registration", "plugin", info.Name, "error", err)
+				// We decide here to fail the plugin load if payload registration fails,
+				// unless it's a duplicate registration error which might happen during re-initialization.
+				if !core.IsDuplicatePayloadRegistration(err) {
+					return fmt.Errorf("payload registration failed for plugin %s: %w", info.Name, err)
+				}
+			} else {
+				deps.MustGetLogger().Info("Plugin registered payloads", "plugin", info.Name)
+			}
+		}
+	}
+
+	ServiceRegistry[info.Name] = newServiceFunc
 	deps.MustGetLogger().Info("Registered plugin service", "name", info.Name)
 
 	return nil

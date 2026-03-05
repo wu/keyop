@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"os"
 	"runtime"
 	"strings"
@@ -18,39 +19,6 @@ type readWriteSeeker struct {
 
 func (rws *readWriteSeeker) Write(p []byte) (n int, err error) {
 	return 0, fmt.Errorf("read-only")
-}
-
-type mockMessenger struct {
-	messages []core.Message
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
 }
 
 func TestCheck_Darwin(t *testing.T) {
@@ -88,7 +56,7 @@ File-backed pages:                         1000.
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	cfg := core.ServiceConfig{
@@ -108,11 +76,11 @@ File-backed pages:                         1000.
 		t.Fatalf("Check failed: %v", err)
 	}
 
-	if len(messenger.messages) != 1 {
-		t.Fatalf("Expected 1 message, got %d", len(messenger.messages))
+	if len(messenger.SentMessages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(messenger.SentMessages))
 	}
 
-	msg := messenger.messages[0]
+	msg := messenger.SentMessages[0]
 	if msg.MetricName != "memory_test.utilized_percent" {
 		t.Errorf("Expected metric name memory_test.utilized_percent, got %s", msg.MetricName)
 	}
@@ -186,7 +154,7 @@ func TestCheck_Linux(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 
 	cfg := core.ServiceConfig{
@@ -206,11 +174,11 @@ func TestCheck_Linux(t *testing.T) {
 		t.Fatalf("Check failed: %v", err)
 	}
 
-	if len(messenger.messages) != 1 {
-		t.Fatalf("Expected 1 message, got %d", len(messenger.messages))
+	if len(messenger.SentMessages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(messenger.SentMessages))
 	}
 
-	msg := messenger.messages[0]
+	msg := messenger.SentMessages[0]
 	// (1000000 - 400000) / 1000000 * 100 = 60.0%
 	if msg.Metric != 60.0 {
 		t.Errorf("Expected metric value 60.0, got %f", msg.Metric)
@@ -279,7 +247,7 @@ func TestCheck_ErrorHandling(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetOsProvider(fakeOs)
 		deps.SetLogger(&core.FakeLogger{})
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 		cfg := core.ServiceConfig{
 			Name: "memory_test",
@@ -304,7 +272,7 @@ func TestCheck_ErrorHandling(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetOsProvider(fakeOs)
 		deps.SetLogger(&core.FakeLogger{})
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 		cfg := core.ServiceConfig{
 			Name: "memory_test",
@@ -331,7 +299,7 @@ func TestCheck_UnsupportedPlatform(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	cfg := core.ServiceConfig{
 		Name: "memory_test",
@@ -564,7 +532,9 @@ func TestInitialize_SysctlParseError(t *testing.T) {
 
 // ── Check — messenger.Send error ─────────────────────────────────────────────
 
-type errorMessenger struct{}
+type errorMessenger struct {
+	payloadRegistry core.PayloadRegistry
+}
 
 func (e *errorMessenger) Send(_ core.Message) error { return fmt.Errorf("send failed") }
 func (e *errorMessenger) Subscribe(_ context.Context, _, _, _, _ string, _ time.Duration, _ func(core.Message) error) error {
@@ -578,6 +548,10 @@ func (e *errorMessenger) SeekToEnd(_, _ string) error                  { return 
 func (e *errorMessenger) SetDataDir(_ string)                          {}
 func (e *errorMessenger) SetHostname(_ string)                         {}
 func (e *errorMessenger) GetStats() core.MessengerStats                { return core.MessengerStats{} }
+
+func (e *errorMessenger) GetPayloadRegistry() core.PayloadRegistry { return e.payloadRegistry }
+
+func (e *errorMessenger) SetPayloadRegistry(r core.PayloadRegistry) { e.payloadRegistry = r }
 
 func TestCheck_SendError(t *testing.T) {
 	if runtime.GOOS != "darwin" {

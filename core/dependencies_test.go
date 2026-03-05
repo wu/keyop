@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,7 +65,7 @@ func TestDependencies_MustGetMessenger_PanicsWhenUnset(t *testing.T) {
 func TestDependencies_MustGetMessenger_ReturnsWhenSet(t *testing.T) {
 	var d Dependencies
 
-	m := NewMessenger(slog.New(slog.NewJSONHandler(os.Stderr, nil)), FakeOsProvider{Host: "test-host"})
+	m := &FakeMessenger{}
 	d.SetMessenger(m)
 
 	got := d.MustGetMessenger()

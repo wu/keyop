@@ -2,7 +2,6 @@ package sslMonitor
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -11,44 +10,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"math/big"
 	"net"
 	"testing"
 	"time"
 )
-
-type mockMessenger struct {
-	messages []core.Message
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 func TestCheck(t *testing.T) {
 	// 1. Setup a test TLS server
@@ -75,7 +42,7 @@ func TestCheck(t *testing.T) {
 	addr := ln.Addr().String()
 
 	// 2. Setup the service
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps := core.Dependencies{}
 	deps.SetMessenger(messenger)
 	deps.SetLogger(&core.FakeLogger{})
@@ -125,11 +92,11 @@ func TestCheck(t *testing.T) {
 	}
 
 	// 4. Verify results
-	if len(messenger.messages) != 1 {
-		t.Fatalf("Expected 1 message, got %d", len(messenger.messages))
+	if len(messenger.SentMessages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(messenger.SentMessages))
 	}
 
-	msg := messenger.messages[0]
+	msg := messenger.SentMessages[0]
 	if msg.Status != "WARNING" {
 		t.Errorf("Expected status WARNING (expires in 10 days, warning is 30), got %s", msg.Status)
 	}
@@ -166,7 +133,7 @@ func TestCheck_Critical(t *testing.T) {
 	addr := ln.Addr().String()
 
 	// 2. Setup the service
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps := core.Dependencies{}
 	deps.SetMessenger(messenger)
 	deps.SetLogger(&core.FakeLogger{})
@@ -216,7 +183,7 @@ func TestCheck_Critical(t *testing.T) {
 	}
 
 	// 4. Verify results
-	msg := messenger.messages[0]
+	msg := messenger.SentMessages[0]
 	if msg.Status != "CRITICAL" {
 		t.Errorf("Expected status CRITICAL (expires in 5 days, critical is 7), got %s", msg.Status)
 	}
@@ -247,7 +214,7 @@ func TestCheck_OK(t *testing.T) {
 	addr := ln.Addr().String()
 
 	// 2. Setup the service
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps := core.Dependencies{}
 	deps.SetMessenger(messenger)
 	deps.SetLogger(&core.FakeLogger{})
@@ -297,7 +264,7 @@ func TestCheck_OK(t *testing.T) {
 	}
 
 	// 4. Verify results
-	msg := messenger.messages[0]
+	msg := messenger.SentMessages[0]
 	if msg.Status != "OK" {
 		t.Errorf("Expected status OK (expires in 60 days, warning is 30), got %s", msg.Status)
 	}

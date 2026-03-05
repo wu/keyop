@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"log/slog"
 	"os"
 	"testing"
@@ -104,7 +105,7 @@ func TestStartKernelErrorChannel(t *testing.T) {
 		ctx := deps.MustGetContext()
 		cancel := deps.MustGetCancel()
 
-		messenger := &mockMessenger{}
+		messenger := testutil.NewFakeMessenger()
 		deps.SetMessenger(messenger)
 
 		svcCtx, svcCancel := context.WithCancel(ctx)
@@ -122,9 +123,9 @@ func TestStartKernelErrorChannel(t *testing.T) {
 		err := StartKernel(deps, tasks)
 		assert.NoError(t, err)
 
-		assert.Len(t, messenger.messages, 1)
-		assert.Equal(t, "errors", messenger.messages[0].ChannelName)
-		assert.Contains(t, messenger.messages[0].Text, "task failed")
+		assert.Len(t, messenger.SentMessages, 1)
+		assert.Equal(t, "errors", messenger.SentMessages[0].ChannelName)
+		assert.Contains(t, messenger.SentMessages[0].Text, "task failed")
 	})
 }
 
@@ -160,6 +161,12 @@ func (m *mockMessenger) SetHostname(hostname string) {}
 func (m *mockMessenger) GetStats() core.MessengerStats {
 	return core.MessengerStats{}
 }
+
+func (m *mockMessenger) GetPayloadRegistry() core.PayloadRegistry {
+	return nil
+}
+
+func (m *mockMessenger) SetPayloadRegistry(reg core.PayloadRegistry) {}
 
 type mockStateStore struct {
 	data map[string]interface{}

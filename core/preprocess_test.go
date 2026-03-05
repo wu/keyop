@@ -32,6 +32,8 @@ func (c *captureMessenger) SeekToEnd(_ string, _ string) error                  
 func (c *captureMessenger) SetDataDir(_ string)                                        {}
 func (c *captureMessenger) SetHostname(_ string)                                       {}
 func (c *captureMessenger) GetStats() MessengerStats                                   { return MessengerStats{} }
+func (c *captureMessenger) GetPayloadRegistry() PayloadRegistry                        { return nil }
+func (c *captureMessenger) SetPayloadRegistry(reg PayloadRegistry)                     {}
 
 // subscribeCapture captures the handler passed to Subscribe so tests can invoke it directly.
 type subscribeCapture struct {
@@ -45,6 +47,8 @@ func (s *subscribeCapture) Subscribe(_ context.Context, _ string, _ string, _ st
 	}
 	return nil
 }
+func (s *subscribeCapture) GetPayloadRegistry() PayloadRegistry    { return nil }
+func (s *subscribeCapture) SetPayloadRegistry(reg PayloadRegistry) {}
 
 // ============================================================
 // tokenize

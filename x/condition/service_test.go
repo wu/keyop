@@ -6,46 +6,14 @@ import (
 	"log/slog"
 	"os"
 	"testing"
-	"time"
+
+	testutil "keyop/core/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type MockMessenger struct {
-	SentMessages []core.Message
-}
-
-func (m *MockMessenger) Send(msg core.Message) error {
-	m.SentMessages = append(m.SentMessages, msg)
-	return nil
-}
-
-func (m *MockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *MockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *MockMessenger) SetDataDir(dir string) {}
-
-func (m *MockMessenger) SetHostname(hostname string) {}
-
-func (m *MockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
-
-func testDeps(t *testing.T, messenger core.MessengerApi) core.Dependencies {
+func testDeps(messenger core.MessengerApi) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
 
@@ -92,8 +60,8 @@ func TestService_MessageHandler(t *testing.T) {
 	}
 
 	t.Run("metric gt 80", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -110,8 +78,8 @@ func TestService_MessageHandler(t *testing.T) {
 	})
 
 	t.Run("text contains error", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -127,8 +95,8 @@ func TestService_MessageHandler(t *testing.T) {
 	})
 
 	t.Run("multiple matches", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -154,8 +122,8 @@ func TestService_MessageHandler(t *testing.T) {
 	})
 
 	t.Run("no match", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -170,7 +138,7 @@ func TestService_MessageHandler(t *testing.T) {
 }
 
 func TestService_ValidateConfig(t *testing.T) {
-	deps := testDeps(t, nil)
+	deps := testDeps(nil)
 
 	t.Run("valid config", func(t *testing.T) {
 		cfg := core.ServiceConfig{

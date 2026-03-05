@@ -41,6 +41,28 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		}
 
 		service := serviceFunc(serviceDeps, serviceConfig)
+
+		// Check if service implements RuntimePlugin for payload registration
+		if rtPlugin, ok := service.(core.RuntimePlugin); ok {
+			reg := serviceDeps.MustGetMessenger().GetPayloadRegistry()
+			if reg != nil {
+				// Built-in services might already have their payloads registered if they are multiple instances,
+				// but RegisterPayloads should handle (or reg.Register handles) duplicates.
+				// In core.Register, we return an error for duplicates.
+				if err := rtPlugin.RegisterPayloads(reg); err != nil {
+					// We allow duplicates for built-in services as they might have multiple instances
+					if core.IsDuplicatePayloadRegistration(err) {
+						logger.Debug("Service payload already registered", "name", serviceConfig.Name, "info", err)
+					} else {
+						logger.Error("Service failed payload registration", "name", serviceConfig.Name, "error", err)
+						return fmt.Errorf("service payload registration failed: %w", err)
+					}
+				} else {
+					logger.Info("Service registered payloads", "name", serviceConfig.Name)
+				}
+			}
+		}
+
 		services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
 	}
 

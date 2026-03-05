@@ -17,6 +17,15 @@ func init() {
 	startTime = time.Now()
 }
 
+// HeartbeatEvent represents a heartbeat from a service.
+type HeartbeatEvent struct {
+	Now           time.Time `json:"now"`
+	Uptime        string    `json:"uptime"`
+	UptimeSeconds int64     `json:"uptimeSeconds"`
+}
+
+func (h HeartbeatEvent) PayloadType() string { return "service.heartbeat.v1" }
+
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig
@@ -29,18 +38,30 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+func (svc Service) Name() string {
+	return "heartbeat"
+}
+
+func (svc Service) RegisterPayloads(reg core.PayloadRegistry) error {
+	if err := reg.Register("heartbeat", func() any { return &HeartbeatEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register heartbeat alias: %w", err)
+		}
+	}
+	if err := reg.Register("service.heartbeat.v1", func() any { return &HeartbeatEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register service.heartbeat.v1: %w", err)
+		}
+	}
+	return nil
+}
+
 func (svc Service) ValidateConfig() []error {
 	return nil
 }
 
 func (svc Service) Initialize() error {
 	return nil
-}
-
-type Event struct {
-	Now           time.Time
-	Uptime        string
-	UptimeSeconds int64
 }
 
 func (svc Service) Check() error {
@@ -55,20 +76,20 @@ func (svc Service) Check() error {
 	}
 
 	now := time.Now()
-	heartbeat := Event{
+	heartbeat := HeartbeatEvent{
 		Now:           now,
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
 
-	// generate correlation id for this check to tie together the events and metrics in the backend
-	correlationId := uuid.New().String()
+	// generate correlation ID for this check to tie together the events and metrics in the backend
+	correlationID := uuid.New().String()
 	if !restartNotified {
 		// send an alert on service startup
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 		err := messenger.Send(core.Message{
-			Correlation: correlationId,
+			Correlation: correlationID,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
@@ -82,7 +103,7 @@ func (svc Service) Check() error {
 	}
 
 	eventErr := messenger.Send(core.Message{
-		Correlation: correlationId,
+		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -97,7 +118,7 @@ func (svc Service) Check() error {
 	}
 
 	metricErr := messenger.Send(core.Message{
-		Correlation: correlationId,
+		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

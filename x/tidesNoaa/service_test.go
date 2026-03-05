@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
+	testutil "keyop/core/testutil"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,32 +25,6 @@ import (
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-type mockMessenger struct {
-	messages []core.Message
-	mu       sync.Mutex
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error { return nil }
-func (m *mockMessenger) SeekToEnd(_ string, _ string) error                         { return nil }
-func (m *mockMessenger) SetDataDir(_ string)                                        {}
-func (m *mockMessenger) SetHostname(_ string)                                       {}
-func (m *mockMessenger) GetStats() core.MessengerStats                              { return core.MessengerStats{} }
 
 // mockOsProvider intercepts file I/O into an in-memory map while delegating
 // MkdirAll to the real OS so directory creation works.
@@ -785,7 +760,7 @@ func TestYAMLRoundTrip(t *testing.T) {
 func TestBackfillExtremes(t *testing.T) {
 	now := time.Now()
 	osP := newMockOsProvider(t)
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 	initSvc(t, svc)
 
@@ -817,7 +792,7 @@ func TestBackfillExtremes(t *testing.T) {
 func TestValidateConfig(t *testing.T) {
 	t.Run("missing stationId", func(t *testing.T) {
 		osP := newMockOsProvider(t)
-		deps := makeDeps(t, &mockMessenger{}, osP)
+		deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 		cfg := core.ServiceConfig{
 			Name:   "tide-test",
 			Type:   "tidesNoaa",
@@ -831,7 +806,7 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("valid config", func(t *testing.T) {
 		osP := newMockOsProvider(t)
-		deps := makeDeps(t, &mockMessenger{}, osP)
+		deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 		svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 		errs := svc.ValidateConfig()
 		assert.Empty(t, errs)
@@ -840,7 +815,7 @@ func TestValidateConfig(t *testing.T) {
 
 func TestInitialize_DefaultDataDir(t *testing.T) {
 	osP := newMockOsProvider(t)
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 	initSvc(t, svc)
 	assert.Equal(t, filepath.Join(osP.dir, ".keyop", "tides"), svc.dataDir)
@@ -853,7 +828,7 @@ func TestInitialize_DefaultDataDir(t *testing.T) {
 func TestInitialize_CustomDataDir(t *testing.T) {
 	osP := newMockOsProvider(t)
 	customDir := filepath.Join(t.TempDir(), "custom-tides")
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", map[string]interface{}{
 		"dataDir": customDir,
 	})).(*Service)
@@ -868,7 +843,7 @@ func TestInitialize_FetchesStationCoordinates(t *testing.T) {
 	defer meta.Close()
 
 	osP := newMockOsProvider(t)
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9446705", nil)).(*Service)
 	svc.metadataBase = meta.URL
 	require.NoError(t, svc.Initialize())
@@ -885,7 +860,7 @@ func TestInitialize_ExplicitCoordsSkipFetch(t *testing.T) {
 	defer meta.Close()
 
 	osP := newMockOsProvider(t)
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", map[string]interface{}{
 		"lat": 37.7749, "lon": -122.4194,
 	})).(*Service)
@@ -898,7 +873,7 @@ func TestInitialize_ExplicitCoordsSkipFetch(t *testing.T) {
 
 func TestDayFilePath(t *testing.T) {
 	osP := newMockOsProvider(t)
-	deps := makeDeps(t, &mockMessenger{}, osP)
+	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 	initSvc(t, svc)
 
@@ -922,7 +897,7 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -935,9 +910,9 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 	err := svc.Check()
 	require.NoError(t, err)
 
-	messenger.mu.Lock()
-	msgs := messenger.messages
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	msgs := messenger.SentMessages
+	messenger.Mu.Unlock()
 
 	require.GreaterOrEqual(t, len(msgs), 1)
 	// First message must always be the tide event.
@@ -981,7 +956,7 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -1005,9 +980,9 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 
 	require.NoError(t, svc.Check())
 
-	messenger.mu.Lock()
-	msgs := messenger.messages
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	msgs := messenger.SentMessages
+	messenger.Mu.Unlock()
 
 	events := map[string][]core.Message{}
 	for _, m := range msgs {
@@ -1056,7 +1031,7 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		Window12Lunar: windowWithHighLow(14.0, 0.2),
 	}
 
-	makeService := func(t *testing.T, messenger *mockMessenger) *Service {
+	makeService := func(t *testing.T, messenger *testutil.FakeMessenger) *Service {
 		t.Helper()
 		osP := newMockOsProvider(t)
 		deps := makeDeps(t, messenger, osP)
@@ -1067,13 +1042,13 @@ func TestSendExtremeTideStatus(t *testing.T) {
 	}
 
 	t.Run("warning when rising toward extreme high", func(t *testing.T) {
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		svc := makeService(t, messenger)
 		peak := &TidePeak{Type: "high", Value: 11.0, Time: "2026-03-01 14:00"} // beats 1-lunar-cycle record of 10.0
 		require.NoError(t, svc.sendExtremeTideStatus(messenger, peak, "rising", extremes))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "extreme_tide")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
+		messenger.Mu.Unlock()
 		require.NotEmpty(t, msgs)
 		warnings := 0
 		for _, m := range msgs {
@@ -1086,26 +1061,26 @@ func TestSendExtremeTideStatus(t *testing.T) {
 	})
 
 	t.Run("ok when rising but next peak is not extreme", func(t *testing.T) {
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		svc := makeService(t, messenger)
 		peak := &TidePeak{Type: "high", Value: 8.0, Time: "2026-03-01 14:00"} // below all records
 		require.NoError(t, svc.sendExtremeTideStatus(messenger, peak, "rising", extremes))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "extreme_tide")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
+		messenger.Mu.Unlock()
 		for _, m := range msgs {
 			assert.Equal(t, "ok", m.Status)
 		}
 	})
 
 	t.Run("warning when falling toward extreme low", func(t *testing.T) {
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		svc := makeService(t, messenger)
 		peak := &TidePeak{Type: "low", Value: 0.1, Time: "2026-03-01 18:00"} // beats all low records
 		require.NoError(t, svc.sendExtremeTideStatus(messenger, peak, "falling", extremes))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "extreme_tide")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
+		messenger.Mu.Unlock()
 		warnings := 0
 		for _, m := range msgs {
 			if m.Status == "warning" {
@@ -1117,7 +1092,7 @@ func TestSendExtremeTideStatus(t *testing.T) {
 	})
 
 	t.Run("no message sent when status has not changed", func(t *testing.T) {
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		svc := makeService(t, messenger)
 		// Pre-seed status as ok for all windows.
 		svc.extremeTideStatus = map[string]string{
@@ -1125,14 +1100,14 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		}
 		peak := &TidePeak{Type: "high", Value: 8.0, Time: "2026-03-01 14:00"}
 		require.NoError(t, svc.sendExtremeTideStatus(messenger, peak, "rising", extremes))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "extreme_tide")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
+		messenger.Mu.Unlock()
 		assert.Empty(t, msgs, "no message should be sent when status unchanged")
 	})
 
 	t.Run("status transitions from warning to ok when peak is no longer extreme", func(t *testing.T) {
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		svc := makeService(t, messenger)
 		// Start in warning state.
 		svc.extremeTideStatus = map[string]string{
@@ -1140,9 +1115,9 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		}
 		peak := &TidePeak{Type: "high", Value: 8.0, Time: "2026-03-01 14:00"} // not extreme
 		require.NoError(t, svc.sendExtremeTideStatus(messenger, peak, "rising", extremes))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "extreme_tide")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
+		messenger.Mu.Unlock()
 		require.NotEmpty(t, msgs)
 		for _, m := range msgs {
 			assert.Equal(t, "ok", m.Status)
@@ -1196,7 +1171,7 @@ func runHighLowAlertTest(t *testing.T, base time.Time, records []TideRecord, wan
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 	initSvc(t, svc)
@@ -1206,9 +1181,9 @@ func runHighLowAlertTest(t *testing.T, base time.Time, records []TideRecord, wan
 
 	require.NoError(t, svc.Check())
 
-	messenger.mu.Lock()
-	msgs := messenger.messages
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	msgs := messenger.SentMessages
+	messenger.Mu.Unlock()
 
 	evts := map[string][]core.Message{}
 	for _, m := range msgs {
@@ -1243,7 +1218,7 @@ func TestCheck_NoDoublePeakAlert(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
 	initSvc(t, svc)
@@ -1253,16 +1228,16 @@ func TestCheck_NoDoublePeakAlert(t *testing.T) {
 
 	// First Check — alert should fire once.
 	require.NoError(t, svc.Check())
-	messenger.mu.Lock()
-	firstCount := len(filterByEvent(messenger.messages, "high_tide_alert"))
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	firstCount := len(filterByEvent(messenger.SentMessages, "high_tide_alert"))
+	messenger.Mu.Unlock()
 	assert.Equal(t, 1, firstCount, "first Check should send exactly one high_tide_alert")
 
 	// Second Check — same records, peak already alerted — must not re-fire.
 	require.NoError(t, svc.Check())
-	messenger.mu.Lock()
-	secondCount := len(filterByEvent(messenger.messages, "high_tide_alert"))
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	secondCount := len(filterByEvent(messenger.SentMessages, "high_tide_alert"))
+	messenger.Mu.Unlock()
 	assert.Equal(t, 1, secondCount, "second Check must not duplicate the high_tide_alert")
 }
 
@@ -1293,7 +1268,7 @@ func TestCheck_FetchesMissingDayFiles(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -1303,11 +1278,11 @@ func TestCheck_FetchesMissingDayFiles(t *testing.T) {
 	err := svc.Check()
 	require.NoError(t, err)
 
-	messenger.mu.Lock()
-	count := len(messenger.messages)
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	count := len(messenger.SentMessages)
+	messenger.Mu.Unlock()
 	assert.GreaterOrEqual(t, count, 1)
-	assert.Equal(t, "tide", messenger.messages[0].Event)
+	assert.Equal(t, "tide", messenger.SentMessages[0].Event)
 }
 
 func TestCheck_RefreshesStaleFile(t *testing.T) {
@@ -1326,7 +1301,7 @@ func TestCheck_RefreshesStaleFile(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -1339,9 +1314,9 @@ func TestCheck_RefreshesStaleFile(t *testing.T) {
 	err := svc.Check()
 	require.NoError(t, err)
 
-	messenger.mu.Lock()
-	msgs := messenger.messages
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	msgs := messenger.SentMessages
+	messenger.Mu.Unlock()
 	require.GreaterOrEqual(t, len(msgs), 1)
 	assert.Equal(t, "tide", msgs[0].Event)
 }
@@ -1351,7 +1326,7 @@ func TestCheck_PropagatesTodayFetchError(t *testing.T) {
 	defer server.Close()
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -1362,9 +1337,9 @@ func TestCheck_PropagatesTodayFetchError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "No data was found.")
 
-	messenger.mu.Lock()
-	count := len(messenger.messages)
-	messenger.mu.Unlock()
+	messenger.Mu.Lock()
+	count := len(messenger.SentMessages)
+	messenger.Mu.Unlock()
 	assert.Equal(t, 0, count)
 }
 
@@ -1380,7 +1355,7 @@ func TestCheck_UsesYesterdayRecordsNearMidnight(t *testing.T) {
 	tRecords := buildRecords(time.Date(2026, 3, 1, 0, 6, 0, 0, time.Local), 10)
 
 	osP := newMockOsProvider(t)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger, osP)
 
 	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
@@ -1543,9 +1518,9 @@ func TestMaybeSendTideReport(t *testing.T) {
 	// Seattle coordinates — reliable sunrise/sunset year-round.
 	const lat, lon = 47.6062, -122.3321
 
-	makeReportSvc := func(t *testing.T, extraCfg map[string]interface{}) (*Service, *mockMessenger) {
+	makeReportSvc := func(t *testing.T, extraCfg map[string]interface{}) (*Service, *testutil.FakeMessenger) {
 		t.Helper()
-		messenger := &mockMessenger{}
+		messenger := &testutil.FakeMessenger{}
 		osP := newMockOsProvider(t)
 		cfg := makeCfg("9414290", extraCfg)
 		deps := makeDeps(t, messenger, osP)
@@ -1558,9 +1533,9 @@ func TestMaybeSendTideReport(t *testing.T) {
 		svc, messenger := makeReportSvc(t, nil)
 		now := time.Date(2026, 3, 1, 5, 0, 0, 0, time.Local)
 		require.NoError(t, svc.maybeSendTideReport(messenger, now))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		assert.Empty(t, msgs)
 	})
 
@@ -1572,9 +1547,9 @@ func TestMaybeSendTideReport(t *testing.T) {
 		now := time.Date(2026, 3, 1, 1, 30, 0, 0, time.Local) // 01:30 — before 04:00
 		require.NoError(t, svc.maybeSendTideReport(messenger, now))
 
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		require.Len(t, msgs, 1, "first-run report should fire immediately regardless of time")
 	})
 
@@ -1584,9 +1559,9 @@ func TestMaybeSendTideReport(t *testing.T) {
 		// Simulate a service that has already sent a report yesterday.
 		svc.lastReportDay = localMidnight(now).AddDate(0, 0, -1)
 		require.NoError(t, svc.maybeSendTideReport(messenger, now))
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		assert.Empty(t, msgs)
 	})
 
@@ -1610,17 +1585,17 @@ func TestMaybeSendTideReport(t *testing.T) {
 
 		require.NoError(t, svc.maybeSendTideReport(messenger, now))
 
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		require.Len(t, msgs, 1)
 		assert.Contains(t, msgs[0].Text, "9414290")
 
 		// Second call same day — should not send again.
 		require.NoError(t, svc.maybeSendTideReport(messenger, now.Add(time.Hour)))
-		messenger.mu.Lock()
-		msgs = filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs = filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		assert.Len(t, msgs, 1, "report must not be sent twice in one day")
 	})
 
@@ -1632,9 +1607,9 @@ func TestMaybeSendTideReport(t *testing.T) {
 		require.NoError(t, svc.maybeSendTideReport(messenger, day1))
 		require.NoError(t, svc.maybeSendTideReport(messenger, day2))
 
-		messenger.mu.Lock()
-		msgs := filterByEvent(messenger.messages, "tide_report")
-		messenger.mu.Unlock()
+		messenger.Mu.Lock()
+		msgs := filterByEvent(messenger.SentMessages, "tide_report")
+		messenger.Mu.Unlock()
 		assert.Len(t, msgs, 2, "report should fire once per calendar day")
 	})
 

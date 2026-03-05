@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"runtime"
 	"testing"
 	"time"
@@ -11,30 +12,9 @@ import (
 
 // ── test helpers ────────────────────────────────────────────────────────────
 
-type mockMessenger struct {
-	messages []core.Message
+type errorMessenger struct {
+	payloadRegistry core.PayloadRegistry
 }
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(_ context.Context, _, _, _, _ string, _ time.Duration, _ func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(_ context.Context, _, _, _, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(_, _, _ string, _ int64) error { return nil }
-func (m *mockMessenger) SeekToEnd(_, _ string) error                  { return nil }
-func (m *mockMessenger) SetDataDir(_ string)                          {}
-func (m *mockMessenger) SetHostname(_ string)                         {}
-func (m *mockMessenger) GetStats() core.MessengerStats                { return core.MessengerStats{} }
-
-type errorMessenger struct{}
 
 func (e *errorMessenger) Send(_ core.Message) error { return fmt.Errorf("send failed") }
 func (e *errorMessenger) Subscribe(_ context.Context, _, _, _, _ string, _ time.Duration, _ func(core.Message) error) error {
@@ -48,6 +28,8 @@ func (e *errorMessenger) SeekToEnd(_, _ string) error                  { return 
 func (e *errorMessenger) SetDataDir(_ string)                          {}
 func (e *errorMessenger) SetHostname(_ string)                         {}
 func (e *errorMessenger) GetStats() core.MessengerStats                { return core.MessengerStats{} }
+func (e *errorMessenger) GetPayloadRegistry() core.PayloadRegistry     { return nil }
+func (e *errorMessenger) SetPayloadRegistry(core.PayloadRegistry)      {}
 
 func makeDeps(fakeOs *core.FakeOsProvider, messenger core.MessengerApi) core.Dependencies {
 	deps := core.Dependencies{}
@@ -348,7 +330,7 @@ func TestCheck_Darwin_TwoDevices(t *testing.T) {
 	}
 
 	fakeOs := makeFakeOs([]byte(sampleIoregOutput), []byte(sampleSPOutput), nil, nil)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {
@@ -358,12 +340,12 @@ func TestCheck_Darwin_TwoDevices(t *testing.T) {
 		t.Fatalf("Check failed: %v", err)
 	}
 
-	if len(messenger.messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d: %v", len(messenger.messages), messenger.messages)
+	if len(messenger.SentMessages) != 2 {
+		t.Fatalf("expected 2 messages, got %d: %v", len(messenger.SentMessages), messenger.SentMessages)
 	}
 
 	foundKeyboard, foundTrackpad := false, false
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.MetricName == "bt_svc.battery.magic_keyboard" && msg.Metric == 78 {
 			foundKeyboard = true
 		}
@@ -372,10 +354,10 @@ func TestCheck_Darwin_TwoDevices(t *testing.T) {
 		}
 	}
 	if !foundKeyboard {
-		t.Errorf("keyboard metric not found: %v", messenger.messages)
+		t.Errorf("keyboard metric not found: %v", messenger.SentMessages)
 	}
 	if !foundTrackpad {
-		t.Errorf("trackpad metric not found: %v", messenger.messages)
+		t.Errorf("trackpad metric not found: %v", messenger.SentMessages)
 	}
 }
 
@@ -385,7 +367,7 @@ func TestCheck_Darwin_DeviceMetrics(t *testing.T) {
 	}
 
 	fakeOs := makeFakeOs([]byte(sampleIoregOutput), []byte(sampleSPOutput), nil, nil)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	cfg := core.ServiceConfig{
 		Name: "bt_svc",
@@ -407,7 +389,7 @@ func TestCheck_Darwin_DeviceMetrics(t *testing.T) {
 	}
 
 	foundKeyboard, foundTrackpad := false, false
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.MetricName == "home.mac.keyboard.battery" && msg.Metric == 78 {
 			foundKeyboard = true
 		}
@@ -416,10 +398,10 @@ func TestCheck_Darwin_DeviceMetrics(t *testing.T) {
 		}
 	}
 	if !foundKeyboard {
-		t.Errorf("keyboard explicit metric not found: %v", messenger.messages)
+		t.Errorf("keyboard explicit metric not found: %v", messenger.SentMessages)
 	}
 	if !foundTrackpad {
-		t.Errorf("trackpad fallback metric not found: %v", messenger.messages)
+		t.Errorf("trackpad fallback metric not found: %v", messenger.SentMessages)
 	}
 }
 
@@ -429,7 +411,7 @@ func TestCheck_Darwin_NoDevices(t *testing.T) {
 	}
 
 	fakeOs := makeFakeOs([]byte(""), []byte(sampleSPOutput), nil, nil)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {
@@ -438,8 +420,8 @@ func TestCheck_Darwin_NoDevices(t *testing.T) {
 	if err := svc.Check(); err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	if len(messenger.messages) != 0 {
-		t.Errorf("expected no messages for no devices, got %d", len(messenger.messages))
+	if len(messenger.SentMessages) != 0 {
+		t.Errorf("expected no messages for no devices, got %d", len(messenger.SentMessages))
 	}
 }
 
@@ -449,7 +431,7 @@ func TestCheck_Darwin_IoregError(t *testing.T) {
 	}
 
 	fakeOs := makeFakeOs(nil, nil, fmt.Errorf("ioreg failed"), nil)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {
@@ -467,7 +449,7 @@ func TestCheck_Darwin_SystemProfilerError(t *testing.T) {
 
 	// ioreg succeeds but system_profiler fails — we should get an error.
 	fakeOs := makeFakeOs([]byte(sampleIoregOutput), nil, nil, fmt.Errorf("sp failed"))
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {
@@ -486,7 +468,7 @@ func TestCheck_Darwin_UnknownMacFallsBackToAddress(t *testing.T) {
 	// system_profiler returns no devices, so the MAC address is used as name.
 	emptySP := `{"SPBluetoothDataType":[{"device_connected":[],"device_not_connected":[]}]}`
 	fakeOs := makeFakeOs([]byte(sampleIoregOutput), []byte(emptySP), nil, nil)
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {
@@ -496,8 +478,8 @@ func TestCheck_Darwin_UnknownMacFallsBackToAddress(t *testing.T) {
 		t.Fatalf("Check failed: %v", err)
 	}
 	// Should have sent 2 messages using the normalised MAC as the device name.
-	if len(messenger.messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(messenger.messages))
+	if len(messenger.SentMessages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(messenger.SentMessages))
 	}
 }
 
@@ -524,7 +506,7 @@ func TestCheck_UnsupportedPlatform(t *testing.T) {
 	}
 
 	fakeOs := &core.FakeOsProvider{}
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(fakeOs, messenger)
 	svc := NewService(deps, makeCfg("bt_svc")).(*Service)
 	if err := svc.Initialize(); err != nil {

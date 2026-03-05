@@ -4,69 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"keyop/core"
+	"keyop/core/testutil"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-type mockMessenger struct {
-	messages      []core.Message
-	subscriptions map[string]func(core.Message) error
-	mu            sync.Mutex
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.subscriptions == nil {
-		m.subscriptions = make(map[string]func(core.Message) error)
-	}
-	m.subscriptions[channelName] = messageHandler
-	return nil
-}
-
-func (m *mockMessenger) trigger(channelName string, msg core.Message) error {
-	m.mu.Lock()
-	handler, ok := m.subscriptions[channelName]
-	m.mu.Unlock()
-	if ok {
-		return handler(msg)
-	}
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 func TestNwsWeatherService(t *testing.T) {
 	// Setup mock server
@@ -128,7 +75,11 @@ func TestNwsWeatherService(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
-	messenger := &mockMessenger{}
+	handlers := make(map[string]func(core.Message) error)
+	messenger := testutil.NewFakeMessenger(testutil.WithSubscribeHook(func(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+		handlers[channelName] = messageHandler
+		return nil
+	}))
 	deps.SetMessenger(messenger)
 	deps.SetContext(context.Background())
 
@@ -156,10 +107,9 @@ func TestNwsWeatherService(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
 
-		messenger.mu.Lock()
-		defer messenger.mu.Unlock()
-		assert.Equal(t, 1, len(messenger.messages))
-		msg := messenger.messages[0]
+		msgs := messenger.Messages()
+		assert.Equal(t, 1, len(msgs))
+		msg := msgs[0]
 		assert.Equal(t, "test-weather", msg.ChannelName)
 		assert.Contains(t, msg.Text, "Mostly cloudy")
 		assert.Contains(t, msg.Summary, "Mostly Cloudy, 28°F")
@@ -177,21 +127,20 @@ func TestNwsWeatherService(t *testing.T) {
 				"lon": -94.0,
 			},
 		}
-		err = messenger.trigger("gps-channel", gpsMsg)
+		handler := handlers["gps-channel"]
+		assert.NotNil(t, handler)
+		err = handler(gpsMsg)
 		assert.NoError(t, err)
 
 		// Check should now use new coordinates and new forecast URL
-		messenger.mu.Lock()
-		messenger.messages = nil
-		messenger.mu.Unlock()
+		messenger.Reset()
 
 		err = svc.Check()
 		assert.NoError(t, err)
 
-		messenger.mu.Lock()
-		defer messenger.mu.Unlock()
-		assert.Equal(t, 1, len(messenger.messages))
-		msg := messenger.messages[0]
+		msgs := messenger.Messages()
+		assert.Equal(t, 1, len(msgs))
+		msg := msgs[0]
 		assert.Contains(t, msg.Text, "Sunny")
 		assert.Contains(t, msg.Summary, "Sunny, 75°F")
 	})

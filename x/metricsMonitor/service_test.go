@@ -1,51 +1,17 @@
 package metricsMonitor
 
 import (
-	"context"
 	"keyop/core"
+	testutil "keyop/core/testutil"
 	"log/slog"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type MockMessenger struct {
-	SentMessages []core.Message
-}
-
-func (m *MockMessenger) Send(msg core.Message) error {
-	m.SentMessages = append(m.SentMessages, msg)
-	return nil
-}
-
-func (m *MockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *MockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *MockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *MockMessenger) SetDataDir(dir string) {}
-
-func (m *MockMessenger) SetHostname(hostname string) {}
-
-func (m *MockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
-
-func testDeps(t *testing.T, messenger core.MessengerApi) core.Dependencies {
+func testDeps(messenger core.MessengerApi) core.Dependencies {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
 
@@ -89,8 +55,8 @@ func TestService_MessageHandler(t *testing.T) {
 	}
 
 	t.Run("trigger above threshold", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -103,7 +69,7 @@ func TestService_MessageHandler(t *testing.T) {
 
 		require.Len(t, messenger.SentMessages, 1)
 		assert.Equal(t, "monitor", messenger.SentMessages[0].ChannelName)
-		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
 		assert.Contains(t, messenger.SentMessages[0].Text, "cpu_load")
 
 		// Transition back to OK
@@ -116,8 +82,8 @@ func TestService_MessageHandler(t *testing.T) {
 	})
 
 	t.Run("trigger below threshold", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -130,13 +96,13 @@ func TestService_MessageHandler(t *testing.T) {
 
 		require.Len(t, messenger.SentMessages, 1)
 		assert.Equal(t, "monitor", messenger.SentMessages[0].ChannelName)
-		assert.Equal(t, "warning", messenger.SentMessages[0].Status)
+		require.Equal(t, "warning", messenger.SentMessages[0].Status)
 		assert.Contains(t, messenger.SentMessages[0].Text, "temp")
 	})
 
 	t.Run("no trigger", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -174,8 +140,8 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, overlappingCfg).(*Service)
 
 		msg := core.Message{
@@ -188,7 +154,7 @@ func TestService_MessageHandler(t *testing.T) {
 
 		require.Len(t, messenger.SentMessages, 1)
 		// critical should take precedence
-		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
 	})
 
 	t.Run("recovery threshold", func(t *testing.T) {
@@ -208,8 +174,8 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, recoveryCfg).(*Service)
 
 		// 1. Above threshold (40.0) -> ALERT
@@ -217,14 +183,14 @@ func TestService_MessageHandler(t *testing.T) {
 		err := svc.messageHandler(msg)
 		assert.NoError(t, err)
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
 
 		// 2. Below threshold but above recovery threshold (39.5) -> STAY ALERT
 		msg.Metric = 39.5
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 		require.Len(t, messenger.SentMessages, 2)
-		assert.Equal(t, "critical", messenger.SentMessages[1].Status)
+		require.Equal(t, "critical", messenger.SentMessages[1].Status)
 
 		// 3. Below recovery threshold (38.5) -> RECOVERED
 		msg.Metric = 38.5
@@ -257,8 +223,8 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfgAll).(*Service)
 
 		msg := core.Message{
@@ -270,12 +236,12 @@ func TestService_MessageHandler(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
 	})
 
 	t.Run("send notification every time", func(t *testing.T) {
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, cfg).(*Service)
 
 		msg := core.Message{
@@ -298,7 +264,7 @@ func TestService_MessageHandler(t *testing.T) {
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 		assert.Len(t, messenger.SentMessages, 3)
-		assert.Equal(t, "ok", messenger.SentMessages[2].Status)
+		require.Equal(t, "ok", messenger.SentMessages[2].Status)
 	})
 }
 
@@ -323,8 +289,8 @@ func TestService_Updates(t *testing.T) {
 		},
 	}
 
-	messenger := &MockMessenger{}
-	deps := testDeps(t, messenger)
+	messenger := &testutil.FakeMessenger{}
+	deps := testDeps(messenger)
 	svc := NewService(deps, cfg).(*Service)
 
 	t.Run("trigger updates threshold", func(t *testing.T) {
@@ -337,7 +303,7 @@ func TestService_Updates(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
+		require.Equal(t, "critical", messenger.SentMessages[0].Status)
 		assert.Equal(t, "CPU LOAD TOO HIGH", messenger.SentMessages[0].Text)
 		assert.Equal(t, "CRITICAL: cpu_load", messenger.SentMessages[0].Summary)
 		assert.Equal(t, "alerting", messenger.SentMessages[0].State)
@@ -360,29 +326,29 @@ func TestService_Updates(t *testing.T) {
 			},
 		}
 
-		messenger := &MockMessenger{}
-		deps := testDeps(t, messenger)
+		messenger := &testutil.FakeMessenger{}
+		deps := testDeps(messenger)
 		svc := NewService(deps, recoveryCfg).(*Service)
 
 		// 1. Trigger
 		msg := core.Message{MetricName: "temp", Metric: 41.0}
 		svc.messageHandler(msg)
-		require.Equal(t, "critical", messenger.SentMessages[0].Status)
+		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 
 		// 2. Above recovery
 		msg.Metric = 39.5
 		svc.messageHandler(msg)
-		require.Equal(t, "critical", messenger.SentMessages[1].Status)
+		assert.Equal(t, "critical", messenger.SentMessages[1].Status)
 
 		// 3. Below recovery
 		msg.Metric = 38.5
 		svc.messageHandler(msg)
-		require.Equal(t, "ok", messenger.SentMessages[2].Status)
+		assert.Equal(t, "ok", messenger.SentMessages[2].Status)
 	})
 }
 
 func TestService_ValidateConfig_Updates(t *testing.T) {
-	deps := testDeps(t, nil)
+	deps := testDeps(nil)
 
 	t.Run("both status and updates", func(t *testing.T) {
 		cfg := core.ServiceConfig{
@@ -459,8 +425,8 @@ func TestService_StateTransitions(t *testing.T) {
 		},
 	}
 
-	messenger := &MockMessenger{}
-	deps := testDeps(t, messenger)
+	messenger := &testutil.FakeMessenger{}
+	deps := testDeps(messenger)
 	svc := NewService(deps, cfg).(*Service)
 
 	// 1. Start in OK state
@@ -531,7 +497,7 @@ func TestService_StateTransitions(t *testing.T) {
 }
 
 func TestService_ValidateConfig(t *testing.T) {
-	deps := testDeps(t, nil)
+	deps := testDeps(nil)
 
 	t.Run("valid config", func(t *testing.T) {
 		cfg := core.ServiceConfig{

@@ -1,43 +1,17 @@
 package heartbeat
 
 import (
-	"context"
-	"keyop/core"
 	"log/slog"
 	"os"
-	"sync"
 	"testing"
-	"time"
+
+	"keyop/core"
+
+	testutil "keyop/core/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type mockMessenger struct {
-	messages []core.Message
-	mu       sync.Mutex
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(_ context.Context, _ string, _ string, _ string, _ string, _ time.Duration, _ func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error { return nil }
-func (m *mockMessenger) SeekToEnd(_ string, _ string) error                         { return nil }
-func (m *mockMessenger) SetDataDir(_ string)                                        {}
-func (m *mockMessenger) SetHostname(_ string)                                       {}
-func (m *mockMessenger) GetStats() core.MessengerStats                              { return core.MessengerStats{} }
 
 func makeDeps(t *testing.T, messenger core.MessengerApi) core.Dependencies {
 	t.Helper()
@@ -68,7 +42,7 @@ func TestHeartbeatCheck(t *testing.T) {
 	// Reset so this test controls the restart message.
 	restartNotified = false
 
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
@@ -77,15 +51,15 @@ func TestHeartbeatCheck(t *testing.T) {
 	require.NoError(t, err)
 
 	// First call: restart + uptime + uptime-metric = 3 messages.
-	require.Len(t, messenger.messages, 3)
+	require.Len(t, messenger.SentMessages, 3)
 
 	events := make(map[string]core.Message)
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		events[msg.Event] = msg
 	}
 
 	// All messages use cfg.Name as channel.
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		assert.Equal(t, "hb-service", msg.ChannelName)
 		assert.Equal(t, "hb-service", msg.ServiceName)
 		assert.Equal(t, "heartbeat", msg.ServiceType)
@@ -103,6 +77,13 @@ func TestHeartbeatCheck(t *testing.T) {
 	assert.NotEmpty(t, uptime.Text)
 	assert.NotNil(t, uptime.Data)
 
+	// Verify typed payload
+	hb, ok := uptime.Data.(HeartbeatEvent)
+	assert.True(t, ok, "expected HeartbeatEvent in Data")
+	assert.NotEmpty(t, hb.Uptime)
+	// UptimeSeconds might be zero if test runs very fast after start
+	// assert.NotZero(t, hb.UptimeSeconds)
+
 	// uptime_metric event
 	metric, ok := events["uptime_metric"]
 	assert.True(t, ok, "expected an uptime-metric event")
@@ -113,7 +94,7 @@ func TestHeartbeatCheck_SubsequentCall_NoRestart(t *testing.T) {
 	// Ensure restartNotified is true so the restart message is suppressed.
 	restartNotified = true
 
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
@@ -122,10 +103,10 @@ func TestHeartbeatCheck_SubsequentCall_NoRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Only uptime + uptime-metric = 2 messages.
-	require.Len(t, messenger.messages, 2)
+	require.Len(t, messenger.SentMessages, 2)
 
 	events := make(map[string]core.Message)
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		events[msg.Event] = msg
 	}
 	assert.Contains(t, events, "uptime_check")
@@ -136,7 +117,7 @@ func TestHeartbeatCheck_SubsequentCall_NoRestart(t *testing.T) {
 func TestHeartbeatCheck_CustomMetricName(t *testing.T) {
 	restartNotified = true
 
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", map[string]interface{}{
 		"metricName": "custom.heartbeat.name",
@@ -146,8 +127,8 @@ func TestHeartbeatCheck_CustomMetricName(t *testing.T) {
 	err := svc.Check()
 	require.NoError(t, err)
 
-	require.Len(t, messenger.messages, 2)
-	for _, msg := range messenger.messages {
+	require.Len(t, messenger.SentMessages, 2)
+	for _, msg := range messenger.SentMessages {
 		assert.Equal(t, "custom.heartbeat.name", msg.MetricName)
 	}
 }
@@ -155,7 +136,7 @@ func TestHeartbeatCheck_CustomMetricName(t *testing.T) {
 func TestHeartbeatCheck_DefaultMetricName(t *testing.T) {
 	restartNotified = true
 
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("my-heartbeat", nil)
 
@@ -163,7 +144,7 @@ func TestHeartbeatCheck_DefaultMetricName(t *testing.T) {
 	err := svc.Check()
 	require.NoError(t, err)
 
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.Event == "uptime" || msg.Event == "uptime-metric" {
 			assert.Equal(t, "my-heartbeat", msg.MetricName)
 		}
@@ -173,17 +154,17 @@ func TestHeartbeatCheck_DefaultMetricName(t *testing.T) {
 func TestHeartbeatCheck_CorrelationShared(t *testing.T) {
 	restartNotified = true
 
-	messenger := &mockMessenger{}
+	messenger := &testutil.FakeMessenger{}
 	deps := makeDeps(t, messenger)
 	cfg := makeCfg("hb-service", nil)
 
 	svc := NewService(deps, cfg).(Service)
 	require.NoError(t, svc.Check())
 
-	require.Len(t, messenger.messages, 2)
-	corr := messenger.messages[0].Correlation
+	require.Len(t, messenger.SentMessages, 2)
+	corr := messenger.SentMessages[0].Correlation
 	assert.NotEmpty(t, corr)
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		assert.Equal(t, corr, msg.Correlation, "all messages should share the same correlation id")
 	}
 }

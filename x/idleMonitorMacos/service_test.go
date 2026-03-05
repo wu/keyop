@@ -1,46 +1,13 @@
 package idleMonitorMacos
 
 import (
-	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/core/testutil"
 	"runtime"
 	"testing"
 	"time"
 )
-
-type mockMessenger struct {
-	messages []core.Message
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 type mockStateStore struct {
 	data map[string]interface{}
@@ -87,7 +54,7 @@ func TestCheck(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	stateStore := &mockStateStore{data: make(map[string]interface{})}
 	deps.SetStateStore(stateStore)
@@ -119,11 +86,11 @@ func TestCheck(t *testing.T) {
 	}
 
 	// Verify event and metrics
-	assertMessage(t, messenger.messages, "idle_test", "active")
-	assertEventData(t, messenger.messages, 0, true) // active duration might be small but > 0
-	assertMetric(t, messenger.messages, "idle_test.idle_duration", 0)
+	assertMessage(t, messenger.SentMessages, "idle_test", "active")
+	assertEventData(t, messenger.SentMessages, 0, true) // active duration might be small but > 0
+	assertMetric(t, messenger.SentMessages, "idle_test.idle_duration", 0)
 
-	messenger.messages = nil // reset
+	messenger.SentMessages = nil // reset
 
 	// 2. Still active, below threshold
 	idleNanos = 5 * 1e9 // 5 seconds
@@ -131,15 +98,15 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMetric(t, messenger.messages, "idle_test.idle_duration", 5)
+	assertMetric(t, messenger.SentMessages, "idle_test.idle_duration", 5)
 	// No alert should be sent
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.Event == "idle_alert" || msg.Event == "active_alert" {
 			t.Errorf("Unexpected alert sent")
 		}
 	}
 
-	messenger.messages = nil
+	messenger.SentMessages = nil
 
 	// 3. Become Idle - exceeds 10s threshold
 	idleNanos = 15 * 1e9 // 15 seconds
@@ -147,8 +114,8 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMessage(t, messenger.messages, "idle_test", "idle")
-	assertMetric(t, messenger.messages, "idle_test.idle_duration", 15)
+	assertMessage(t, messenger.SentMessages, "idle_test", "idle")
+	assertMetric(t, messenger.SentMessages, "idle_test.idle_duration", 15)
 
 	// Verify state saved
 	if stateStore.data["idle_test"] == nil {
@@ -160,7 +127,7 @@ func TestCheck(t *testing.T) {
 		}
 	}
 
-	messenger.messages = nil
+	messenger.SentMessages = nil
 
 	// 4. Stay Idle
 	idleNanos = 20 * 1e9 // 20 seconds
@@ -168,15 +135,15 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMetric(t, messenger.messages, "idle_test.idle_duration", 20)
+	assertMetric(t, messenger.SentMessages, "idle_test.idle_duration", 20)
 	// No new alert
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.Event == "idle_alert" {
 			t.Errorf("Unexpected alert sent while already idle")
 		}
 	}
 
-	messenger.messages = nil
+	messenger.SentMessages = nil
 
 	// 5. Become Active again
 	idleNanos = 0
@@ -184,8 +151,8 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	assertMessage(t, messenger.messages, "idle_test", "active")
-	assertMetric(t, messenger.messages, "idle_test.idle_duration", 0)
+	assertMessage(t, messenger.SentMessages, "idle_test", "active")
+	assertMetric(t, messenger.SentMessages, "idle_test.idle_duration", 0)
 
 	// Verify state saved
 	state := stateStore.data["idle_test"].(ServiceState)
@@ -201,14 +168,14 @@ func TestCheck(t *testing.T) {
 	}
 	// We need to access private fields or check behavior
 	// Let's check if it starts as active (from state)
-	messenger.messages = nil
+	messenger.SentMessages = nil
 	idleNanos = 0
 	err = svc2.Check()
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
 	// Should not trigger transition alert if it was already active in state
-	for _, msg := range messenger.messages {
+	for _, msg := range messenger.SentMessages {
 		if msg.Event == "active_alert" {
 			t.Errorf("Unexpected alert sent after initialization from state")
 		}
@@ -227,7 +194,7 @@ func TestInitialize_NoState(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetOsProvider(fakeOs)
 	deps.SetLogger(&core.FakeLogger{})
-	messenger := &mockMessenger{}
+	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
 	stateStore := &mockStateStore{data: make(map[string]interface{})}
 	deps.SetStateStore(stateStore)
