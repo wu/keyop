@@ -44,8 +44,9 @@ jobs:
           # when using newer Go versions such as 1.26).
           install-mode: source
           # Use the newer output format to avoid the deprecated `github-actions`
-          # output warning. Run over the entire module.
-          args: run --out-format=colored-line-number ./...
+          # output warning. Run over the entire module. Note: do NOT include the
+          # `run` subcommand here because the action itself already invokes it.
+          args: --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
         run: |
