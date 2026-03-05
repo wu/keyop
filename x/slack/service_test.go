@@ -275,6 +275,7 @@ func TestService_Check(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",
+		Subs: map[string]core.ChannelInfo{"events": {Name: "events-ch"}},
 		Config: map[string]interface{}{
 			"token":     "xoxb-test",
 			"appToken":  "xapp-test",

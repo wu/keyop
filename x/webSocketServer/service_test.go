@@ -379,8 +379,9 @@ func TestHandleConnection(t *testing.T) {
 	// 4. Send correlated ack
 	require.NoError(t, conn.WriteJSON(wsMessage{V: 1, Type: "ack", BatchID: received.BatchID}))
 
-	conn.Close()
-
+	if err := conn.Close(); err != nil {
+		t.Logf("failed to close websocket conn: %v", err)
+	}
 	// 5. Test Resume on second connection
 	conn2, teardown2 := setupTestServer(t, svc, certDir)
 	defer teardown2()
@@ -404,7 +405,7 @@ func TestHandleConnection(t *testing.T) {
 	testMsg2 := core.Message{Text: "world", ChannelName: "test-channel"}
 	messenger.subscribeChan <- testMsg2
 
-	safeSetReadDeadline(t, conn2, time.Now().Add(5 * time.Second))
+	safeSetReadDeadline(t, conn2, time.Now().Add(5*time.Second))
 	require.NoError(t, conn2.ReadJSON(&received))
 	safeClearReadDeadline(t, conn2)
 	assert.Equal(t, "batch", received.Type)
@@ -456,9 +457,9 @@ func TestHandleConnection_VersionMismatch(t *testing.T) {
 		Capabilities: &wsCapabilities{Batch: true}}))
 
 	var errMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
 	require.NoError(t, conn.ReadJSON(&errMsg))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 
 	assert.Equal(t, "error", errMsg.Type)
 	assert.Equal(t, wsp.CodeUnsupportedVersion, errMsg.Code)
@@ -466,7 +467,7 @@ func TestHandleConnection_VersionMismatch(t *testing.T) {
 	assert.Equal(t, 99, errMsg.GotV)
 
 	// Server should close; the next read must fail
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(2*time.Second))
 	_, _, nextErr := conn.ReadMessage()
 	assert.Error(t, nextErr, "server should close after version error")
 }
@@ -524,9 +525,9 @@ func TestHandleConnection_Batching(t *testing.T) {
 	received := make([]BatchItem, 0, batchSize)
 	for len(received) < batchSize {
 		var batchMsg wsMessage
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
 		require.NoError(t, conn.ReadJSON(&batchMsg))
-		conn.SetReadDeadline(time.Time{})
+		safeClearReadDeadline(t, conn)
 		assert.Equal(t, "batch", batchMsg.Type)
 		assert.NotEmpty(t, batchMsg.BatchID)
 		assert.NotEmpty(t, batchMsg.Items)
@@ -660,7 +661,7 @@ func TestHandleConnection_ClientBatch_NoAckOnFailure(t *testing.T) {
 	}
 	require.NoError(t, conn.WriteJSON(batch))
 
-	conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	safeSetReadDeadline(t, conn, time.Now().Add(300*time.Millisecond))
 	var unexpected wsMessage
 	err = conn.ReadJSON(&unexpected)
 	assert.Error(t, err, "expected no ack from server when Send fails, but got: %+v", unexpected)
@@ -700,7 +701,9 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 		default:
 		}
 		<-ctx.Done()
-		c.Close()
+		if err := c.Close(); err != nil {
+			t.Logf("failed to close websocket conn: %v", err)
+		}
 	}))
 	t.Cleanup(plainSrv.Close)
 
@@ -733,12 +736,12 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 	go func() {
 		var frames []wsMessage
 		for len(frames) < 2 {
-			clientConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			safeSetReadDeadline(t, clientConn, time.Now().Add(5*time.Second))
 			var m wsMessage
 			if err := clientConn.ReadJSON(&m); err != nil {
 				return
 			}
-			clientConn.SetReadDeadline(time.Time{})
+			safeClearReadDeadline(t, clientConn)
 			if m.Type == "batch" {
 				frames = append(frames, m)
 				rcvdCh <- rcvd{id: m.BatchID}
@@ -759,12 +762,12 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 	// exactly as the real read-loop does.
 	go func() {
 		for {
-			serverConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			safeSetReadDeadline(t, serverConn, time.Now().Add(10*time.Second))
 			var m wsMessage
 			if err := serverConn.ReadJSON(&m); err != nil {
 				return
 			}
-			serverConn.SetReadDeadline(time.Time{})
+			safeClearReadDeadline(t, serverConn)
 			if m.Type == "ack" && m.BatchID != "" {
 				pendingMu.Lock()
 				if w, ok := pending[m.BatchID]; ok {
@@ -863,9 +866,9 @@ func TestHandleConnection_PostHandshakeVersionMismatch(t *testing.T) {
 	}))
 
 	var errMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
 	require.NoError(t, conn.ReadJSON(&errMsg))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 
 	assert.Equal(t, "error", errMsg.Type)
 	assert.Equal(t, wsp.CodeUnsupportedVersion, errMsg.Code)
@@ -875,7 +878,7 @@ func TestHandleConnection_PostHandshakeVersionMismatch(t *testing.T) {
 	assert.Contains(t, errMsg.Message, "99", "message should mention the bad version")
 
 	// Server should close after sending the error
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(2*time.Second))
 	_, _, closeErr := conn.ReadMessage()
 	assert.Error(t, closeErr, "server should close connection after version error frame")
 }
@@ -921,16 +924,16 @@ func TestHandleConnection_BadHandshake(t *testing.T) {
 	}))
 
 	var errMsg wsMessage
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
 	require.NoError(t, conn.ReadJSON(&errMsg))
-	conn.SetReadDeadline(time.Time{})
+	safeClearReadDeadline(t, conn)
 
 	assert.Equal(t, "error", errMsg.Type)
 	assert.Equal(t, wsp.CodeBadHandshake, errMsg.Code)
 	assert.Equal(t, wsp.BadHandshakeMsg, errMsg.Message)
 
 	// Server should close
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	safeSetReadDeadline(t, conn, time.Now().Add(2*time.Second))
 	_, _, closeErr := conn.ReadMessage()
 	assert.Error(t, closeErr, "server should close after BAD_HANDSHAKE error")
 }
@@ -994,7 +997,9 @@ func TestSendBatchAndWaitAck_FlushOnClose(t *testing.T) {
 		c, _ := upgrader.Upgrade(w, r, nil)
 		serverConnCh <- c
 		<-ctx.Done()
-		c.Close()
+		if err := c.Close(); err != nil {
+			t.Logf("failed to close websocket conn: %v", err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 
