@@ -90,8 +90,9 @@ func TestOsProvider_ReadDir(t *testing.T) {
 func TestOsProvider_Stat(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
-
+	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+		assert.NoError(t, err)
+	}
 	info, err := provider.Stat(tmpFile)
 	assert.NoError(t, err)
 	assert.Equal(t, "testfile", info.Name())
@@ -100,8 +101,9 @@ func TestOsProvider_Stat(t *testing.T) {
 func TestOsProvider_Remove(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
-
+	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+		assert.NoError(t, err)
+	}
 	err := provider.Remove(tmpFile)
 	assert.NoError(t, err)
 
@@ -257,8 +259,13 @@ func TestFakeFile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 4, n)
 
-		_, _ = tmp.Seek(0, 0)
-		content, _ := os.ReadFile(tmp.Name())
+		if _, err := tmp.Seek(0, 0); err != nil {
+			t.Fatalf("failed to seek tmp file: %v", err)
+		}
+		content, err := os.ReadFile(tmp.Name())
+		if err != nil {
+			t.Fatalf("failed to read tmp file: %v", err)
+		}
 		assert.Equal(t, "test", string(content))
 	})
 }
@@ -286,8 +293,9 @@ func TestFakeOsProvider_MkdirAll(t *testing.T) {
 func TestOsProvider_Chtimes(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
-
+	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+		assert.NoError(t, err)
+	}
 	now := time.Now()
 	err := provider.Chtimes(tmpFile, now, now)
 	assert.NoError(t, err)

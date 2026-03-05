@@ -86,7 +86,7 @@ func TestPayloadRegistry_Concurrency(t *testing.T) {
 			}
 		}(i)
 
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
 				if _, err := reg.Decode("nonexistent", map[string]string{"foo": "bar"}); err != nil {
@@ -141,7 +141,7 @@ func TestPluginRegisterPayloads_ErrorIsSurfaced(t *testing.T) {
 	reg := newDefaultRegistry(fl)
 
 	// Simulate a plugin that fails registration
-	failReg := func(r PayloadRegistry) error {
+	failReg := func(_ PayloadRegistry) error {
 		return fmt.Errorf("hard failure")
 	}
 

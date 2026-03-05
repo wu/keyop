@@ -76,6 +76,7 @@ var ValidConditionOperators = map[string]bool{
 	"matches":  true,
 }
 
+// ValidateConditions validates a raw conditions slice decoded from config and returns any errors found.
 func ValidateConditions(key string, raw []interface{}) []error {
 	var errs []error
 	for i, cRaw := range raw {

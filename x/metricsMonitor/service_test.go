@@ -332,17 +332,23 @@ func TestService_Updates(t *testing.T) {
 
 		// 1. Trigger
 		msg := core.Message{MetricName: "temp", Metric: 41.0}
-		svc.messageHandler(msg)
+		if err := svc.messageHandler(msg); err != nil {
+			t.Fatalf("messageHandler error: %v", err)
+		}
 		assert.Equal(t, "critical", messenger.SentMessages[0].Status)
 
 		// 2. Above recovery
 		msg.Metric = 39.5
-		svc.messageHandler(msg)
+		if err := svc.messageHandler(msg); err != nil {
+			t.Fatalf("messageHandler error: %v", err)
+		}
 		assert.Equal(t, "critical", messenger.SentMessages[1].Status)
 
 		// 3. Below recovery
 		msg.Metric = 38.5
-		svc.messageHandler(msg)
+		if err := svc.messageHandler(msg); err != nil {
+			t.Fatalf("messageHandler error: %v", err)
+		}
 		assert.Equal(t, "ok", messenger.SentMessages[2].Status)
 	})
 }

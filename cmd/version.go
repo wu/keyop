@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -19,12 +18,12 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print the version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Keyop Version: %s\n", Version)
-			fmt.Printf("Git Commit:    %s\n", Commit)
-			fmt.Printf("Git Branch:    %s\n", Branch)
-			fmt.Printf("Build Time:    %s\n", BuildTime)
-			fmt.Printf("Go Version:    %s\n", runtime.Version())
-			fmt.Printf("OS/Arch:       %s/%s\n", runtime.GOOS, runtime.GOARCH)
+			cmd.Printf("Keyop Version: %s\n", Version)
+			cmd.Printf("Git Commit:    %s\n", Commit)
+			cmd.Printf("Git Branch:    %s\n", Branch)
+			cmd.Printf("Build Time:    %s\n", BuildTime)
+			cmd.Printf("Go Version:    %s\n", runtime.Version())
+			cmd.Printf("OS/Arch:       %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},
 	}
 }

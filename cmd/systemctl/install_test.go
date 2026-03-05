@@ -46,8 +46,14 @@ func TestInstallSystemd(t *testing.T) {
 		t.Fatalf("installSystemd failed: %v", err)
 	}
 
-	exe, _ := os.Executable()
-	exe, _ = filepath.Abs(exe)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("failed to get executable: %v", err)
+	}
+	exe, err = filepath.Abs(exe)
+	if err != nil {
+		t.Fatalf("failed to get absolute path: %v", err)
+	}
 
 	writtenContent := buf.String()
 	if !strings.Contains(writtenContent, "ExecStart="+exe+" run") {

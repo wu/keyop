@@ -264,5 +264,7 @@ func (svc *Service) sendBatch(messenger core.MessengerApi, channelName string, c
 		ServiceType: svc.Cfg.Type,
 		ServiceName: svc.Cfg.Name,
 	}
-	_ = messenger.Send(respMsg)
+	if err := messenger.Send(respMsg); err != nil {
+		svc.Deps.MustGetLogger().Error("ollama: failed to send response", "error", err)
+	}
 }

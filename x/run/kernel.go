@@ -77,12 +77,14 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 						logger.Error("Task run completed with error", "service", task.Name, "error", err)
 						if task.ErrorChannelName != "" {
 							messenger := deps.MustGetMessenger()
-							_ = messenger.Send(core.Message{
+							if err := messenger.Send(core.Message{
 								ChannelName: task.ErrorChannelName,
 								ServiceName: task.Name,
 								Text:        fmt.Sprintf("Task %s failed: %v", task.Name, err),
 								Data:        err.Error(),
-							})
+							}); err != nil {
+								logger.Error("task: failed to send error message", "service", task.Name, "error", err)
+							}
 						}
 					}
 					// Always save last check time

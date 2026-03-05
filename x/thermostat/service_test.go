@@ -156,8 +156,9 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send a cold temp to turn heater ON
-	_ = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20})
-
+	if err := messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 20}); err != nil {
+		assert.NoError(t, err)
+	}
 	// Wait for processing
 	time.Sleep(1 * time.Second)
 

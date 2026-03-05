@@ -73,7 +73,7 @@ func TestFileStateStore(t *testing.T) {
 
 	t.Run("Save error - MkdirAll", func(t *testing.T) {
 		mockOs := FakeOsProvider{
-			MkdirAllFunc: func(path string, perm os.FileMode) error {
+			MkdirAllFunc: func(_ string, perm os.FileMode) error {
 				return os.ErrPermission
 			},
 		}
@@ -85,7 +85,7 @@ func TestFileStateStore(t *testing.T) {
 
 	t.Run("Save error - OpenFile", func(t *testing.T) {
 		mockOs := FakeOsProvider{
-			OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
+			OpenFileFunc: func(_ string, flag int, perm os.FileMode) (FileApi, error) {
 				return nil, os.ErrPermission
 			},
 		}
@@ -103,7 +103,7 @@ func TestFileStateStore(t *testing.T) {
 
 	t.Run("Load error - OpenFile", func(t *testing.T) {
 		mockOs := FakeOsProvider{
-			OpenFileFunc: func(name string, flag int, perm os.FileMode) (FileApi, error) {
+			OpenFileFunc: func(_ string, flag int, perm os.FileMode) (FileApi, error) {
 				return nil, os.ErrPermission
 			},
 		}

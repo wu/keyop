@@ -11,6 +11,7 @@ import (
 	"github.com/MatusOllah/slogcolor"
 )
 
+// InitializeDependencies sets up core dependencies including logger, OS provider, and state/messenger.
 func InitializeDependencies(console bool) core.Dependencies {
 
 	// Set timezone to Pacific
@@ -46,14 +47,14 @@ func InitializeDependencies(console bool) core.Dependencies {
 		logger = slog.New(slogcolor.NewHandler(os.Stdout, slogOptions))
 	} else {
 		logDir := filepath.Join(home, ".keyop", "logs")
-		if err := os.MkdirAll(logDir, 0755); err != nil {
+		if err := os.MkdirAll(logDir, 0750); err != nil {
 			// Fallback to stderr if we can't create the log directory
 			logger = slog.New(slogcolor.NewHandler(os.Stderr, slogOptions))
 			logger.Error("Failed to create log directory", "path", logDir, "error", err)
 		} else {
 			logFileName := "keyop." + time.Now().Format("20060102") + ".log"
 			logFilePath := filepath.Join(logDir, logFileName)
-			f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) //nolint:gosec
 			if err != nil {
 				// Fallback to stderr if we can't open the log file
 				logger = slog.New(slogcolor.NewHandler(os.Stderr, slogOptions))
@@ -62,6 +63,13 @@ func InitializeDependencies(console bool) core.Dependencies {
 				logger = slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{
 					Level: slogOptions.Level,
 				}))
+				// Ensure file is closed on shutdown; log errors if Close fails.
+				defer func() {
+					if err := f.Close(); err != nil {
+						// Use the logger already created to record file close errors.
+						logger.Error("Failed to close log file", "path", logFilePath, "error", err)
+					}
+				}()
 			}
 		}
 	}

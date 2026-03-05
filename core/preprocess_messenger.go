@@ -94,30 +94,37 @@ func (p *PreprocessMessenger) SubscribeExtended(ctx context.Context, source stri
 	return p.inner.SubscribeExtended(ctx, source, channelName, serviceType, serviceName, maxAge, wrappedHandler)
 }
 
+// SetReaderState delegates to the inner Messenger implementation.
 func (p *PreprocessMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
 	return p.inner.SetReaderState(channelName, readerName, fileName, offset)
 }
 
+// SeekToEnd delegates to the inner Messenger implementation.
 func (p *PreprocessMessenger) SeekToEnd(channelName string, readerName string) error {
 	return p.inner.SeekToEnd(channelName, readerName)
 }
 
+// SetDataDir delegates to the inner Messenger implementation.
 func (p *PreprocessMessenger) SetDataDir(dir string) {
 	p.inner.SetDataDir(dir)
 }
 
+// SetHostname delegates to the inner Messenger implementation.
 func (p *PreprocessMessenger) SetHostname(hostname string) {
 	p.inner.SetHostname(hostname)
 }
 
+// GetStats returns messenger internal statistics by delegating to the inner messenger.
 func (p *PreprocessMessenger) GetStats() MessengerStats {
 	return p.inner.GetStats()
 }
 
+// GetPayloadRegistry returns the configured PayloadRegistry from the inner messenger.
 func (p *PreprocessMessenger) GetPayloadRegistry() PayloadRegistry {
 	return p.inner.GetPayloadRegistry()
 }
 
+// SetPayloadRegistry forwards the registry to the inner messenger.
 func (p *PreprocessMessenger) SetPayloadRegistry(reg PayloadRegistry) {
 	p.inner.SetPayloadRegistry(reg)
 }

@@ -33,7 +33,7 @@ func (c *captureMessenger) SetDataDir(_ string)                                 
 func (c *captureMessenger) SetHostname(_ string)                                       {}
 func (c *captureMessenger) GetStats() MessengerStats                                   { return MessengerStats{} }
 func (c *captureMessenger) GetPayloadRegistry() PayloadRegistry                        { return nil }
-func (c *captureMessenger) SetPayloadRegistry(reg PayloadRegistry)                     {}
+func (c *captureMessenger) SetPayloadRegistry(_ PayloadRegistry)                       {}
 
 // subscribeCapture captures the handler passed to Subscribe so tests can invoke it directly.
 type subscribeCapture struct {
@@ -47,8 +47,8 @@ func (s *subscribeCapture) Subscribe(_ context.Context, _ string, _ string, _ st
 	}
 	return nil
 }
-func (s *subscribeCapture) GetPayloadRegistry() PayloadRegistry    { return nil }
-func (s *subscribeCapture) SetPayloadRegistry(reg PayloadRegistry) {}
+func (s *subscribeCapture) GetPayloadRegistry() PayloadRegistry  { return nil }
+func (s *subscribeCapture) SetPayloadRegistry(_ PayloadRegistry) {}
 
 // ============================================================
 // tokenize
@@ -540,8 +540,9 @@ func TestPreprocessMessenger_Subscribe_SubPreprocess_Match(t *testing.T) {
 	var capturedHandler func(Message) error
 	inner := &subscribeCapture{handler: func(h func(Message) error) { capturedHandler = h }}
 	pm := NewPreprocessMessenger(inner, subConds, nil)
-	_ = pm.Subscribe(context.Background(), "src", "ch", "t", "n", 0, handler)
-
+	if err := pm.Subscribe(context.Background(), "src", "ch", "t", "n", 0, handler); err != nil {
+		assert.NoError(t, err)
+	}
 	require.NoError(t, capturedHandler(Message{Status: "warn"}))
 	require.Len(t, received, 1)
 	assert.Equal(t, "processed", received[0].Summary)
@@ -559,8 +560,9 @@ func TestPreprocessMessenger_Subscribe_SubPreprocess_Drop(t *testing.T) {
 	var capturedHandler func(Message) error
 	inner := &subscribeCapture{handler: func(h func(Message) error) { capturedHandler = h }}
 	pm := NewPreprocessMessenger(inner, subConds, nil)
-	_ = pm.Subscribe(context.Background(), "src", "ch", "t", "n", 0, handler)
-
+	if err := pm.Subscribe(context.Background(), "src", "ch", "t", "n", 0, handler); err != nil {
+		assert.NoError(t, err)
+	}
 	require.NoError(t, capturedHandler(Message{Status: "ok"}))
 	assert.Empty(t, received)
 }
@@ -623,10 +625,20 @@ func TestHeartbeatStyleRouting(t *testing.T) {
 	inner := &captureMessenger{}
 	pm := NewPreprocessMessenger(inner, nil, conds)
 
-	_ = pm.Send(Message{Status: "restart"})
-	_ = pm.Send(Message{Status: "uptime"})
-	_ = pm.Send(Message{Status: "uptime-metric"})
-	_ = pm.Send(Message{Status: "unknown"}) // no match → sent unchanged
+	if err := pm.Send(Message{Status: "restart"}); err != nil {
+
+		assert.NoError(t, err)
+
+	}
+	if err := pm.Send(Message{Status: "uptime"}); err != nil {
+		assert.NoError(t, err)
+	}
+	if err := pm.Send(Message{Status: "uptime-metric"}); err != nil {
+		assert.NoError(t, err)
+	}
+	if err := pm.Send(Message{Status: "unknown"}); err != nil {
+		t.Logf("pm.Send failed: %v", err)
+	}
 
 	require.Len(t, inner.Sent, 4)
 	assert.Equal(t, "alerts", inner.Sent[0].ChannelName)

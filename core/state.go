@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 )
 
+// FileStateStore persists state to files under a data directory.
 type FileStateStore struct {
 	DataDir string
 	os      OsProviderApi
 }
 
+// NewFileStateStore creates a FileStateStore rooted at the given dataDir.
 func NewFileStateStore(dataDir string, os OsProviderApi) *FileStateStore {
 	return &FileStateStore{
 		DataDir: dataDir,
@@ -24,6 +26,7 @@ func (s *FileStateStore) getFilePath(key string) string {
 	return filepath.Join(s.DataDir, fmt.Sprintf("state_%s.json", key))
 }
 
+// Save writes a value as JSON to the state file identified by key.
 func (s *FileStateStore) Save(key string, value interface{}) error {
 	path := s.getFilePath(key)
 
@@ -51,6 +54,7 @@ func (s *FileStateStore) Save(key string, value interface{}) error {
 	return err
 }
 
+// Load reads and decodes JSON state from the file identified by key into value.
 func (s *FileStateStore) Load(key string, value interface{}) error {
 	path := s.getFilePath(key)
 
@@ -71,7 +75,8 @@ func (s *FileStateStore) Load(key string, value interface{}) error {
 	return decoder.Decode(value)
 }
 
+// NoOpStateStore is a StateStore that performs no persistence (useful for tests).
 type NoOpStateStore struct{}
 
-func (s *NoOpStateStore) Save(key string, value interface{}) error { return nil }
-func (s *NoOpStateStore) Load(key string, value interface{}) error { return nil }
+func (s *NoOpStateStore) Save(_ string, _ interface{}) error { return nil }
+func (s *NoOpStateStore) Load(_ string, _ interface{}) error { return nil }

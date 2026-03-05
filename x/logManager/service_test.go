@@ -40,12 +40,12 @@ func TestService_Check(t *testing.T) {
 
 	// Create a new log file (should NOT be gzipped)
 	newFile := filepath.Join(tmpDir, "new.log")
-	err = os.WriteFile(newFile, []byte("new log content"), 0644)
+	err = os.WriteFile(newFile, []byte("new log content"), 0600)
 	assert.NoError(t, err)
 
 	// Create an old log file (should BE gzipped)
 	oldFile := filepath.Join(tmpDir, "old.log")
-	err = os.WriteFile(oldFile, []byte("old log content"), 0644)
+	err = os.WriteFile(oldFile, []byte("old log content"), 0600)
 	assert.NoError(t, err)
 
 	// Set modification time to 50 hours ago
@@ -113,7 +113,7 @@ func TestService_Check_Errors(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		deps.SetOsProvider(core.FakeOsProvider{
-			ReadDirFunc: func(dirname string) ([]os.DirEntry, error) {
+			ReadDirFunc: func(_ string) ([]os.DirEntry, error) {
 				return nil, fmt.Errorf("read error")
 			},
 		})
@@ -128,7 +128,7 @@ func TestService_Check_Errors(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		deps.SetOsProvider(core.FakeOsProvider{
-			ReadDirFunc: func(dirname string) ([]os.DirEntry, error) {
+			ReadDirFunc: func(_ string) ([]os.DirEntry, error) {
 				return nil, os.ErrNotExist
 			},
 		})
@@ -145,11 +145,11 @@ func TestService_Check_Filtering(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Subdirectory (should be skipped)
-	err := os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755)
+	err := os.Mkdir(filepath.Join(tmpDir, "subdir"), 0750)
 	assert.NoError(t, err)
 
 	// Non-log file (should be skipped)
-	err = os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("content"), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("content"), 0600)
 	assert.NoError(t, err)
 
 	deps := core.Dependencies{}
@@ -177,7 +177,7 @@ func TestService_gzipFile_Errors(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		deps.SetOsProvider(core.FakeOsProvider{
-			OpenFileFunc: func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+			OpenFileFunc: func(_ string, _ int, _ os.FileMode) (core.FileApi, error) {
 				return nil, fmt.Errorf("open src error")
 			},
 		})
@@ -191,7 +191,7 @@ func TestService_gzipFile_Errors(t *testing.T) {
 		deps := core.Dependencies{}
 		deps.SetLogger(logger)
 		deps.SetOsProvider(core.FakeOsProvider{
-			OpenFileFunc: func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+			OpenFileFunc: func(name string, _ int, _ os.FileMode) (core.FileApi, error) {
 				if strings.HasSuffix(name, ".gz") {
 					return nil, fmt.Errorf("open dest error")
 				}
@@ -232,7 +232,7 @@ func TestService_Check_CustomMaxAge(t *testing.T) {
 
 	// Create a log file that is 12 hours old (should BE gzipped because it > 10h)
 	oldFile := filepath.Join(tmpDir, "old_12h.log")
-	err = os.WriteFile(oldFile, []byte("12h old content"), 0644)
+	err = os.WriteFile(oldFile, []byte("12h old content"), 0600)
 	assert.NoError(t, err)
 	oldTime12 := time.Now().Add(-12 * time.Hour)
 	err = os.Chtimes(oldFile, oldTime12, oldTime12)
@@ -240,7 +240,7 @@ func TestService_Check_CustomMaxAge(t *testing.T) {
 
 	// Create a log file that is 8 hours old (should NOT be gzipped because it < 10h)
 	newFile := filepath.Join(tmpDir, "new_8h.log")
-	err = os.WriteFile(newFile, []byte("8h old content"), 0644)
+	err = os.WriteFile(newFile, []byte("8h old content"), 0600)
 	assert.NoError(t, err)
 	oldTime8 := time.Now().Add(-8 * time.Hour)
 	err = os.Chtimes(newFile, oldTime8, oldTime8)
@@ -290,7 +290,7 @@ func TestService_Check_InvalidMaxAge(t *testing.T) {
 
 	// Create a log file that is 50 hours old (should BE gzipped by default 48h)
 	oldFile := filepath.Join(tmpDir, "old_50h.log")
-	err = os.WriteFile(oldFile, []byte("50h old content"), 0644)
+	err = os.WriteFile(oldFile, []byte("50h old content"), 0600)
 	assert.NoError(t, err)
 	oldTime50 := time.Now().Add(-50 * time.Hour)
 	err = os.Chtimes(oldFile, oldTime50, oldTime50)

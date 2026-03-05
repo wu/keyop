@@ -442,7 +442,9 @@ func TestClientSendsOutgoingBatch(t *testing.T) {
 				total := len(receivedBatch)
 				mu.Unlock()
 				// Ack with matching batchId
-				_ = conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID})
+				if err := conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID}); err != nil {
+					assert.NoError(t, err)
+				}
 				if total >= batchSize {
 					select {
 					case batchReceived <- struct{}{}:
@@ -574,7 +576,9 @@ func TestClientOutboundAtLeastOnce(t *testing.T) {
 					return
 				}
 				// Second connection: ack normally.
-				_ = conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID})
+				if err := conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID}); err != nil {
+					assert.NoError(t, err)
+				}
 				select {
 				case everReceived <- struct{}{}:
 				default:
@@ -682,14 +686,16 @@ func TestClientVersionMismatch(t *testing.T) {
 		conn.SetReadDeadline(time.Time{})
 
 		// Reply with UNSUPPORTED_VERSION error instead of welcome
-		_ = conn.WriteJSON(wsMessage{
+		if err := conn.WriteJSON(wsMessage{
 			V:         protocolVersion,
 			Type:      "error",
 			Code:      wsp.CodeUnsupportedVersion,
 			ExpectedV: protocolVersion,
 			GotV:      hello.V,
 			Message:   wsp.UnsupportedVersionMsg(protocolVersion, hello.V),
-		})
+		}); err != nil {
+			t.Logf("conn.WriteJSON failed: %v", err)
+		}
 
 		// After sending the error we expect the client to close; wait briefly
 		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -808,9 +814,13 @@ func TestClientAckCrossRelease(t *testing.T) {
 					onceClose.Do(func() { close(bothCaptured) })
 
 					// Ack out of order: second received batch first, then first.
-					_ = conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: batches[1].batchID})
+					if err := conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: batches[1].batchID}); err != nil {
+						assert.NoError(t, err)
+					}
 					time.Sleep(20 * time.Millisecond)
-					_ = conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: batches[0].batchID})
+					if err := conn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: batches[0].batchID}); err != nil {
+						assert.NoError(t, err)
+					}
 					allAcked <- struct{}{}
 					allAcked <- struct{}{}
 
@@ -959,12 +969,14 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 		}
 
 		// Send a batch with wrong version — client must reject it
-		_ = conn.WriteJSON(wsMessage{
+		if err := conn.WriteJSON(wsMessage{
 			V:       99,
 			Type:    "batch",
 			BatchID: uuid.New().String(),
 			Items:   []BatchItem{{Payload: core.Message{Text: "bad-v-msg"}}},
-		})
+		}); err != nil {
+			t.Logf("conn.WriteJSON failed: %v", err)
+		}
 
 		// Expect the client to respond with an error frame then close
 		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -1477,7 +1489,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 		}
 		conn.SetReadDeadline(time.Time{})
 
-		_ = conn.WriteJSON(wsMessage{
+		if err := conn.WriteJSON(wsMessage{
 			V:            protocolVersion,
 			Type:         "welcome",
 			ServerID:     uuid.New().String(),
@@ -1486,7 +1498,9 @@ func TestClientSPKIPinMatch(t *testing.T) {
 				PingIntervalMs: int(pingInterval.Milliseconds()),
 				PongTimeoutMs:  int(pongTimeout.Milliseconds()),
 			},
-		})
+		}); err != nil {
+			t.Logf("conn.WriteJSON failed: %v", err)
+		}
 		select {
 		case connected <- struct{}{}:
 		default:

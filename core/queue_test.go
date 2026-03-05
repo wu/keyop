@@ -136,7 +136,12 @@ func TestPersistentQueue_Ack(t *testing.T) {
 	// Next Dequeue should block (we'll check with a timeout)
 	resChan := make(chan string, 1)
 	go func() {
-		item, _, _, _ := pq.Dequeue(context.Background(), "reader1")
+		item, _, _, err := pq.Dequeue(context.Background(), "reader1")
+		if err != nil {
+			t.Errorf("Dequeue error: %v", err)
+			resChan <- ""
+			return
+		}
 		resChan <- item
 	}()
 
@@ -205,8 +210,15 @@ func TestPersistentQueue_Blocking(t *testing.T) {
 
 	resChan := make(chan string, 1)
 	go func() {
-		item, _, _, _ := pq.Dequeue(context.Background(), "test")
-		_ = pq.Ack("test")
+		item, _, _, err := pq.Dequeue(context.Background(), "test")
+		if err != nil {
+			t.Errorf("Dequeue error: %v", err)
+			resChan <- ""
+			return
+		}
+		if err := pq.Ack("test"); err != nil {
+			t.Logf("Ack error: %v", err)
+		}
 		resChan <- item
 	}()
 
@@ -250,7 +262,9 @@ func TestPersistentQueue_DequeueBeforeEnqueue(t *testing.T) {
 		if err != nil {
 			t.Errorf("Dequeue error: %v", err)
 		}
-		_ = pq.Ack("test")
+		if err := pq.Ack("test"); err != nil {
+			assert.NoError(t, err)
+		}
 		resChan <- item
 	}()
 

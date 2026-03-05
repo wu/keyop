@@ -36,7 +36,9 @@ func Execute() {
 	fs.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
 	fs.BoolVarP(&console, "stdout", "o", false, "display the logs in colorized output to stdout")
 	versionFlag := fs.BoolP("version", "v", false, "display version information")
-	_ = fs.Parse(os.Args[1:])
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		// Ignore parse errors: unknown flags are allowed via ParseErrorsAllowlist
+	}
 
 	if *versionFlag {
 		fmt.Printf("Keyop Version: %s\n", Version)

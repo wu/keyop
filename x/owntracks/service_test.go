@@ -129,7 +129,9 @@ func TestService_Initialize_StartsServer(t *testing.T) {
 
 	assert.NoError(t, reqErr)
 	if resp != nil {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("failed to close response body: %v", err)
+		}
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 }
@@ -183,10 +185,12 @@ func TestService_ServeHTTP(t *testing.T) {
 		messenger := deps.MustGetMessenger().(*core.Messenger)
 		allMsgs := make(chan core.Message, 20)
 
-		messenger.Subscribe(context.Background(), "test", "test-owntracks", "owntracks", "test", 0, func(m core.Message) error {
+		if err := messenger.Subscribe(context.Background(), "test", "test-owntracks", "owntracks", "test", 0, func(m core.Message) error {
 			allMsgs <- m
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("Subscribe failed: %v", err)
+		}
 
 		correlationID := "test-uuid-123"
 		testData := map[string]interface{}{
@@ -301,10 +305,12 @@ func TestService_ServeHTTP(t *testing.T) {
 
 		messenger := deps.MustGetMessenger().(*core.Messenger)
 		allMsgs2 := make(chan core.Message, 10)
-		messenger.Subscribe(context.Background(), "test-device", "test-owntracks", "owntracks", "test-device", 0, func(m core.Message) error {
+		if err := messenger.Subscribe(context.Background(), "test-device", "test-owntracks", "owntracks", "test-device", 0, func(m core.Message) error {
 			allMsgs2 <- m
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("Subscribe failed: %v", err)
+		}
 
 		correlationID := "device-mapping-uuid"
 		testData := map[string]interface{}{

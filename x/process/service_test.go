@@ -121,7 +121,9 @@ func TestProcessService(t *testing.T) {
 		err := svc.cmd.Process.Kill()
 		assert.NoError(t, err)
 		//goland:noinspection GoUnhandledErrorResult
-		svc.cmd.Process.Wait()
+		if _, err := svc.cmd.Process.Wait(); err != nil {
+			t.Logf("svc.cmd.Process.Wait failed: %v", err)
+		}
 
 		messenger.SentMessages = nil
 		err = svc.Check()
@@ -139,7 +141,9 @@ func TestProcessService(t *testing.T) {
 	// Cleanup
 	if svc.cmd != nil && svc.cmd.Process != nil {
 		//goland:noinspection GoUnhandledErrorResult
-		svc.cmd.Process.Kill()
+		if err := svc.cmd.Process.Kill(); err != nil {
+			t.Logf("svc.cmd.Process.Kill failed: %v", err)
+		}
 	}
 }
 

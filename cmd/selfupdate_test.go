@@ -35,6 +35,11 @@ func TestInstallUpdate(t *testing.T) {
 
 	gzReader, err := gzip.NewReader(&buf)
 	assert.NoError(t, err)
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			t.Logf("failed to close gzip reader: %v", err)
+		}
+	}()
 
 	logger := &core.FakeLogger{}
 

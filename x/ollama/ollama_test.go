@@ -3,9 +3,10 @@ package ollama
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -28,23 +29,32 @@ func TestClient_Chat(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(resp1); err != nil {
 			t.Fatalf("failed to encode resp1: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 		if err := json.NewEncoder(w).Encode(resp2); err != nil {
 			t.Fatalf("failed to encode resp2: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(server.Close)
 
-	// Parse host and port from server URL
-	// httptest server uses localhost and a random port
-	var port int
-	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(server.URL, "http://localhost:%d", &port)
+	// Parse host and port from server URL. Use url.Parse for robustness.
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		host = u.Hostname()
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
 	}
 
-	client := NewClient("127.0.0.1", port, 1*time.Second, true)
+	client := NewClient(host, port, 1*time.Second, true)
 	messages := []Message{{Role: "user", Content: "Hi"}}
 
 	var received string
@@ -79,17 +89,25 @@ func TestClient_Summarize(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			t.Fatalf("failed to encode resp: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(server.Close)
 
-	var port int
-	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(server.URL, "http://localhost:%d", &port)
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		host = u.Hostname()
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
 	}
 
-	client := NewClient("127.0.0.1", port, 1*time.Second, true)
+	client := NewClient(host, port, 1*time.Second, true)
 	messages := []Message{{Role: "user", Content: "Talk 1"}, {Role: "assistant", Content: "Reply 1"}}
 
 	summary, err := client.Summarize(context.Background(), "test-model", messages)
@@ -116,17 +134,25 @@ func TestClient_Chat_NoStream(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			t.Fatalf("failed to encode resp: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(server.Close)
 
-	var port int
-	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(server.URL, "http://localhost:%d", &port)
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		host = u.Hostname()
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
 	}
 
-	client := NewClient("127.0.0.1", port, 1*time.Second, false)
+	client := NewClient(host, port, 1*time.Second, false)
 	messages := []Message{{Role: "user", Content: "Hi"}}
 
 	var received string
@@ -156,18 +182,26 @@ func TestClient_Chat_NoStream_NoNewline(t *testing.T) {
 			Done:    true,
 		}
 		data, _ := json.Marshal(resp)
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 		// No trailing newline specifically
 	}))
 	t.Cleanup(server.Close)
 
-	var port int
-	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(server.URL, "http://localhost:%d", &port)
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		host = u.Hostname()
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
 	}
 
-	client := NewClient("127.0.0.1", port, 1*time.Second, false)
+	client := NewClient(host, port, 1*time.Second, false)
 	messages := []Message{{Role: "user", Content: "Hi"}}
 
 	var received string
@@ -200,21 +234,33 @@ func TestClient_Chat_Stream_NoNewline(t *testing.T) {
 			Message: Message{Role: "assistant", Content: " world!"},
 			Done:    true,
 		}
-		json.NewEncoder(w).Encode(resp1)
-		w.Write([]byte("\n"))
+		if err := json.NewEncoder(w).Encode(resp1); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 		data, _ := json.Marshal(resp2)
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 		// NO NEWLINE after second part
 	}))
 	t.Cleanup(server.Close)
 
-	var port int
-	fmt.Sscanf(server.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(server.URL, "http://localhost:%d", &port)
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		host = u.Hostname()
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
 	}
 
-	client := NewClient("127.0.0.1", port, 1*time.Second, true)
+	client := NewClient(host, port, 1*time.Second, true)
 	messages := []Message{{Role: "user", Content: "Hi"}}
 
 	var received string

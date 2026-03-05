@@ -67,8 +67,11 @@ func TestMessenger_DLQFailure_DoesNotAckOriginal(t *testing.T) {
 		return errors.New("fail always")
 	}))
 
-	_ = m.Send(Message{ChannelName: channel, Text: "trigger"})
+	if err := m.Send(Message{ChannelName: channel, Text: "trigger"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
 	// Handler should be called
 	select {
 	case <-handlerCalled:
@@ -132,8 +135,11 @@ func TestMessenger_DLQSuccess_AcksOriginal(t *testing.T) {
 		return errors.New("fail always")
 	}))
 
-	_ = m.Send(Message{ChannelName: channel, Text: "to-dlq"})
+	if err := m.Send(Message{ChannelName: channel, Text: "to-dlq"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
 	// Wait for DLQ
 	dlqReceived := make(chan Message, 1)
 	require.NoError(t, m.Subscribe(ctx, "dlq-reader", dlqChannel, "test", "dlq-reader", 0, func(msg Message) error {
@@ -192,8 +198,11 @@ func TestMessenger_RetryCountContract(t *testing.T) {
 		return errors.New("fail")
 	}))
 
-	_ = m.Send(Message{ChannelName: "chan", Text: "retry-test"})
+	if err := m.Send(Message{ChannelName: "chan", Text: "retry-test"}); err != nil {
 
+		assert.NoError(t, err)
+
+	}
 	// Wait until it hits DLQ
 	assert.Eventually(t, func() bool {
 		mu.Lock()
@@ -225,8 +234,9 @@ func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	logPath := filepath.Join(tmpDir, fmt.Sprintf("%s_queue_%s.log", channel, time.Now().Format("20060102")))
-	_ = os.WriteFile(logPath, []byte("invalid json\n"), 0644)
-
+	if err := os.WriteFile(logPath, []byte("invalid json\n"), 0644); err != nil {
+		assert.NoError(t, err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	require.NoError(t, m.Subscribe(ctx, "sub", channel, "test", "test", 0, func(msg Message) error { return nil }))
@@ -301,7 +311,9 @@ func TestEnvelope_PayloadRegistry_Concurrency(t *testing.T) {
 			defer wg.Done()
 			for j := range iterations {
 				typeName := fmt.Sprintf("type-%d-%d", id, j)
-				RegisterPayload(typeName, func() any { return map[string]int{"id": id, "j": j} })
+				if err := RegisterPayload(typeName, func() any { return map[string]int{"id": id, "j": j} }); err != nil {
+					t.Errorf("RegisterPayload failed: %v", err)
+				}
 			}
 		}(i)
 	}
@@ -316,7 +328,9 @@ func TestEnvelope_PayloadRegistry_Concurrency(t *testing.T) {
 					Headers: map[string]string{"payload-type": typeName},
 					Payload: DeviceStatusEvent{DeviceID: "test"},
 				}
-				_, _ = env.UnmarshalPayload()
+				if _, err := env.UnmarshalPayload(); err != nil {
+					t.Logf("env.UnmarshalPayload failed: %v", err)
+				}
 
 				// Also try to unmarshal something we might have just registered
 				regTypeName := fmt.Sprintf("type-%d-%d", id, j)
@@ -324,7 +338,9 @@ func TestEnvelope_PayloadRegistry_Concurrency(t *testing.T) {
 					Headers: map[string]string{"payload-type": regTypeName},
 					Payload: map[string]int{"id": id, "j": j},
 				}
-				_, _ = env2.UnmarshalPayload()
+				if _, err := env2.UnmarshalPayload(); err != nil {
+					t.Logf("env2.UnmarshalPayload failed: %v", err)
+				}
 			}
 		}(i)
 	}

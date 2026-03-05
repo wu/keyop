@@ -162,20 +162,26 @@ func mockNoaaServer(t *testing.T, recordsByDate map[string][]TideRecord, errMsg 
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if errMsg != "" {
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": map[string]string{"message": errMsg},
-			})
+			}); err != nil {
+				t.Logf("failed to encode error response: %v", err)
+			}
 			return
 		}
 		date := r.URL.Query().Get("begin_date")
 		records, ok := recordsByDate[date]
 		if !ok || len(records) == 0 {
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": map[string]string{"message": "No data for " + date},
-			})
+			}); err != nil {
+				t.Logf("failed to encode no-data response: %v", err)
+			}
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"predictions": records})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"predictions": records}); err != nil {
+			assert.NoError(t, err)
+		}
 	}))
 }
 
@@ -184,7 +190,9 @@ func mockNoaaServer(t *testing.T, recordsByDate map[string][]TideRecord, errMsg 
 func noopMetadataServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"stations": []interface{}{}})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"stations": []interface{}{}}); err != nil {
+			assert.NoError(t, err)
+		}
 	}))
 }
 
@@ -203,11 +211,13 @@ func initSvc(t *testing.T, svc *Service) {
 func mockMetadataServer(t *testing.T, lat, lon float64) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"stations": []map[string]interface{}{
 				{"lat": lat, "lng": lon},
 			},
-		})
+		}); err != nil {
+			t.Logf("failed to encode metadata response: %v", err)
+		}
 	}))
 }
 
@@ -341,7 +351,9 @@ func TestFetchDayRecords(t *testing.T) {
 
 	t.Run("errors when data array is empty", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"predictions": []TideRecord{}})
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{"predictions": []TideRecord{}}); err != nil {
+				assert.NoError(t, err)
+			}
 		}))
 		t.Cleanup(server.Close)
 
@@ -840,7 +852,7 @@ func TestInitialize_FetchesStationCoordinates(t *testing.T) {
 	// When lat/lon are absent from config, Initialize should fetch them from
 	// the NOAA metadata API and populate svc.lat/svc.lon.
 	meta := mockMetadataServer(t, 47.18, -122.675)
-	defer meta.Close()
+	t.Cleanup(meta.Close)
 
 	osP := newMockOsProvider(t)
 	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
@@ -857,7 +869,7 @@ func TestInitialize_ExplicitCoordsSkipFetch(t *testing.T) {
 	// called (the no-op server returns empty stations, so if we did call it
 	// lat/lon would be zeroed out — this test verifies they're preserved).
 	meta := noopMetadataServer(t)
-	defer meta.Close()
+	t.Cleanup(meta.Close)
 
 	osP := newMockOsProvider(t)
 	deps := makeDeps(t, &testutil.FakeMessenger{}, osP)

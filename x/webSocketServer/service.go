@@ -271,23 +271,27 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	var hello wsMessage
 	if err := json.Unmarshal(raw, &hello); err != nil || hello.Type != "hello" {
 		logger.Error("webSocketServer: expected hello", "raw", string(raw))
-		_ = cw.writeJSON(wsMessage{
+		if err := cw.writeJSON(wsMessage{
 			V:       protocolVersion,
 			Type:    "error",
 			Code:    wsp.CodeBadHandshake,
 			Message: wsp.BadHandshakeMsg,
-		})
+		}); err != nil {
+			logger.Error("webSocketServer: failed to write JSON", "error", err)
+		}
 		return
 	}
 	if hello.V != protocolVersion {
-		_ = cw.writeJSON(wsMessage{
+		if err := cw.writeJSON(wsMessage{
 			V:         protocolVersion,
 			Type:      "error",
 			Code:      wsp.CodeUnsupportedVersion,
 			ExpectedV: protocolVersion,
 			GotV:      hello.V,
 			Message:   wsp.UnsupportedVersionMsg(protocolVersion, hello.V),
-		})
+		}); err != nil {
+			logger.Error("webSocketServer: failed to write JSON", "error", err)
+		}
 		return
 	}
 
@@ -365,7 +369,9 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 					}
 				}
 				if !failed && msg.BatchID != "" {
-					_ = cw.writeJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID, Queue: msg.Queue})
+					if err := cw.writeJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: msg.BatchID, Queue: msg.Queue}); err != nil {
+						logger.Error("webSocketServer: failed to write JSON", "error", err)
+					}
 				}
 			}
 		}
@@ -388,14 +394,16 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 			// Enforce protocol version on every post-handshake frame.
 			if msg.V != protocolVersion {
 				logger.Error("webSocketServer: version mismatch on frame", "type", msg.Type, "v", msg.V)
-				_ = cw.writeJSON(wsMessage{
+				if err := cw.writeJSON(wsMessage{
 					V:         protocolVersion,
 					Type:      "error",
 					Code:      wsp.CodeUnsupportedVersion,
 					ExpectedV: protocolVersion,
 					GotV:      msg.V,
 					Message:   wsp.UnsupportedVersionMsg(protocolVersion, msg.V),
-				})
+				}); err != nil {
+					logger.Error("webSocketServer: failed to write JSON", "error", err)
+				}
 				cw.close()
 				return
 			}

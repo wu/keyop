@@ -191,7 +191,7 @@ func TestService_Check(t *testing.T) {
 		wsMu.Unlock()
 
 		// Send hello
-		conn.WriteJSON(map[string]interface{}{"type": "hello"})
+		require.NoError(t, conn.WriteJSON(map[string]interface{}{"type": "hello"}))
 
 		// Wait for a message from the client (the ack) or context cancel
 		for {

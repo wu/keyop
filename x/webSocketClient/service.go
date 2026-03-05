@@ -402,7 +402,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 	pendingMu := sync.Mutex{}
 	pending := make(map[string]*pendingAck)
 
-	// ── Send Resume messages ──────────────────────────────────────────────────
+	// ── (Send) Resume messages ──────────────────────────────────────────────────
 	svc.mu.Lock()
 	for q, s := range svc.state {
 		resumeMsg := wsMessage{
@@ -610,14 +610,16 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 		// Enforce protocol version on every post-handshake frame.
 		if msg.V != protocolVersion {
 			logger.Error("webSocketClient: version mismatch on frame", "type", msg.Type, "v", msg.V)
-			_ = cw.writeJSON(wsMessage{
+			if err := cw.writeJSON(wsMessage{
 				V:         protocolVersion,
 				Type:      "error",
 				Code:      wsp.CodeUnsupportedVersion,
 				ExpectedV: protocolVersion,
 				GotV:      msg.V,
 				Message:   wsp.UnsupportedVersionMsg(protocolVersion, msg.V),
-			})
+			}); err != nil {
+				logger.Error("webSocketClient: failed to write JSON", "error", err)
+			}
 			cw.close()
 			return
 		}
@@ -662,6 +664,7 @@ func (svc *Service) handleConnection(conn *websocket.Conn) {
 				if localName, ok := remoteToLocal[item.Payload.ChannelName]; ok {
 					item.Payload.ChannelName = localName
 				}
+				logger.Info("webSocketClient: received", "uuid", item.Payload.Uuid, "channel", item.Payload.ChannelName, "hostname", item.Payload.Hostname)
 				if err := messenger.Send(item.Payload); err != nil {
 					logger.Error("webSocketClient: failed to forward batched message", "error", err)
 					failed = true

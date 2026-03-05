@@ -45,7 +45,9 @@ func TestMessenger_SubscribeAndSend_ToMultipleSubscribers(t *testing.T) {
 
 	// Send in a goroutine to avoid blocking on unbuffered channels
 	go func() {
-		_ = m.Send(Message{ChannelName: "alpha", Text: "hello"})
+		if err := m.Send(Message{ChannelName: "alpha", Text: "hello"}); err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
 	}()
 
 	time.Sleep(1 * time.Second)
@@ -81,7 +83,11 @@ func TestMessenger_Send_IsolatedByChannel(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send to channel "a" only
-	go func() { _ = m.Send(Message{ChannelName: "a", Text: "foo"}) }()
+	go func() {
+		if err := m.Send(Message{ChannelName: "a", Text: "foo"}); err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
+	}()
 
 	time.Sleep(1 * time.Second)
 
@@ -112,7 +118,9 @@ func TestMessenger_Send_OrderPreserved(t *testing.T) {
 
 	// Send three messages in order in a single goroutine
 	for i := 1; i <= 3; i++ {
-		_ = m.Send(Message{ChannelName: "ordered", Text: fmt.Sprintf("%d", i)})
+		if err := m.Send(Message{ChannelName: "ordered", Text: fmt.Sprintf("%d", i)}); err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
 	}
 
 	time.Sleep(1 * time.Second)
@@ -213,7 +221,9 @@ func TestMessenger_Send_DataPassedInMessage(t *testing.T) {
 	p := payload{K: "v", N: 123}
 
 	go func() {
-		_ = m.Send(Message{ChannelName: "json", Text: "with-data", Data: p})
+		if err := m.Send(Message{ChannelName: "json", Text: "with-data", Data: p}); err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
 	}()
 
 	time.Sleep(1 * time.Second)
@@ -283,7 +293,11 @@ func TestNewMessenger_HostnameError_LoggedAndEmptyHostname(t *testing.T) {
 	err = m.Subscribe(context.Background(), "test", "test", "testType", "test", 0, func(msg Message) error { gotMessage = msg; return nil })
 	assert.NoError(t, err)
 
-	go func() { _ = m.Send(Message{ChannelName: "test", Text: "ping"}) }()
+	go func() {
+		if err := m.Send(Message{ChannelName: "test", Text: "ping"}); err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
+	}()
 
 	time.Sleep(1 * time.Second)
 

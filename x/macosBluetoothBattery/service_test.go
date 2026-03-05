@@ -1,3 +1,4 @@
+//nolint:revive
 package macosBluetoothBattery
 
 import (
@@ -13,7 +14,6 @@ import (
 // ── test helpers ────────────────────────────────────────────────────────────
 
 type errorMessenger struct {
-	payloadRegistry core.PayloadRegistry
 }
 
 func (e *errorMessenger) Send(_ core.Message) error { return fmt.Errorf("send failed") }
@@ -314,7 +314,7 @@ func TestValidateConfig_ValidPubs(t *testing.T) {
 func makeFakeOs(ioregOut, spOut []byte, ioregErr, spErr error) *core.FakeOsProvider {
 	call := 0
 	fakeOs := &core.FakeOsProvider{}
-	fakeOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fakeOs.CommandFunc = func(_ string, arg ...string) core.CommandApi {
 		call++
 		if call == 1 {
 			return &core.FakeCommand{CombinedOutputFunc: func() ([]byte, error) { return ioregOut, ioregErr }}

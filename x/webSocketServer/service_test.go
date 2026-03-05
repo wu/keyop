@@ -205,7 +205,9 @@ func (f *fakeMessenger) SubscribeExtended(ctx context.Context, _ string, channel
 				return
 			case msg := <-f.subscribeChan:
 				if msg.ChannelName == channelName {
-					_ = messageHandler(msg, "testfile", 0)
+					if err := messageHandler(msg, "testfile", 0); err != nil {
+						fmt.Printf("messageHandler error: %v\n", err)
+					}
 				}
 			}
 		}
@@ -737,9 +739,13 @@ func TestHandleConnection_AckCorrelation(t *testing.T) {
 		}
 		// Ack second frame first, then first frame.
 		time.Sleep(10 * time.Millisecond)
-		_ = clientConn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: frames[1].BatchID})
+		if err := clientConn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: frames[1].BatchID}); err != nil {
+			assert.NoError(t, err)
+		}
 		time.Sleep(10 * time.Millisecond)
-		_ = clientConn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: frames[0].BatchID})
+		if err := clientConn.WriteJSON(wsMessage{V: protocolVersion, Type: "ack", BatchID: frames[0].BatchID}); err != nil {
+			assert.NoError(t, err)
+		}
 	}()
 
 	// Server-side: start a goroutine that reads ack frames and signals pending map,

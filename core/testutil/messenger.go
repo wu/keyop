@@ -60,6 +60,7 @@ func WithSubscribeExtendedHook(h func(ctx context.Context, source string, channe
 	return func(f *FakeMessenger) { f.SubscribeExtendedHook = h }
 }
 
+// Send records a message into the fake's SentMessages slice.
 func (f *FakeMessenger) Send(msg core.Message) error {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
@@ -67,6 +68,7 @@ func (f *FakeMessenger) Send(msg core.Message) error {
 	return nil
 }
 
+// Subscribe calls the optional SubscribeHook if present, otherwise is a no-op.
 func (f *FakeMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
 	if f.SubscribeHook != nil {
 		return f.SubscribeHook(ctx, sourceName, channelName, serviceType, serviceName, maxAge, messageHandler)
@@ -74,6 +76,7 @@ func (f *FakeMessenger) Subscribe(ctx context.Context, sourceName string, channe
 	return nil
 }
 
+// SubscribeExtended calls the optional SubscribeExtendedHook if present.
 func (f *FakeMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
 	if f.SubscribeExtendedHook != nil {
 		return f.SubscribeExtendedHook(ctx, source, channelName, serviceType, serviceName, maxAge, messageHandler)
@@ -81,26 +84,33 @@ func (f *FakeMessenger) SubscribeExtended(ctx context.Context, source string, ch
 	return nil
 }
 
+// SetReaderState is a no-op in the fake messenger.
 func (f *FakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
 	return nil
 }
 
+// SeekToEnd is a no-op in the fake messenger.
 func (f *FakeMessenger) SeekToEnd(channelName string, readerName string) error {
 	return nil
 }
 
+// SetDataDir is a no-op for the fake messenger.
 func (f *FakeMessenger) SetDataDir(dir string) {}
 
+// SetHostname is a no-op for the fake messenger.
 func (f *FakeMessenger) SetHostname(hostname string) {}
 
+// GetStats returns current fake messenger stats.
 func (f *FakeMessenger) GetStats() core.MessengerStats {
 	return f.Stats
 }
 
+// GetPayloadRegistry returns the configured PayloadRegistry.
 func (f *FakeMessenger) GetPayloadRegistry() core.PayloadRegistry {
 	return f.PayloadRegistry
 }
 
+// SetPayloadRegistry sets the fake messenger's PayloadRegistry.
 func (f *FakeMessenger) SetPayloadRegistry(reg core.PayloadRegistry) {
 	f.PayloadRegistry = reg
 }

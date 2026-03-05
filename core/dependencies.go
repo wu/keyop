@@ -9,7 +9,7 @@ type Dependencies struct {
 	os        OsProviderApi
 	messenger MessengerApi
 	state     StateStore
-	context   context.Context
+	ctx       context.Context
 	cancel    context.CancelFunc
 }
 
@@ -36,14 +36,14 @@ func (d *Dependencies) MustGetLogger() Logger {
 }
 
 func (d *Dependencies) SetContext(ctx context.Context) {
-	d.context = ctx
+	d.ctx = ctx
 }
 
 func (d *Dependencies) MustGetContext() context.Context {
-	if d.context == nil {
+	if d.ctx == nil {
 		panic("ERROR: Context is not initialized")
 	}
-	return d.context
+	return d.ctx
 }
 
 func (d *Dependencies) SetCancel(cancel context.CancelFunc) {
@@ -87,7 +87,7 @@ func (d *Dependencies) Clone() Dependencies {
 		os:        d.os,
 		messenger: d.messenger,
 		state:     d.state,
-		context:   d.context,
+		ctx:       d.ctx,
 		cancel:    d.cancel,
 	}
 }

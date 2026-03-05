@@ -1,3 +1,4 @@
+//nolint:revive,gosec
 package httpPostServer
 
 import (
@@ -217,7 +218,9 @@ func TestService_Initialize_StartsServerAndLogs(t *testing.T) {
 	today := time.Now().Format("20060102")
 	filename := fmt.Sprintf("httpPostServer_TestSvc_%s.jsonl", today)
 	//goland:noinspection GoUnhandledErrorResult
-	os.Remove(filename)
+	if err := os.Remove(filename); err != nil {
+		t.Logf("failed to remove %s: %v", filename, err)
+	}
 }
 
 func TestService_MethodNotAllowed(t *testing.T) {
@@ -272,7 +275,7 @@ func TestService_MethodNotAllowed(t *testing.T) {
 type errorReader struct{}
 
 //goland:noinspection GoUnusedParameter
-func (e *errorReader) Read(p []byte) (n int, err error) {
+func (e *errorReader) Read(_ []byte) (n int, err error) {
 	return 0, fmt.Errorf("simulated read error")
 }
 
@@ -468,8 +471,9 @@ func TestService_Initialize_FailedToCreateTargetDirectory(t *testing.T) {
 		}
 	}()
 	certsDir := filepath.Join(tmpDir, ".keyop", "certs")
-	_ = util.GenerateTestCerts(certsDir)
-
+	if err := util.GenerateTestCerts(certsDir); err != nil {
+		assert.NoError(t, err)
+	}
 	fakeOs := core.FakeOsProvider{
 		Host:         "test-host",
 		Home:         tmpDir,

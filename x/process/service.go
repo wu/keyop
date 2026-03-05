@@ -106,7 +106,9 @@ func (svc *Service) Check() error {
 		if pErr := svc.cmd.Process.Signal(syscall.Signal(0)); pErr != nil {
 			logger.Info("process died, restarting", "error", pErr)
 			// Reap the process to avoid defunct state
-			_ = svc.cmd.Wait()
+			if wErr := svc.cmd.Wait(); wErr != nil {
+				logger.Error("process: wait failed", "error", wErr)
+			}
 			err = svc.startProcess()
 			status = "restarted"
 		}

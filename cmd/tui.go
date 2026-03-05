@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"keyop/x/webSocketClient"
+	"log"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -90,7 +91,9 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() {
-		_ = osProvider.RemoveAll(tempDir)
+		if err := osProvider.RemoveAll(tempDir); err != nil {
+			log.Printf("tui: failed to remove temp directory %s: %v", tempDir, err)
+		}
 	}()
 
 	dataDir := filepath.Join(tempDir, "data")
@@ -159,7 +162,9 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 			case <-deps.MustGetContext().Done():
 				return
 			default:
-				_ = wsSvc.Check()
+				if err := wsSvc.Check(); err != nil {
+					logger.Warn("tui: websocket client check failed", "err", err)
+				}
 				time.Sleep(time.Second)
 			}
 		}
@@ -224,10 +229,12 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 			if key == tcell.KeyEnter {
 				text := taskmgrInput.GetText()
 				if text != "" {
-					_ = messenger.Send(core.Message{
+					if err := messenger.Send(core.Message{
 						ChannelName: "taskmgr-in",
 						Text:        text,
-					})
+					}); err != nil {
+						logger.Warn("tui: failed to send taskmgr message", "err", err)
+					}
 					taskmgrInput.SetText("")
 				}
 			}
@@ -300,7 +307,11 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 					HostnameColors:    hostnameColors,
 					ServiceNameColors: serviceNameColors,
 				}
-				_ = stateStore.Save("monitor", s)
+				if err := stateStore.Save("monitor", s); err != nil {
+
+					logger.Warn("tui: failed to save state", "err", err)
+
+				}
 				serviceNameColorsMu.Unlock()
 				hostnameColorsMu.Unlock()
 				mu.Unlock()
@@ -309,11 +320,21 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	}()
 
 	// Seek to end of queues to avoid processing old messages
-	_ = messenger.SeekToEnd(hbChannel, "monitorTUI_HB")
-	_ = messenger.SeekToEnd(statusChannel, "monitorTUI_Temp")
-	_ = messenger.SeekToEnd(errorChannel, "monitorTUI_Error")
-	_ = messenger.SeekToEnd(alertChannel, "monitorTUI_Alert")
-	_ = messenger.SeekToEnd("taskmgr-out", "monitorTUI_Taskmgr")
+	if err := messenger.SeekToEnd(hbChannel, "monitorTUI_HB"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", hbChannel, "err", err)
+	}
+	if err := messenger.SeekToEnd(statusChannel, "monitorTUI_Temp"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", statusChannel, "err", err)
+	}
+	if err := messenger.SeekToEnd(errorChannel, "monitorTUI_Error"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", errorChannel, "err", err)
+	}
+	if err := messenger.SeekToEnd(alertChannel, "monitorTUI_Alert"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", alertChannel, "err", err)
+	}
+	if err := messenger.SeekToEnd("taskmgr-out", "monitorTUI_Taskmgr"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", "taskmgr-out", "err", err)
+	}
 
 	// Subscribe to heartbeats
 	err = messenger.Subscribe(ctx, "monitorTUI_HB", hbChannel, "monitor", "monitor", 0, func(msg core.Message) error {
@@ -601,7 +622,11 @@ func getHostnameColor(hostname string, stateStore core.StateStore, hosts map[str
 		HostnameColors:    hostnameColors,
 		ServiceNameColors: serviceNameColors,
 	}
-	_ = stateStore.Save("monitor", s_)
+	if err := stateStore.Save("monitor", s_); err != nil {
+
+		log.Printf("tui: failed to save state: %v", err)
+
+	}
 	serviceNameColorsMu.Unlock()
 
 	return tcell.GetColor(hex)
@@ -633,7 +658,11 @@ func getServiceColor(serviceName string, stateStore core.StateStore, hosts map[s
 		HostnameColors:    hostnameColors,
 		ServiceNameColors: serviceNameColors,
 	}
-	_ = stateStore.Save("monitor", s_)
+	if err := stateStore.Save("monitor", s_); err != nil {
+
+		log.Printf("tui: failed to save state: %v", err)
+
+	}
 	hostnameColorsMu.Unlock()
 
 	return tcell.GetColor(hex)

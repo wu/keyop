@@ -5,16 +5,18 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"io"
 	"keyop/core"
 	"keyop/util"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +72,35 @@ func testDeps(t *testing.T) core.Dependencies {
 	deps.SetMessenger(messenger)
 
 	return deps
+}
+
+// parseServerHostPort returns hostname and port for a test server URL.
+func parseServerHostPort(server *httptest.Server) (string, int) {
+	u, _ := url.Parse(server.URL)
+	host := "127.0.0.1"
+	port := 0
+	if u != nil {
+		h := u.Hostname()
+		if h := strings.TrimSpace(h); h != "" {
+			host = h
+		}
+		if p := u.Port(); p != "" {
+			if p2, err := strconv.Atoi(p); err == nil {
+				port = p2
+			}
+		}
+		if port != 0 {
+			return host, port
+		}
+	}
+	// fallback: try splitting listener address
+	if h, p, err := net.SplitHostPort(server.Listener.Addr().String()); err == nil {
+		host = h
+		if p2, err := strconv.Atoi(p); err == nil {
+			port = p2
+		}
+	}
+	return host, port
 }
 
 func TestService_ValidateConfig(t *testing.T) {
@@ -237,14 +268,7 @@ func TestService_MessageHandler_Success(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	// Parse the server URL to get hostname and port
-	var hostname string
-	var port int
-	fmt.Sscanf(server.URL, "https://%s", &hostname)
-	addr := server.Listener.Addr().String()
-	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(addr, "[::]:%d", &port)
-	}
+	_, port := parseServerHostPort(server)
 
 	cfg := core.ServiceConfig{
 		Name: "test-httpPostClient",
@@ -376,14 +400,7 @@ func TestService_MessageHandler_Timeout(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	// Parse the server URL to get hostname and port
-	var hostname string
-	var port int
-	fmt.Sscanf(server.URL, "https://%s", &hostname)
-	addr := server.Listener.Addr().String()
-	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(addr, "[::]:%d", &port)
-	}
+	_, port := parseServerHostPort(server)
 
 	cfg := core.ServiceConfig{
 		Name: "test-httpPostClient",
@@ -418,8 +435,9 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 			t.Logf("failed to remove tmpDir %s: %v", tmpDir, err)
 		}
 	}()
-	_ = util.GenerateTestCerts(tmpDir)
-
+	if err := util.GenerateTestCerts(tmpDir); err != nil {
+		assert.NoError(t, err)
+	}
 	serverCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.crt"))
 	serverKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.key"))
 	serverCert, _ := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
@@ -433,14 +451,7 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 	server.StartTLS()
 	t.Cleanup(server.Close)
 
-	var hostname string
-	var port int
-	fmt.Sscanf(server.URL, "https://%s", &hostname)
-	addr := server.Listener.Addr().String()
-	fmt.Sscanf(addr, "127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(addr, "[::]:%d", &port)
-	}
+	_, port := parseServerHostPort(server)
 
 	cfg := core.ServiceConfig{
 		Name: "test-httpPostClient",

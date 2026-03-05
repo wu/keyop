@@ -334,7 +334,9 @@ func TestService_MessageHandler_SendError(t *testing.T) {
 			}
 			// Close the connection immediately to cause a send error
 			//goland:noinspection GoUnhandledErrorResult
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				t.Logf("failed to close conn: %v", err)
+			}
 		}
 	}()
 

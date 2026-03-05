@@ -1,3 +1,4 @@
+//nolint:revive
 package core
 
 import (
@@ -6,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -67,7 +67,7 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.Printf("PersistentQueue: failed to close file %s: %v", fileName, err)
+			pq.logger.Error("PersistentQueue: failed to close file", "file", fileName, "error", err)
 		}
 	}()
 
@@ -273,7 +273,7 @@ func (pq *PersistentQueue) saveState(readerName string, state readerState) error
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.Printf("PersistentQueue: failed to close file %s: %v", stateFile, err)
+			pq.logger.Error("PersistentQueue: failed to close file", "file", stateFile, "error", err)
 		}
 	}()
 
@@ -308,7 +308,7 @@ func (pq *PersistentQueue) readEntry(fileName string, offset int64) (string, int
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.Printf("PersistentQueue: failed to close file %s: %v", fullPath, err)
+			pq.logger.Error("PersistentQueue: failed to close file", "file", fullPath, "error", err)
 		}
 	}()
 

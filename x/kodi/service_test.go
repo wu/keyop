@@ -67,7 +67,10 @@ func (m *mockKodiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resJSON, _ := json.Marshal(result)
 	resp.Result = resJSON
 
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func TestService_Check(t *testing.T) {

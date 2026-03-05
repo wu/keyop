@@ -85,14 +85,17 @@ func (svc *Service) Initialize() error {
 	if err := osProvider.MkdirAll(svc.dir, 0o755); err != nil {
 		logger.Error("versionControlGit: failed to create directory", "dir", svc.dir, "error", err)
 		// send error event
-		_ = messenger.Send(core.Message{
+		if err := messenger.Send(core.Message{
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "error",
 			Text:        "failed to create directory",
 			Data:        map[string]string{"op": "mkdir", "error": err.Error()},
-		})
+		}); err != nil {
+			logger.Error("versionControlGit: failed to send error event", "error", err)
+		}
+
 		// don't fail initialization; service can still subscribe and attempt later
 	}
 
@@ -180,7 +183,9 @@ func (svc *Service) handleMessage(msg core.Message) error {
 		return nil
 	}
 	defer func() {
-		_ = f.Close()
+		if err := f.Close(); err != nil {
+			logger.Error("versionControlGit: failed to close file", "file", filePath, "error", err)
+		}
 	}()
 
 	if _, err := f.Write(data); err != nil {
@@ -242,14 +247,16 @@ func sendErrorEvent(messenger core.MessengerApi, cfg core.ServiceConfig, op stri
 	if output != nil {
 		payload["output"] = string(output)
 	}
-	_ = messenger.Send(core.Message{
+	if err := messenger.Send(core.Message{
 		ChannelName: cfg.Name,
 		ServiceName: cfg.Name,
 		ServiceType: cfg.Type,
 		Event:       "error",
 		Text:        fmt.Sprintf("versionControlGit: %s failed", op),
 		Data:        payload,
-	})
+	}); err != nil {
+		fmt.Printf("versionControlGit: failed to send error event: %v\n", err)
+	}
 }
 
 // sanitizeFilename makes a filesystem-safe filename from an arbitrary string.

@@ -93,7 +93,9 @@ func TestFetchOvationData_Errors(t *testing.T) {
 
 	t.Run("Invalid JSON", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("invalid-json"))
+			if _, err := w.Write([]byte("invalid-json")); err != nil {
+				t.Fatalf("failed to write invalid-json response: %v", err)
+			}
 		}))
 		t.Cleanup(server.Close)
 

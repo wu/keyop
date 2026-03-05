@@ -124,11 +124,15 @@ func TestService_ChatAndBatch(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "Hello "}}); err != nil {
 			t.Fatalf("failed to encode resp1: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "world!"}, Done: true}); err != nil {
 			t.Fatalf("failed to encode resp2: %v", err)
 		}
-		w.Write([]byte("\n"))
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(ts.Close)
 
@@ -190,16 +194,26 @@ func TestService_HistorySummarize(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		var req ChatRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			assert.NoError(t, err)
+		}
 		// If summarization prompt detected, return a short summary in one chunk
 		if len(req.Messages) > 0 && strings.Contains(req.Messages[0].Content, "summarize") {
-			json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "[SUMMARY]"}, Done: true})
-			w.Write([]byte("\n"))
+			if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "[SUMMARY]"}, Done: true}); err != nil {
+				t.Fatalf("failed to encode resp: %v", err)
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
 			return
 		}
 		// Normal chat reply
-		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true})
-		w.Write([]byte("\n"))
+		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true}); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	t.Cleanup(ts.Close)
 
@@ -246,8 +260,9 @@ func TestService_ConfigParameters(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		var req ChatRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			assert.NoError(t, err)
+		}
 		// Verify guidelines are present in the messages sent to Ollama
 		foundGuidelines := false
 		for _, m := range req.Messages {
@@ -260,11 +275,14 @@ func TestService_ConfigParameters(t *testing.T) {
 			t.Errorf("Guidelines not found in request messages")
 		}
 
-		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true})
-		w.Write([]byte("\n"))
+		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true}); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
-	defer ts.Close()
-
+	t.Cleanup(ts.Close)
 	u, _ := url.Parse(ts.URL)
 	host := u.Hostname()
 	port, _ := strconv.Atoi(u.Port())
@@ -293,10 +311,12 @@ func TestService_ConfigParameters(t *testing.T) {
 	assert.Equal(t, "You are a helpful assistant.", svc.Guidelines)
 
 	received := make(chan core.Message, 10)
-	_ = messenger.Subscribe(context.Background(), "test", "ollama-test", "ollama", "ollama", 0, func(m core.Message) error {
+	if err := messenger.Subscribe(context.Background(), "test", "ollama-test", "ollama", "ollama", 0, func(m core.Message) error {
 		received <- m
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
 
 	// 1. Test guidelines
 	err := svc.messageHandler(core.Message{Text: "Hello"})
@@ -346,11 +366,14 @@ func TestService_DuplicateGuidelinesBug(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true})
-		w.Write([]byte("\n"))
+		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true}); err != nil {
+			t.Fatalf("failed to encode resp: %v", err)
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
-	defer ts.Close()
-
+	t.Cleanup(ts.Close)
 	u, _ := url.Parse(ts.URL)
 	host := u.Hostname()
 	port, _ := strconv.Atoi(u.Port())

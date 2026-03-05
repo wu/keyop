@@ -12,8 +12,9 @@ import (
 	"time"
 )
 
+// GenerateTestCerts generates test certificates for use by unit tests and writes them into dir.
 func GenerateTestCerts(dir string) error {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 
@@ -134,6 +135,7 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caPriv *rsa.
 	return nil
 }
 
+// CreateTestCerts generates test certificates and returns paths to the server and client cert/key files.
 func CreateTestCerts(dir string) (string, string, string, string, error) {
 	err := GenerateTestCerts(dir)
 	if err != nil {
