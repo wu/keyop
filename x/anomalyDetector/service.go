@@ -108,12 +108,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	svc.MetricBuffer[msg.MetricName] = window
 
 	if svc.Training {
+		// If we've seen enough data, we can stop "pure" training or just keep training slowly.
+		// For simplicity, we just keep training and check error.
 		mse := svc.AE.Train(window)
-		// If we've seen enough data, we can stop "pure" training or just keep training slowly
-		// For simplicity, we just keep training and check error
-		if len(svc.MetricBuffer[msg.MetricName]) > svc.MinTrainSize {
-			// Maybe reduce learning rate?
-		}
 
 		if mse > svc.Threshold {
 			return svc.reportAnomalyStatus(msg, mse, "warning")

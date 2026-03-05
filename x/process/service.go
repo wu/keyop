@@ -84,7 +84,7 @@ func (svc *Service) startProcess() error {
 		}
 	}()
 
-	if _, err := f.WriteString(fmt.Sprintf("%d", svc.cmd.Process.Pid)); err != nil {
+	if _, err := fmt.Fprintf(f, "%d", svc.cmd.Process.Pid); err != nil {
 		return fmt.Errorf("failed to write to pid file: %w", err)
 	}
 

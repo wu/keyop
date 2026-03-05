@@ -120,11 +120,11 @@ func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 	_, _ = core.UnmarshalEnvelope([]byte(fmt.Sprintf(`{"v":"v1","id":"1","topic":"chan1","payload":{"value":"plugin-data"},"headers":{"payload-type":"%s"}}`, payloadType)))
 
 	// Use messenger.Send to test the full path
-	err = messenger.Send(core.Message{
+	require.NoError(t, messenger.Send(core.Message{
 		ChannelName: "chan1",
 		Data:        map[string]any{"value": "plugin-data"},
-	})
-	_ = messenger.Send(core.Message{ChannelName: "chan1", Data: "trigger-queue-init"}) // Ensure queue is init
+	}))
+	require.NoError(t, messenger.Send(core.Message{ChannelName: "chan1", Data: "trigger-queue-init"})) // Ensure queue is init
 }
 
 // Actually, let's write a simpler test that just verifies LoadPlugins behavior if we could mock plugin.Open
@@ -243,6 +243,7 @@ func TestDuplicatePayloadRegistration_ReturnsError(t *testing.T) {
 	typeName := "duplicate.test.v1"
 
 	err := reg.Register(typeName, func() any { return &struct{}{} })
+	require.NoError(t, err)
 	// It might already be registered if tests run concurrently, but usually they don't share globals unless specified.
 	// Actually tests in same package share globals.
 
