@@ -1,3 +1,4 @@
+// Package util contains small helper utilities used across keyop.
 package util
 
 import (

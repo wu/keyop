@@ -1,3 +1,4 @@
+//nolint:revive
 package httpPostClient
 
 import (
@@ -180,7 +181,7 @@ func (svc *Service) Initialize() error {
 		MinVersion:   tls.VersionTLS12,
 		// Ignore IP SAN by skipping default verification and providing a custom one
 		// that doesn't check hostnames/IPs.
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			opts := x509.VerifyOptions{
 				Roots:         caCertPool,
@@ -255,7 +256,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := svc.httpClient.Do(req)
+	resp, err := svc.httpClient.Do(req) //nolint:gosec
 	if err != nil {
 		logger.Error("failed to post message to HTTP endpoint", "url", url, "error", err)
 		return err

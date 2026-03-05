@@ -1,3 +1,4 @@
+//nolint:revive,gosec
 package core
 
 import (

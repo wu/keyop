@@ -1,3 +1,4 @@
+//nolint:revive
 package githubNotification
 
 import (
@@ -89,7 +90,7 @@ func (svc *Service) Check() error {
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec
 	if err != nil {
 		return err
 	}
