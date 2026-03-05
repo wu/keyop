@@ -24,6 +24,12 @@ jobs:
           # (do not rely on go-version-file here to avoid resolution issues on runners).
           go-version: '1.26'
 
+      - name: Clean Go caches
+        run: |
+          # Clear any stale compiled export data that can confuse the analyzers in golangci-lint
+          # (resolves errors like "unsupported version: 2" caused by mismatched export data).
+          go clean -cache -modcache -testcache || true
+
       - name: Install linters
         run: |
           sudo apt-get update
