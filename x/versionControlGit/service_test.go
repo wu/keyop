@@ -51,7 +51,7 @@ func testDepsWithFakeOs(t *testing.T, tempDir string) (core.Dependencies, *core.
 
 // successGitCmdFunc returns a CommandFunc that always succeeds and records calls.
 func successGitCmdFunc(commands *[]string) func(string, ...string) core.CommandApi {
-	return func(name string, arg ...string) core.CommandApi {
+	return func(_ string, arg ...string) core.CommandApi {
 		*commands = append(*commands, strings.Join(arg, " "))
 		return &core.FakeCommand{CombinedOutputFunc: func() ([]byte, error) {
 			return []byte("ok"), nil
@@ -260,7 +260,7 @@ func TestInitialize_mkdirFailure_doesNotReturnError(t *testing.T) {
 	tmp := t.TempDir()
 	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
 	mkdirErr := errors.New("permission denied")
-	fOs.MkdirAllFunc = func(path string, perm os.FileMode) error {
+	fOs.MkdirAllFunc = func(_ string, _ os.FileMode) error {
 		return mkdirErr
 	}
 	fOs.CommandFunc = successGitCmdFunc(new([]string))
@@ -520,7 +520,7 @@ func Test_handleMessage_writeFileFailure_emitsError(t *testing.T) {
 	fOs.CommandFunc = successGitCmdFunc(new([]string))
 
 	writeErr := errors.New("no space left on device")
-	fOs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+	fOs.OpenFileFunc = func(_ string, _ int, _ os.FileMode) (core.FileApi, error) {
 		return nil, writeErr
 	}
 
@@ -545,7 +545,7 @@ func Test_handleMessage_gitAddError_emitsError(t *testing.T) {
 	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
 
 	var cmds []string
-	fOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fOs.CommandFunc = func(_ string, arg ...string) core.CommandApi {
 		cmd := strings.Join(arg, " ")
 		cmds = append(cmds, cmd)
 		if strings.Contains(cmd, " add ") {
@@ -580,7 +580,7 @@ func Test_handleMessage_gitCommitError_emitsError(t *testing.T) {
 	tmp := t.TempDir()
 	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
 
-	fOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fOs.CommandFunc = func(_ string, arg ...string) core.CommandApi {
 		cmd := strings.Join(arg, " ")
 		if strings.Contains(cmd, " commit ") {
 			return &core.FakeCommand{CombinedOutputFunc: func() ([]byte, error) {
@@ -610,7 +610,7 @@ func Test_handleMessage_gitCommitNothingToCommit_noError(t *testing.T) {
 	tmp := t.TempDir()
 	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
 
-	fOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fOs.CommandFunc = func(_ string, arg ...string) core.CommandApi {
 		cmd := strings.Join(arg, " ")
 		if strings.Contains(cmd, " commit ") {
 			return &core.FakeCommand{CombinedOutputFunc: func() ([]byte, error) {
@@ -645,7 +645,7 @@ func Test_handleMessage_gitInitError_emitsError(t *testing.T) {
 		return os.Stat(name)
 	}
 
-	fOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fOs.CommandFunc = func(_ string, arg ...string) core.CommandApi {
 		cmd := strings.Join(arg, " ")
 		if strings.Contains(cmd, " init") {
 			return &core.FakeCommand{CombinedOutputFunc: func() ([]byte, error) {

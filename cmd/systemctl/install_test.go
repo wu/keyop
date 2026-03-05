@@ -14,11 +14,11 @@ type mockFile struct {
 	buf *bytes.Buffer
 }
 
-func (m *mockFile) Write(p []byte) (n int, err error)            { return m.buf.Write(p) }
-func (m *mockFile) WriteString(s string) (n int, err error)      { return m.buf.WriteString(s) }
-func (m *mockFile) Close() error                                 { return nil }
-func (m *mockFile) Read(p []byte) (n int, err error)             { return 0, io.EOF }
-func (m *mockFile) Seek(offset int64, whence int) (int64, error) { return 0, nil }
+func (m *mockFile) Write(p []byte) (n int, err error)       { return m.buf.Write(p) }
+func (m *mockFile) WriteString(s string) (n int, err error) { return m.buf.WriteString(s) }
+func (m *mockFile) Close() error                            { return nil }
+func (m *mockFile) Read(_ []byte) (int, error)              { return 0, io.EOF }
+func (m *mockFile) Seek(_ int64, _ int) (int64, error)      { return 0, nil }
 
 func TestInstallSystemd(t *testing.T) {
 	fakeOs := &core.FakeOsProvider{}
@@ -28,7 +28,7 @@ func TestInstallSystemd(t *testing.T) {
 	deps.SetLogger(logger)
 
 	buf := &bytes.Buffer{}
-	fakeOs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+	fakeOs.OpenFileFunc = func(name string, _ int, _ os.FileMode) (core.FileApi, error) {
 		if name != "/etc/systemd/system/keyop.service" {
 			t.Errorf("unexpected file path: %s", name)
 		}
@@ -94,11 +94,11 @@ func TestInstallSystemdCustomUserGroup(t *testing.T) {
 	deps.SetLogger(logger)
 
 	buf := &bytes.Buffer{}
-	fakeOs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
+	fakeOs.OpenFileFunc = func(_ string, _ int, _ os.FileMode) (core.FileApi, error) {
 		return &mockFile{buf: buf}, nil
 	}
 
-	fakeOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fakeOs.CommandFunc = func(_ string, _ ...string) core.CommandApi {
 		return &core.FakeCommand{}
 	}
 

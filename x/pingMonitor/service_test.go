@@ -22,7 +22,7 @@ func TestCheck(t *testing.T) {
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
-			CommandFunc: func(name string, arg ...string) core.CommandApi {
+			CommandFunc: func(_ string, _ ...string) core.CommandApi {
 				return &core.FakeCommand{
 					CombinedOutputFunc: func() ([]byte, error) {
 						return []byte("64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=12.3 ms"), nil
@@ -74,7 +74,7 @@ func TestCheck(t *testing.T) {
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
-			CommandFunc: func(name string, arg ...string) core.CommandApi {
+			CommandFunc: func(_ string, _ ...string) core.CommandApi {
 				return &core.FakeCommand{
 					CombinedOutputFunc: func() ([]byte, error) {
 						return []byte("64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=12.3 ms"), nil
@@ -118,7 +118,7 @@ func TestCheck(t *testing.T) {
 		deps.SetMessenger(messenger)
 
 		fakeOs := &core.FakeOsProvider{
-			CommandFunc: func(name string, arg ...string) core.CommandApi {
+			CommandFunc: func(_ string, _ ...string) core.CommandApi {
 				return &core.FakeCommand{
 					CombinedOutputFunc: func() ([]byte, error) {
 						return []byte("ping: cannot resolve unreachable.host: Unknown host"), errors.New("ping failed")

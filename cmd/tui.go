@@ -67,7 +67,7 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui",
 		Short: "TUI monitor for heartbeats, temperatures, errors, and alerts",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runMonitor(deps, wsHost, wsPort, hbChannel, statusChannel, errorChannel, alertChannel)
 		},
 	}

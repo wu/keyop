@@ -10,7 +10,7 @@ import (
 )
 
 func TestFetchOvationData(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		data := OvationData{
 			ForecastTime: "2026-02-18T21:00:00Z",
 			Coordinates: [][]int{
@@ -81,7 +81,7 @@ func TestOvationData_FindProbability(t *testing.T) {
 
 func TestFetchOvationData_Errors(t *testing.T) {
 	t.Run("HTTP error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(server.Close)
@@ -92,7 +92,7 @@ func TestFetchOvationData_Errors(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			if _, err := w.Write([]byte("invalid-json")); err != nil {
 				t.Fatalf("failed to write invalid-json response: %v", err)
 			}

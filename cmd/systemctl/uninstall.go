@@ -13,7 +13,7 @@ func NewUninstallCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "uninstall",
 		Short: "Uninstall the systemd service",
 		Long:  `Stop the service, disable it, and remove the configuration file.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return uninstallSystemd(deps)
 		},
 	}

@@ -17,7 +17,7 @@ func NewInstallCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "install",
 		Short: "Install as a systemd service",
 		Long:  `Generate systemd configuration and enable the service.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return installSystemd(deps, user, group)
 		},
 	}

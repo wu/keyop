@@ -189,7 +189,7 @@ func (f *fakeMessenger) Send(msg core.Message) error {
 }
 
 func (f *fakeMessenger) Subscribe(ctx context.Context, sourceName, channelName, serviceType, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return f.SubscribeExtended(ctx, sourceName, channelName, serviceType, serviceName, maxAge, func(msg core.Message, fileName string, offset int64) error {
+	return f.SubscribeExtended(ctx, sourceName, channelName, serviceType, serviceName, maxAge, func(msg core.Message, _ string, _ int64) error {
 		return messageHandler(msg)
 	})
 }

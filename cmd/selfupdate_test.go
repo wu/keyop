@@ -69,7 +69,7 @@ func TestProgressReader(t *testing.T) {
 	pr := &progressReader{
 		Reader: buf,
 		Total:  total,
-		OnProgress: func(current, total int64) {
+		OnProgress: func(current int64, _ int64) {
 			progressCalls = append(progressCalls, current)
 		},
 	}

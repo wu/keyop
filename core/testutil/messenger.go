@@ -85,20 +85,20 @@ func (f *FakeMessenger) SubscribeExtended(ctx context.Context, source string, ch
 }
 
 // SetReaderState is a no-op in the fake messenger.
-func (f *FakeMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
+func (f *FakeMessenger) SetReaderState(_ string, _ string, _ string, _ int64) error {
 	return nil
 }
 
 // SeekToEnd is a no-op in the fake messenger.
-func (f *FakeMessenger) SeekToEnd(channelName string, readerName string) error {
+func (f *FakeMessenger) SeekToEnd(_ string, _ string) error {
 	return nil
 }
 
 // SetDataDir is a no-op for the fake messenger.
-func (f *FakeMessenger) SetDataDir(dir string) {}
+func (f *FakeMessenger) SetDataDir(_ string) {}
 
 // SetHostname is a no-op for the fake messenger.
-func (f *FakeMessenger) SetHostname(hostname string) {}
+func (f *FakeMessenger) SetHostname(_ string) {}
 
 // GetStats returns current fake messenger stats.
 func (f *FakeMessenger) GetStats() core.MessengerStats {

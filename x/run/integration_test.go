@@ -80,7 +80,7 @@ func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 	}
 
 	// Mocking what loadPlugin does without the .so part
-	newServiceFunc := func(d core.Dependencies, c core.ServiceConfig) core.Service {
+	newServiceFunc := func(_ core.Dependencies, _ core.ServiceConfig) core.Service {
 		return p
 	}
 
@@ -284,7 +284,7 @@ func TestLoadPlugins_InvokesRegisterPayloads(t *testing.T) {
 	}
 
 	// Mock newServiceFunc
-	newServiceFunc := func(d core.Dependencies, c core.ServiceConfig) core.Service {
+	newServiceFunc := func(_ core.Dependencies, _ core.ServiceConfig) core.Service {
 		return p
 	}
 

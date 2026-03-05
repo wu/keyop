@@ -364,7 +364,7 @@ L:
 func TestService_DuplicateGuidelinesBug(t *testing.T) {
 	deps := testDeps(t)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		if err := json.NewEncoder(w).Encode(ChatResponse{Message: Message{Role: "assistant", Content: "ok"}, Done: true}); err != nil {
 			t.Fatalf("failed to encode resp: %v", err)

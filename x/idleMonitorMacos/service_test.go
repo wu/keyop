@@ -43,7 +43,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	idleNanos := int64(0)
-	fakeOs.CommandFunc = func(name string, arg ...string) core.CommandApi {
+	fakeOs.CommandFunc = func(_ string, _ ...string) core.CommandApi {
 		return &core.FakeCommand{
 			CombinedOutputFunc: func() ([]byte, error) {
 				return []byte(fmt.Sprintf(`    | | |   "HIDIdleTime" = %d`, idleNanos)), nil

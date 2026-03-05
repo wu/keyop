@@ -17,7 +17,7 @@ func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the version information",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			cmd.Printf("Keyop Version: %s\n", Version)
 			cmd.Printf("Git Commit:    %s\n", Commit)
 			cmd.Printf("Git Branch:    %s\n", Branch)

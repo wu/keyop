@@ -15,7 +15,7 @@ func NewCmd(deps core.Dependencies) *cobra.Command {
 This utility is a work in progress.
 
 `,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			logger := deps.MustGetLogger()
 
 			// 3. Load plugins (and register their payload types)

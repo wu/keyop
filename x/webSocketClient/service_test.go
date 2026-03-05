@@ -1255,7 +1255,7 @@ func TestClientFlushPendingOnClose(t *testing.T) {
 // setupWrongCAServer creates a test TLS WS server signed by a *different* CA than the
 // one installed under dir/.keyop/certs. The client (which trusts only its own CA)
 // must reject the connection.
-func setupWrongCAServer(t *testing.T, clientDir string, handler http.HandlerFunc) (wsURL string, cleanup func()) {
+func setupWrongCAServer(t *testing.T, _ string, handler http.HandlerFunc) (wsURL string, cleanup func()) {
 	t.Helper()
 
 	// Generate a completely independent CA + server cert in a temp dir.

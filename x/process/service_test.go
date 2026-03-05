@@ -1,64 +1,15 @@
 package process
 
 import (
-	"context"
 	"fmt"
 	"keyop/core"
 	"keyop/core/testutil"
 	"log/slog"
 	"os"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-type mockMessenger struct {
-	payloadRegistry core.PayloadRegistry
-
-	messages []core.Message
-	mu       sync.Mutex
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetPayloadRegistry() core.PayloadRegistry {
-	return m.payloadRegistry
-}
-
-func (m *mockMessenger) SetPayloadRegistry(r core.PayloadRegistry) {
-	m.payloadRegistry = r
-}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
 
 func TestProcessService(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))

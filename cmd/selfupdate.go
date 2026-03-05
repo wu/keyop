@@ -18,7 +18,7 @@ func NewSelfUpdateCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "selfupdate",
 		Short: "Update keyop to the latest version",
 		Long:  `Download the latest build from geekfarm.org and install it.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runSelfUpdate(deps)
 		},
 	}

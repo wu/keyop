@@ -112,7 +112,7 @@ func splitLine(line string, sep string) []string {
 }
 
 // wrapper to avoid importing strings directly in the test and to keep logic clear
-func stringSplitN(s, sep string, n int) []string {
+func stringSplitN(s, sep string, _ int) []string {
 	// actual implementation
 	return stringsSplit(s, sep)
 }

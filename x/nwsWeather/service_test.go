@@ -84,7 +84,7 @@ func TestNwsWeatherService(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 	handlers := make(map[string]func(core.Message) error)
-	messenger := testutil.NewFakeMessenger(testutil.WithSubscribeHook(func(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+	messenger := testutil.NewFakeMessenger(testutil.WithSubscribeHook(func(_ context.Context, _ string, channelName string, _ string, _ string, _ time.Duration, messageHandler func(core.Message) error) error {
 		handlers[channelName] = messageHandler
 		return nil
 	}))

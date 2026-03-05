@@ -106,7 +106,7 @@ func TestService_ValidateConfig(t *testing.T) {
 
 func TestService_Check(t *testing.T) {
 	// Mock NOAA server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		data := OvationData{
 			ForecastTime: "2026-02-18T21:00:00Z",
 			Coordinates: [][]int{

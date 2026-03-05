@@ -80,7 +80,7 @@ func TestClient_Chat(t *testing.T) {
 }
 
 func TestClient_Summarize(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		resp := ChatResponse{
 			Message: Message{Role: "assistant", Content: "This is a summary."},
@@ -125,7 +125,7 @@ func TestClient_Summarize(t *testing.T) {
 }
 
 func TestClient_Chat_NoStream(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := ChatResponse{
 			Message: Message{Role: "assistant", Content: "Hello world!"},
@@ -175,7 +175,7 @@ func TestClient_Chat_NoStream(t *testing.T) {
 }
 
 func TestClient_Chat_NoStream_NoNewline(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := ChatResponse{
 			Message: Message{Role: "assistant", Content: "Hello world!"},
@@ -224,7 +224,7 @@ func TestClient_Chat_NoStream_NoNewline(t *testing.T) {
 }
 
 func TestClient_Chat_Stream_NoNewline(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		resp1 := ChatResponse{
 			Message: Message{Role: "assistant", Content: "Hello"},

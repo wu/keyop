@@ -129,45 +129,6 @@ func TestStartKernelErrorChannel(t *testing.T) {
 	})
 }
 
-type mockMessenger struct {
-	messages []core.Message
-}
-
-func (m *mockMessenger) Send(msg core.Message) error {
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *mockMessenger) Subscribe(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SubscribeExtended(ctx context.Context, source string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message, string, int64) error) error {
-	return nil
-}
-
-func (m *mockMessenger) SetReaderState(channelName string, readerName string, fileName string, offset int64) error {
-	return nil
-}
-
-func (m *mockMessenger) SeekToEnd(channelName string, readerName string) error {
-	return nil
-}
-
-func (m *mockMessenger) SetDataDir(dir string) {}
-
-func (m *mockMessenger) SetHostname(hostname string) {}
-
-func (m *mockMessenger) GetStats() core.MessengerStats {
-	return core.MessengerStats{}
-}
-
-func (m *mockMessenger) GetPayloadRegistry() core.PayloadRegistry {
-	return nil
-}
-
-func (m *mockMessenger) SetPayloadRegistry(reg core.PayloadRegistry) {}
-
 type mockStateStore struct {
 	data map[string]interface{}
 }

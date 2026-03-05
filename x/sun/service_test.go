@@ -17,7 +17,7 @@ func TestSunService(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(logger)
 	handlers := make(map[string]func(core.Message) error)
-	messenger := testutil.NewFakeMessenger(testutil.WithSubscribeHook(func(ctx context.Context, sourceName string, channelName string, serviceType string, serviceName string, maxAge time.Duration, messageHandler func(core.Message) error) error {
+	messenger := testutil.NewFakeMessenger(testutil.WithSubscribeHook(func(_ context.Context, _ string, channelName string, _ string, _ string, _ time.Duration, messageHandler func(core.Message) error) error {
 		handlers[channelName] = messageHandler
 		return nil
 	}))
@@ -94,7 +94,7 @@ func TestSunService(t *testing.T) {
 		assert.Equal(t, newAlt, alt)
 	})
 
-	t.Run("Alerts scheduled", func(t *testing.T) {
+	t.Run("Alerts scheduled", func(_ *testing.T) {
 		// Just verify it doesn't crash and runs without errors
 		svc.scheduleAlerts()
 	})

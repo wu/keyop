@@ -11,7 +11,7 @@ func NewStartCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "start",
 		Short: "Start the systemd service",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runSystemctl(deps, "start")
 		},
 	}
@@ -21,7 +21,7 @@ func NewStopCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the systemd service",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runSystemctl(deps, "stop")
 		},
 	}
@@ -31,7 +31,7 @@ func NewRestartCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the systemd service",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return runSystemctl(deps, "restart")
 		},
 	}
