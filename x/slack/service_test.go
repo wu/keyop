@@ -261,9 +261,9 @@ func TestService_Check(t *testing.T) {
 			assert.Equal(t, "Bearer xoxb-test", r.Header.Get("Authorization"))
 			userID := r.URL.Query().Get("user")
 			if userID == "U123" {
-			if _, err := fmt.Fprint(w, `{"ok": true, "user": {"name": "jdoe", "real_name": "John Doe"}}`); err != nil {
-				t.Logf("failed to write users.info response: %v", err)
-			}
+				if _, err := fmt.Fprint(w, `{"ok": true, "user": {"name": "jdoe", "real_name": "John Doe"}}`); err != nil {
+					t.Logf("failed to write users.info response: %v", err)
+				}
 			} else {
 				if _, err := fmt.Fprint(w, `{"ok": false, "error": "user_not_found"}`); err != nil {
 					t.Logf("failed to write users.info error response: %v", err)
@@ -283,7 +283,7 @@ func TestService_Check(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	svc.Initialize()
+	require.NoError(t, svc.Initialize())
 	svc.BaseURL = apiServer.URL
 
 	receivedMessage := make(chan string, 1)
