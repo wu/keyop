@@ -35,24 +35,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl
 
-      - name: Get GOROOT from the runner
-        id: get-goroot
+      - name: Install golangci-lint
         run: |
-          echo "GOROOT=$(go env GOROOT)" >> "$GITHUB_OUTPUT"
+          # Install golangci-lint binary on the runner using the official install script.
+          # This avoids analyzer/export-data mismatches caused by containerized toolchains
+          # downloading a different Go toolchain.
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.59.0
 
-      - name: Run golangci-lint using container
+      - name: Run golangci-lint
         run: |
-          # Run the official golangci-lint container image to avoid building the
-          # linter on the runner and to isolate the analysis environment.
-          # Mount the runner's GOROOT into the container so the in-container 'go'
-          # tooling can find the host-installed toolchain required for modules
-          # that specify newer Go versions (e.g., go 1.26).
-          docker run --rm \
-            -v "${{ github.workspace }}:/app" \
-            -v "${{ steps.get-goroot.outputs.GOROOT }}:/usr/local/go" \
-            -e PATH="/usr/local/go/bin:$PATH" \
-            -w /app golangci/golangci-lint:v1.59.0 \
-            golangci-lint run --out-format=colored-line-number ./...
+          # Run the installed linter locally on the runner where Go 1.26 is set up.
+          golangci-lint run --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
         run: |
