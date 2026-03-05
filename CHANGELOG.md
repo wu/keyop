@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/wu/keyop/compare/1.2.0...1.2.1) (2026-03-05)
+
+### Refactoring
+
+* improve heartbeat service state management and tests ([b629b00](https://github.com/wu/keyop/commit/b629b00f215f50dac51875fb2e51280d02f6c8a8))
+
 ## [1.2.0](https://github.com/wu/keyop/compare/1.1.8...1.2.0) (2026-03-05)
 
 ### Features
