@@ -35,18 +35,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl
 
+      - name: Install golangci-lint from source
+        run: |
+          # Install the linter using the runner's Go toolchain so the binary is
+          # built with the same Go version (avoids export-data mismatches).
+          GOBIN=$(go env GOBIN)
+          if [ -z "$GOBIN" ]; then
+            GOBIN=$(go env GOPATH)/bin
+          fi
+          export PATH="$GOBIN:$PATH"
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.0
+          echo "golangci-lint installed to: $(which golangci-lint || true)"
+
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: v1.59.0
-          # Build the linter from source on the runner so the compiled binary
-          # uses the runner's Go toolchain (prevents "unsupported version" errors
-          # when using newer Go versions such as 1.26).
-          install-mode: source
-          # Use the newer output format to avoid the deprecated `github-actions`
-          # output warning. Run over the entire module. Note: do NOT include the
-          # `run` subcommand here because the action itself already invokes it.
-          args: --out-format=colored-line-number ./...
+        run: |
+          # Use colored-line-number output format; keep CI output compact.
+          GOBIN=$(go env GOBIN)
+          if [ -z "$GOBIN" ]; then
+            GOBIN=$(go env GOPATH)/bin
+          fi
+          export PATH="$GOBIN:$PATH"
+          golangci-lint run --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
         run: |
