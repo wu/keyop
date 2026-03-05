@@ -37,15 +37,15 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          # Install golangci-lint binary on the runner using the official install script.
-          # This avoids analyzer/export-data mismatches caused by containerized toolchains
-          # downloading a different Go toolchain.
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.59.0
+          # Build and install golangci-lint with the runner's Go toolchain to ensure
+          # analyzers use a compatible export-data format with Go 1.26.
+          GOBIN="$GITHUB_WORKSPACE/.bin" go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.0
+          echo "$GITHUB_WORKSPACE/.bin" >> "$GITHUB_PATH"
 
       - name: Run golangci-lint
         run: |
           # Run the installed linter locally on the runner where Go 1.26 is set up.
-          golangci-lint run --out-format=colored-line-number ./...
+          golangci-lint run --timeout=10m --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
         run: |
