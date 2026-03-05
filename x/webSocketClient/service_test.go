@@ -26,20 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func safeSetReadDeadline(t *testing.T, c *websocket.Conn, tm time.Time) {
-	t.Helper()
-	if err := c.SetReadDeadline(tm); err != nil {
-		t.Logf("SetReadDeadline failed: %v", err)
-	}
-}
-
-func safeClearReadDeadline(t *testing.T, c *websocket.Conn) {
-	t.Helper()
-	if err := c.SetReadDeadline(time.Time{}); err != nil {
-		t.Logf("Clear ReadDeadline failed: %v", err)
-	}
-}
-
 func TestWebSocket_ClientServer(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "ws_test")
 	require.NoError(t, err)
@@ -55,12 +41,8 @@ func TestWebSocket_ClientServer(t *testing.T) {
 
 	osProvider := core.OsProvider{}
 	oldHome := os.Getenv("HOME")
-	require.NoError(t, os.Setenv("HOME", tmpDir))
-	defer func() {
-		if err := os.Setenv("HOME", oldHome); err != nil {
-			t.Logf("failed to restore HOME: %v", err)
-		}
-	}()
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
 
 	logger := &core.FakeLogger{}
 	messenger := core.NewMessenger(logger, osProvider)
@@ -206,7 +188,7 @@ func setupClientBatchTest(t *testing.T, handler http.HandlerFunc) (wsURL string,
 	require.NoError(t, err)
 
 	oldHome := os.Getenv("HOME")
-	require.NoError(t, os.Setenv("HOME", dir))
+	os.Setenv("HOME", dir)
 
 	certsDir := filepath.Join(dir, ".keyop", "certs")
 	serverCert, serverKey, _, _, err := util.CreateTestCerts(certsDir)
@@ -247,12 +229,12 @@ func setupClientBatchTest(t *testing.T, handler http.HandlerFunc) (wsURL string,
 func sendWelcome(t *testing.T, conn *websocket.Conn) bool {
 	t.Helper()
 	var hello wsMessage
-	safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err := conn.ReadJSON(&hello); err != nil {
 		t.Logf("sendWelcome: ReadJSON hello error: %v", err)
 		return false
 	}
-	safeClearReadDeadline(t, conn)
+	conn.SetReadDeadline(time.Time{})
 	if hello.Type != "hello" || hello.V != protocolVersion {
 		t.Logf("sendWelcome: unexpected hello type=%q v=%d", hello.Type, hello.V)
 		return false
@@ -298,11 +280,11 @@ func TestClientHandlesIncomingBatch(t *testing.T) {
 		// Read subscribe (and resume if any)
 		for {
 			var msg wsMessage
-			safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
+			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 			if err := conn.ReadJSON(&msg); err != nil {
 				break
 			}
-			safeClearReadDeadline(t, conn)
+			conn.SetReadDeadline(time.Time{})
 			if msg.Type == "subscribe" {
 				break
 			}
@@ -330,11 +312,11 @@ func TestClientHandlesIncomingBatch(t *testing.T) {
 
 		// Expect a correlated ack
 		var ack wsMessage
-		safeSetReadDeadline(t, conn, time.Now().Add(10*time.Second))
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		if err := conn.ReadJSON(&ack); err != nil {
 			return
 		}
-		safeClearReadDeadline(t, conn)
+		conn.SetReadDeadline(time.Time{})
 		if ack.Type == "ack" {
 			select {
 			case ackReceived <- ack.BatchID:
@@ -367,8 +349,7 @@ func TestClientHandlesIncomingBatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	received := make(chan core.Message, 10)
 	require.NoError(t, messenger.Subscribe(ctx, "batchReader", "testCh", "test", "test", 0, func(m core.Message) error {
@@ -498,8 +479,7 @@ func TestClientSendsOutgoingBatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	svc := NewService(deps, core.ServiceConfig{
 		Name: "outboundBatchClient",
@@ -631,8 +611,7 @@ func TestClientOutboundAtLeastOnce(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	svc := NewService(deps, core.ServiceConfig{
 		Name: "atLeastOnceClient",
@@ -700,11 +679,11 @@ func TestClientVersionMismatch(t *testing.T) {
 
 		// Read hello
 		var hello wsMessage
-		safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.ReadJSON(&hello); err != nil {
 			return
 		}
-		safeClearReadDeadline(t, conn)
+		conn.SetReadDeadline(time.Time{})
 
 		// Reply with UNSUPPORTED_VERSION error instead of welcome
 		if err := conn.WriteJSON(wsMessage{
@@ -719,7 +698,7 @@ func TestClientVersionMismatch(t *testing.T) {
 		}
 
 		// After sending the error we expect the client to close; wait briefly
-		safeSetReadDeadline(t, conn, time.Now().Add(2*time.Second))
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, _, _ = conn.ReadMessage() // will fail when client closes
 		select {
 		case closedAfterError <- struct{}{}:
@@ -735,8 +714,7 @@ func TestClientVersionMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -815,11 +793,11 @@ func TestClientAckCrossRelease(t *testing.T) {
 		var batches []capturedBatch
 		for {
 			var msg wsMessage
-			safeSetReadDeadline(t, conn, time.Now().Add(10*time.Second))
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.ReadJSON(&msg); err != nil {
 				return
 			}
-			safeClearReadDeadline(t, conn)
+			conn.SetReadDeadline(time.Time{})
 			if msg.Type == "subscribe" || msg.Type == "resume" {
 				continue
 			}
@@ -848,7 +826,7 @@ func TestClientAckCrossRelease(t *testing.T) {
 
 					// Drain any further messages
 					for {
-						safeSetReadDeadline(t, conn, time.Now().Add(500*time.Millisecond))
+						conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 						var m wsMessage
 						if err := conn.ReadJSON(&m); err != nil {
 							return
@@ -883,8 +861,7 @@ func TestClientAckCrossRelease(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	// Two separate pub channels → two independent batch-sender goroutines, so both
 	// can be in-flight at the same time.  batch_size=1 guarantees one batch per message.
@@ -981,11 +958,11 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 		// Drain subscribe/resume frames
 		for {
 			var msg wsMessage
-			safeSetReadDeadline(t, conn, time.Now().Add(3*time.Second))
+			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 			if err := conn.ReadJSON(&msg); err != nil {
 				return
 			}
-			safeClearReadDeadline(t, conn)
+			conn.SetReadDeadline(time.Time{})
 			if msg.Type == "subscribe" {
 				break
 			}
@@ -1002,7 +979,7 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 		}
 
 		// Expect the client to respond with an error frame then close
-		safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		var reply wsMessage
 		if err := conn.ReadJSON(&reply); err == nil && reply.Type == "error" {
 			select {
@@ -1010,10 +987,10 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 			default:
 			}
 		}
-		safeClearReadDeadline(t, conn)
+		conn.SetReadDeadline(time.Time{})
 
 		// Client should close — next read will fail
-		safeSetReadDeadline(t, conn, time.Now().Add(2*time.Second))
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, _, _ = conn.ReadMessage()
 		select {
 		case clientClosed <- struct{}{}:
@@ -1029,8 +1006,7 @@ func TestClientPostHandshakeVersionMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1162,11 +1138,11 @@ func TestClientFlushPendingOnClose(t *testing.T) {
 
 			for {
 				var msg wsMessage
-				safeSetReadDeadline(t, conn, time.Now().Add(10*time.Second))
+				conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.ReadJSON(&msg); err != nil {
 					return
 				}
-				safeClearReadDeadline(t, conn)
+				conn.SetReadDeadline(time.Time{})
 				if msg.Type == "batch" {
 					return // drop without acking
 				}
@@ -1181,8 +1157,7 @@ func TestClientFlushPendingOnClose(t *testing.T) {
 		hostParts := strings.Split(host, ":")
 		portStr := hostParts[len(hostParts)-1]
 		var port int
-		_, err = fmt.Sscanf(portStr, "%d", &port)
-		require.NoError(t, err)
+		fmt.Sscanf(portStr, "%d", &port)
 
 		logger := &core.FakeLogger{}
 		osProvider := core.OsProvider{}
@@ -1318,12 +1293,8 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 	}()
 
 	oldHome := os.Getenv("HOME")
-	require.NoError(t, os.Setenv("HOME", clientDir))
-	defer func() {
-		if err := os.Setenv("HOME", oldHome); err != nil {
-			t.Logf("failed to restore HOME: %v", err)
-		}
-	}()
+	os.Setenv("HOME", clientDir)
+	defer os.Setenv("HOME", oldHome)
 
 	clientCertsDir := filepath.Join(clientDir, ".keyop", "certs")
 	err = util.GenerateTestCerts(clientCertsDir)
@@ -1337,8 +1308,7 @@ func TestClientRejectsWrongCAServer(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1414,12 +1384,8 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 	}()
 
 	oldHome := os.Getenv("HOME")
-	require.NoError(t, os.Setenv("HOME", clientDir))
-	defer func() {
-		if err := os.Setenv("HOME", oldHome); err != nil {
-			t.Logf("failed to restore HOME: %v", err)
-		}
-	}()
+	os.Setenv("HOME", clientDir)
+	defer os.Setenv("HOME", oldHome)
 
 	clientCertsDir := filepath.Join(clientDir, ".keyop", "certs")
 	serverCert, serverKey, _, _, err := util.CreateTestCerts(clientCertsDir)
@@ -1450,8 +1416,7 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
@@ -1518,11 +1483,11 @@ func TestClientSPKIPinMatch(t *testing.T) {
 
 		// Minimal server-side handshake so the client's handleConnection proceeds.
 		var hello wsMessage
-		safeSetReadDeadline(t, conn, time.Now().Add(5*time.Second))
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		if err := conn.ReadJSON(&hello); err != nil {
 			return
 		}
-		safeClearReadDeadline(t, conn)
+		conn.SetReadDeadline(time.Time{})
 
 		if err := conn.WriteJSON(wsMessage{
 			V:            protocolVersion,
@@ -1542,7 +1507,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 		}
 		// Drain to keep the connection alive.
 		for {
-			safeSetReadDeadline(t, conn, time.Now().Add(10*time.Second))
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 			if _, _, err := conn.ReadMessage(); err != nil {
 				return
 			}
@@ -1558,12 +1523,8 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	}()
 
 	oldHome := os.Getenv("HOME")
-	require.NoError(t, os.Setenv("HOME", clientDir))
-	defer func() {
-		if err := os.Setenv("HOME", oldHome); err != nil {
-			t.Logf("failed to restore HOME: %v", err)
-		}
-	}()
+	os.Setenv("HOME", clientDir)
+	defer os.Setenv("HOME", oldHome)
 
 	clientCertsDir := filepath.Join(clientDir, ".keyop", "certs")
 	serverCert, serverKey, _, _, err := util.CreateTestCerts(clientCertsDir)
@@ -1603,8 +1564,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	hostParts := strings.Split(host, ":")
 	portStr := hostParts[len(hostParts)-1]
 	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
+	fmt.Sscanf(portStr, "%d", &port)
 
 	logger := &core.FakeLogger{}
 	osProvider := core.OsProvider{}
