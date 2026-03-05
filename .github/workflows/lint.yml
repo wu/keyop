@@ -35,16 +35,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl
 
-      - name: Install golangci-lint
+      - name: Install golangci-lint (prebuilt)
         run: |
-          # Build and install golangci-lint with the runner's Go toolchain to ensure
-          # analyzers use a compatible export-data format with Go 1.26.
-          GOBIN="$GITHUB_WORKSPACE/.bin" go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.0
-          echo "$GITHUB_WORKSPACE/.bin" >> "$GITHUB_PATH"
+          # Download and install the official prebuilt golangci-lint binary for linux/amd64.
+          # Installing the release binary avoids building x/tools on the runner which
+          # can fail due to tokeninternal size mismatches with some toolchains.
+          curl -sSfL -o /tmp/golangci-lint.tar.gz \
+            https://github.com/golangci/golangci-lint/releases/download/v1.59.0/golangci-lint-1.59.0-linux-amd64.tar.gz
+          tar -xzf /tmp/golangci-lint.tar.gz -C /tmp
+          sudo mv /tmp/golangci-lint-1.59.0-linux-amd64/golangci-lint /usr/local/bin/golangci-lint
+          sudo chmod +x /usr/local/bin/golangci-lint
 
       - name: Run golangci-lint
         run: |
-          # Run the installed linter locally on the runner where Go 1.26 is set up.
+          # Ensure caches are clear so analyzers recompile packages with the runner's Go toolchain
+          # (avoids export-data format mismatches).
+          go clean -cache -modcache -testcache || true
           golangci-lint run --timeout=10m --out-format=colored-line-number ./...
 
       - name: Check formatting (gofmt)
