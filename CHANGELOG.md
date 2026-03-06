@@ -1,3 +1,28 @@
+## [1.3.0](https://github.com/wu/keyop/compare/1.2.1...1.3.0) (2026-03-06)
+
+### Features
+
+* major upgrades to process service ([aa3aae5](https://github.com/wu/keyop/commit/aa3aae5e705f8a4e70d13b6315fdd600de858b46))
+
+### Bug Fixes
+
+* address gosec lint warnings ([35218a7](https://github.com/wu/keyop/commit/35218a7b159bbd16a75791dc6f9b6d71173d37d5))
+* cleaning up lint warnings ([ef3db68](https://github.com/wu/keyop/commit/ef3db6872d2a225e7899d92cb6bb70a7d04da6c7))
+* cleaning up lint warnings ([101187d](https://github.com/wu/keyop/commit/101187df6ae9eec2637d20031782e97ed26a705d))
+* improve backoff algorithm in messenger ([5387a0d](https://github.com/wu/keyop/commit/5387a0de2a9f8481a2ab93d7f954eba2e7ecbbd5))
+* remove testing script used in dev ([8bd8e3b](https://github.com/wu/keyop/commit/8bd8e3b5917388d602cef158abf0855aadb79fa3))
+* resolve lint 'ineffassign' and 'staticcheck' issues ([2b47ab5](https://github.com/wu/keyop/commit/2b47ab57aa542e5d865d5ab760a8d62eb5858ccb))
+* resolve more lint 'unused' issues ([6e5cf70](https://github.com/wu/keyop/commit/6e5cf70f721f1e960341887ef5aa5413b160f14e))
+* resolve more lint errcheck issues ([fd38c57](https://github.com/wu/keyop/commit/fd38c5757c7f14c35a48e8317a00a2baa504f4f2))
+* resolve more lint issues ([3677fdc](https://github.com/wu/keyop/commit/3677fdc27f25e8c347df20b4e60d63f1026d43fa))
+* resolve more lint related issues ([7ca7401](https://github.com/wu/keyop/commit/7ca7401ffb50a58fdce7066df17cf00003a49ed0))
+* resolve some lint 'revive' issues ([51a00d8](https://github.com/wu/keyop/commit/51a00d8f57b5c00a2386187c35f58dc712d50244))
+* temporarily disble revive lint checks in some files ([8f8d50a](https://github.com/wu/keyop/commit/8f8d50af480af0a378ee0c024b837528cae159b0))
+
+### Refactoring
+
+* clean up error handling ([372ea72](https://github.com/wu/keyop/commit/372ea721854878f71bca666ced76cb0c3a4cb66d))
+
 ## [1.2.1](https://github.com/wu/keyop/compare/1.2.0...1.2.1) (2026-03-05)
 
 ### Refactoring
