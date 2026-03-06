@@ -117,24 +117,22 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 		if mse > svc.Threshold {
 			return svc.reportAnomalyStatus(msg, mse, "warning")
-		} else {
-			return svc.reportAnomalyStatus(msg, mse, "ok")
 		}
-	} else {
-		_, reconstructed := svc.AE.Forward(window)
-		mse := 0.0
-		for i := 0; i < svc.WindowSize; i++ {
-			err := reconstructed[i] - window[i]
-			mse += err * err
-		}
-		mse /= float64(svc.WindowSize)
-
-		if mse > svc.Threshold {
-			return svc.reportAnomalyStatus(msg, mse, "warning")
-		} else {
-			return svc.reportAnomalyStatus(msg, mse, "ok")
-		}
+		return svc.reportAnomalyStatus(msg, mse, "ok")
 	}
+
+	_, reconstructed := svc.AE.Forward(window)
+	mse := 0.0
+	for i := 0; i < svc.WindowSize; i++ {
+		err := reconstructed[i] - window[i]
+		mse += err * err
+	}
+	mse /= float64(svc.WindowSize)
+
+	if mse > svc.Threshold {
+		return svc.reportAnomalyStatus(msg, mse, "warning")
+	}
+	return svc.reportAnomalyStatus(msg, mse, "ok")
 }
 
 func (svc *Service) reportAnomalyStatus(msg core.Message, mse float64, status string) error {

@@ -1,3 +1,11 @@
+// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
+//
+// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
+//
+// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
+//
+// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
+//
 //nolint:revive
 package messengerStats
 
@@ -45,10 +53,10 @@ func (svc *Service) Check() error {
 	logger.Debug("messenger stats", "stats", stats)
 
 	currentTime := time.Now()
-	correlationId := uuid.New().String()
+	correlationID := uuid.New().String()
 
 	eventErr := messenger.Send(core.Message{
-		Correlation: correlationId,
+		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -73,7 +81,7 @@ func (svc *Service) Check() error {
 			msgsPerMinute := float64(deltaMessages) / (deltaTime / 60.0)
 
 			metricErr = messenger.Send(core.Message{
-				Correlation: correlationId,
+				Correlation: correlationID,
 				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,

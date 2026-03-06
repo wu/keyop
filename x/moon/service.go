@@ -118,23 +118,29 @@ func getMoonPhaseName(phase float64) string {
 
 	if phase < 1 {
 		return "New Moon"
-	} else if phase < 6 {
-		return "Waxing Crescent"
-	} else if phase < 8 {
-		return "First Quarter"
-	} else if phase < 13 {
-		return "Waxing Gibbous"
-	} else if phase < 15 {
-		return "Full Moon"
-	} else if phase < 20 {
-		return "Waning Gibbous"
-	} else if phase < 22 {
-		return "Last Quarter"
-	} else if phase < 27 {
-		return "Waning Crescent"
-	} else {
-		return "New Moon"
 	}
+	if phase < 6 {
+		return "Waxing Crescent"
+	}
+	if phase < 8 {
+		return "First Quarter"
+	}
+	if phase < 13 {
+		return "Waxing Gibbous"
+	}
+	if phase < 15 {
+		return "Full Moon"
+	}
+	if phase < 20 {
+		return "Waning Gibbous"
+	}
+	if phase < 22 {
+		return "Last Quarter"
+	}
+	if phase < 27 {
+		return "Waning Crescent"
+	}
+	return "New Moon"
 }
 
 // timeUntilNextMajorPhase returns the name and exact time.Time of the next New Moon or Full Moon,

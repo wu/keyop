@@ -1,3 +1,4 @@
+// Package temp provides the temp package.
 package temp
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Service represents a Service used by the package.
 type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig
@@ -134,10 +136,10 @@ func (svc Service) temp() (Event, error) {
 	}
 
 	// generate correlation id for this check to tie together the events and metrics in the backend
-	correlationId := uuid.New().String()
+	correlationID := uuid.New().String()
 
 	eventErr := messenger.Send(core.Message{
-		Correlation: correlationId,
+		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -153,7 +155,7 @@ func (svc Service) temp() (Event, error) {
 	}
 
 	metricErr := messenger.Send(core.Message{
-		Correlation: correlationId,
+		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

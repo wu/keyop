@@ -56,6 +56,7 @@ type logEntry struct {
 	timestamp   time.Time
 }
 
+// NewMonitorCmd creates the TUI monitor command for heartbeats, temperatures, errors, and alerts.
 func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 	var wsPort int
 	var wsHost string
@@ -301,13 +302,13 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 				mu.Lock()
 				hostnameColorsMu.Lock()
 				serviceNameColorsMu.Lock()
-				s := monitorState{
+				st := monitorState{
 					Hosts:             hosts,
 					Temps:             temps,
 					HostnameColors:    hostnameColors,
 					ServiceNameColors: serviceNameColors,
 				}
-				if err := stateStore.Save("monitor", s); err != nil {
+				if err := stateStore.Save("monitor", st); err != nil {
 
 					logger.Warn("tui: failed to save state", "err", err)
 
@@ -616,13 +617,13 @@ func getHostnameColor(hostname string, stateStore core.StateStore, hosts map[str
 
 	// Save state immediately when a new color is generated
 	serviceNameColorsMu.Lock()
-	s_ := monitorState{
+	st := monitorState{
 		Hosts:             hosts,
 		Temps:             temps,
 		HostnameColors:    hostnameColors,
 		ServiceNameColors: serviceNameColors,
 	}
-	if err := stateStore.Save("monitor", s_); err != nil {
+	if err := stateStore.Save("monitor", st); err != nil {
 
 		log.Printf("tui: failed to save state: %v", err)
 
@@ -652,13 +653,13 @@ func getServiceColor(serviceName string, stateStore core.StateStore, hosts map[s
 
 	// Save state immediately when a new color is generated
 	hostnameColorsMu.Lock()
-	s_ := monitorState{
+	st := monitorState{
 		Hosts:             hosts,
 		Temps:             temps,
 		HostnameColors:    hostnameColors,
 		ServiceNameColors: serviceNameColors,
 	}
-	if err := stateStore.Save("monitor", s_); err != nil {
+	if err := stateStore.Save("monitor", st); err != nil {
 
 		log.Printf("tui: failed to save state: %v", err)
 
