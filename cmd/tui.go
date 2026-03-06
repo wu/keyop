@@ -97,11 +97,11 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	}()
 
 	dataDir := filepath.Join(tempDir, "data")
-	if err := osProvider.MkdirAll(dataDir, 0755); err != nil {
+	if err := osProvider.MkdirAll(dataDir, 0750); err != nil { //nolint:gosec // restrict permissions on temp data directory
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 	messenger.SetDataDir(dataDir)
-	messenger.SetHostname(fmt.Sprintf("tui-%d", rand.Intn(1000000)))
+	messenger.SetHostname(fmt.Sprintf("tui-%d", rand.Intn(1000000))) //nolint:gosec // non-crypto randomness for local hostname only
 
 	// Persist state in ~/.keyop/monitor_state
 	home, err := osProvider.UserHomeDir()
@@ -115,13 +115,13 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	// Keep logs for the TUI under ~/.keyop/data/ to match the user's expectations.
 	// Use ~/.keyop/logs for persistent logs (user requested location)
 	persistentLogDir := filepath.Join(home, ".keyop", "logs")
-	if err := osProvider.MkdirAll(persistentLogDir, 0755); err != nil {
+	if err := osProvider.MkdirAll(persistentLogDir, 0750); err != nil { //nolint:gosec // restrict perms for persistent dir
 		return fmt.Errorf("failed to create persistent log directory: %w", err)
 	}
 
 	logFileName := "keyop-tui." + time.Now().Format("20060102") + ".log"
 	logFilePath := filepath.Join(persistentLogDir, logFileName)
-	f, err := osProvider.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := osProvider.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -607,9 +607,9 @@ func getHostnameColor(hostname string, stateStore core.StateStore, hosts map[str
 	// Generate a random high-quality color using go-colorful.
 	// We use HSL to ensure the color is bright and visible on a dark background.
 	// Hue is random (0-360), Saturation is high (0.7-1.0), and Luminance is medium-high (0.6-0.8).
-	h := rand.Float64() * 360.0
-	s := 0.7 + rand.Float64()*0.3
-	l := 0.5 + rand.Float64()*0.2
+	h := rand.Float64() * 360.0   //nolint:gosec // non-crypto randomness for UI color
+	s := 0.7 + rand.Float64()*0.3 //nolint:gosec // non-crypto randomness for UI color
+	l := 0.5 + rand.Float64()*0.2 //nolint:gosec // non-crypto randomness for UI color
 	c := colorful.Hsl(h, s, l)
 	hex := c.Hex()
 	hostnameColors[hostname] = hex
@@ -643,9 +643,9 @@ func getServiceColor(serviceName string, stateStore core.StateStore, hosts map[s
 	// Generate a random high-quality color using go-colorful.
 	// We use HSL to ensure the color is bright and visible on a dark background.
 	// Hue is random (0-360), Saturation is high (0.7-1.0), and Luminance is medium-high (0.6-0.8).
-	h := rand.Float64() * 360.0
-	s := 0.7 + rand.Float64()*0.3
-	l := 0.5 + rand.Float64()*0.2
+	h := rand.Float64() * 360.0   //nolint:gosec // non-crypto randomness for UI color
+	s := 0.7 + rand.Float64()*0.3 //nolint:gosec // non-crypto randomness for UI color
+	l := 0.5 + rand.Float64()*0.2 //nolint:gosec // non-crypto randomness for UI color
 	c := colorful.Hsl(h, s, l)
 	hex := c.Hex()
 	serviceNameColors[serviceName] = hex

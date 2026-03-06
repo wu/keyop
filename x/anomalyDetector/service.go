@@ -194,13 +194,13 @@ func NewAutoencoder(inputSize, hiddenSize int) *Autoencoder {
 	for i := range ae.W1 {
 		ae.W1[i] = make([]float64, inputSize)
 		for j := range ae.W1[i] {
-			ae.W1[i][j] = rand.NormFloat64() * 0.1
+			ae.W1[i][j] = rand.NormFloat64() * 0.1 //nolint:gosec // non-crypto randomness for model initialization
 		}
 	}
 	for i := range ae.W2 {
 		ae.W2[i] = make([]float64, hiddenSize)
 		for j := range ae.W2[i] {
-			ae.W2[i][j] = rand.NormFloat64() * 0.1
+			ae.W2[i][j] = rand.NormFloat64() * 0.1 //nolint:gosec // non-crypto randomness for model initialization
 		}
 	}
 	return ae

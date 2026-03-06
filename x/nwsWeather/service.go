@@ -112,7 +112,7 @@ func (svc *Service) fetchForecastURL() error {
 	}
 	req.Header.Set("User-Agent", "(keyop, https://github.com/keyop/keyop)")
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to trusted NWS API
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (svc *Service) Check() error {
 
 	logger := svc.Deps.MustGetLogger()
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to trusted NWS API
 	if err != nil {
 		return err
 	}

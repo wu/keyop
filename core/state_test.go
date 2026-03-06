@@ -14,11 +14,11 @@ import (
 func TestFileStateStore(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "state_test")
 	require.NoError(t, err)
-	defer func() {
+	t.Cleanup(func() {
 		if err := os.RemoveAll(tmpDir); err != nil {
 			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
 		}
-	}()
+	})
 
 	osProvider := OsProvider{}
 	store := NewFileStateStore(tmpDir, osProvider)
@@ -119,7 +119,7 @@ func TestFileStateStore(t *testing.T) {
 		key := "malformed"
 		// Write malformed JSON manually
 		path := filepath.Join(tmpDir, "state_"+key+".json")
-		err := os.WriteFile(path, []byte("{invalid json}"), 0644)
+		err := os.WriteFile(path, []byte("{invalid json}"), 0600)
 		require.NoError(t, err)
 
 		var val map[string]string

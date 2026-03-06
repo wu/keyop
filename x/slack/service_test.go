@@ -271,7 +271,7 @@ func TestService_Check(t *testing.T) {
 			}
 		}
 	}))
-	defer apiServer.Close()
+	t.Cleanup(apiServer.Close)
 
 	cfg := core.ServiceConfig{
 		Name: "slack-test",

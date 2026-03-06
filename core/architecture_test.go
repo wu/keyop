@@ -99,7 +99,7 @@ func TestMessenger_BackwardCompatibility(t *testing.T) {
 	// Manually write a legacy message (raw JSON of Message struct) to the queue file
 	dateStr := time.Now().Format("20060102")
 	fileName := filepath.Join(tmpDir, fmt.Sprintf("%s_queue_%s.log", channel, dateStr))
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+	if err := os.MkdirAll(tmpDir, 0750); err != nil { //nolint:gosec // restrict permissions for test directory
 		t.Fatal(err)
 	}
 
@@ -110,7 +110,7 @@ func TestMessenger_BackwardCompatibility(t *testing.T) {
 		Timestamp:   time.Now().Add(-time.Minute),
 	}
 	msgBytes, _ := json.Marshal(legacyMsg)
-	if err := os.WriteFile(fileName, append(msgBytes, '\n'), 0644); err != nil {
+	if err := os.WriteFile(fileName, append(msgBytes, '\n'), 0600); err != nil { //nolint:gosec // restrict permissions for test file
 		t.Fatal(err)
 	}
 

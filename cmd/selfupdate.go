@@ -34,7 +34,7 @@ func runSelfUpdateWithURL(deps core.Dependencies, baseURL string) error {
 	url := fmt.Sprintf("%s/keyop-%s-%s.gz", baseURL, runtime.GOOS, runtime.GOARCH)
 	logger.Info("Downloading update", "url", url)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec // URL is internal and not user-controlled
 	if err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
 	}
@@ -94,7 +94,7 @@ func installUpdate(logger core.Logger, gzReader io.Reader, exePath string) error
 		if err := tmpFile.Close(); err != nil {
 			logger.Warn("failed to close temp update file", "err", err)
 		}
-		if err := os.Remove(tmpFile.Name()); err != nil {
+		if err := os.Remove(tmpFile.Name()); err != nil { //nolint:gosec // safe remove of temp file
 			logger.Debug("failed to remove temp update file", "err", err, "path", tmpFile.Name())
 		}
 	}()
@@ -109,14 +109,14 @@ func installUpdate(logger core.Logger, gzReader io.Reader, exePath string) error
 	}
 
 	// Set executable permissions
-	if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
+	if err := os.Chmod(tmpFile.Name(), 0755); err != nil { //nolint:gosec // setting executable permissions for updated binary is intentional
 		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
 	logger.Info("Replacing current binary", "path", exePath)
 
 	// Move the temporary file to the executable path
-	if err := os.Rename(tmpFile.Name(), exePath); err != nil {
+	if err := os.Rename(tmpFile.Name(), exePath); err != nil { //nolint:gosec // moving temp file to executable is intentional
 		return fmt.Errorf("failed to replace executable: %w (try running with sudo?)", err)
 	}
 

@@ -66,7 +66,7 @@ func (svc *Service) startProcess() error {
 	command := svc.Cfg.Config["command"].(string)
 	pidFile := svc.Cfg.Config["pidFile"].(string)
 
-	svc.cmd = exec.Command("sh", "-c", command)
+	svc.cmd = exec.Command("sh", "-c", command) //nolint:gosec // executing configured command intentionally
 	if err := svc.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start process: %w", err)
 	}
@@ -74,7 +74,7 @@ func (svc *Service) startProcess() error {
 	logger.Info("started process", "pid", svc.cmd.Process.Pid, "command", command)
 
 	osProvider := svc.Deps.MustGetOsProvider()
-	f, err := osProvider.OpenFile(pidFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := osProvider.OpenFile(pidFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open pid file: %w", err)
 	}

@@ -58,7 +58,7 @@ func testDeps(t *testing.T) core.Dependencies {
 		ReadFileFunc: os.ReadFile,
 		StatFunc:     os.Stat,
 		OpenFileFunc: func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
-			return os.OpenFile(name, flag, perm)
+			return os.OpenFile(name, flag, perm) //nolint:gosec // test-only file open
 		},
 		MkdirAllFunc: os.MkdirAll,
 		ReadDirFunc:  os.ReadDir,
@@ -439,8 +439,8 @@ func TestService_MessageHandler_UntrustedServerCert(t *testing.T) {
 	if err := util.GenerateTestCerts(tmpDir); err != nil {
 		assert.NoError(t, err)
 	}
-	serverCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.crt"))
-	serverKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.key"))
+	serverCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.crt")) //nolint:gosec // test-only file read
+	serverKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-server.key"))  //nolint:gosec // test-only file read
 	serverCert, _ := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

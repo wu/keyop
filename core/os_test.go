@@ -48,7 +48,7 @@ func TestOsProvider_OpenFile(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
 
-	file, err := provider.OpenFile(tmpFile, os.O_CREATE|os.O_RDWR, 0644)
+	file, err := provider.OpenFile(tmpFile, os.O_CREATE|os.O_RDWR, 0600)
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 
@@ -66,7 +66,7 @@ func TestOsProvider_MkdirAll(t *testing.T) {
 	provider := OsProvider{}
 	tmpDir := t.TempDir() + "/a/b/c"
 
-	err := provider.MkdirAll(tmpDir, 0755)
+	err := provider.MkdirAll(tmpDir, 0750)
 	assert.NoError(t, err)
 
 	info, err := os.Stat(tmpDir)
@@ -78,9 +78,9 @@ func TestOsProvider_ReadDir(t *testing.T) {
 	provider := OsProvider{}
 	tmpDir := t.TempDir()
 
-	err := os.WriteFile(tmpDir+"/file1", []byte("1"), 0644)
+	err := os.WriteFile(tmpDir+"/file1", []byte("1"), 0600)
 	assert.NoError(t, err)
-	err = os.WriteFile(tmpDir+"/file2", []byte("2"), 0644)
+	err = os.WriteFile(tmpDir+"/file2", []byte("2"), 0600)
 	assert.NoError(t, err)
 
 	entries, err := provider.ReadDir(tmpDir)
@@ -91,7 +91,7 @@ func TestOsProvider_ReadDir(t *testing.T) {
 func TestOsProvider_Stat(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("test"), 0600); err != nil {
 		assert.NoError(t, err)
 	}
 	info, err := provider.Stat(tmpFile)
@@ -102,7 +102,7 @@ func TestOsProvider_Stat(t *testing.T) {
 func TestOsProvider_Remove(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("test"), 0600); err != nil {
 		assert.NoError(t, err)
 	}
 	err := provider.Remove(tmpFile)
@@ -242,7 +242,7 @@ func TestFakeFile(t *testing.T) {
 		tmp, _ := os.CreateTemp("", "fakefiletest")
 		//goland:noinspection GoUnhandledErrorResult
 		t.Cleanup(func() {
-			if err := os.Remove(tmp.Name()); err != nil {
+			if err := os.Remove(tmp.Name()); err != nil { //nolint:gosec // test-only temp file
 				t.Logf("failed to remove %s: %v", tmp.Name(), err)
 			}
 		})
@@ -263,7 +263,7 @@ func TestFakeFile(t *testing.T) {
 		if _, err := tmp.Seek(0, 0); err != nil {
 			t.Fatalf("failed to seek tmp file: %v", err)
 		}
-		content, err := os.ReadFile(tmp.Name())
+		content, err := os.ReadFile(tmp.Name()) //nolint:gosec // test-only temp file
 		if err != nil {
 			t.Fatalf("failed to read tmp file: %v", err)
 		}
@@ -294,7 +294,7 @@ func TestFakeOsProvider_MkdirAll(t *testing.T) {
 func TestOsProvider_Chtimes(t *testing.T) {
 	provider := OsProvider{}
 	tmpFile := t.TempDir() + "/testfile"
-	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("test"), 0600); err != nil {
 		assert.NoError(t, err)
 	}
 	now := time.Now()

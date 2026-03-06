@@ -49,7 +49,7 @@ func TestValidateConfig(t *testing.T) {
 	}()
 
 	certDir := filepath.Join(home, ".keyop", "certs")
-	if err := os.MkdirAll(certDir, 0755); err != nil {
+	if err := os.MkdirAll(certDir, 0750); err != nil {
 		t.Fatalf("failed to create cert dir: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestValidateConfig(t *testing.T) {
 		filepath.Join(certDir, "ca.crt"),
 	}
 	for _, f := range files {
-		if err := os.WriteFile(f, []byte("dummy"), 0644); err != nil {
+		if err := os.WriteFile(f, []byte("dummy"), 0600); err != nil {
 			t.Fatalf("failed to create dummy file %s: %v", f, err)
 		}
 	}
@@ -134,7 +134,7 @@ func TestInitialize(t *testing.T) {
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
 	fakeOs.ReadFileFunc = func(name string) ([]byte, error) {
-		return os.ReadFile(name)
+		return os.ReadFile(name) //nolint:gosec // test-only file read
 	}
 	deps.SetOsProvider(fakeOs)
 
@@ -258,7 +258,7 @@ func setupTestServer(t *testing.T, svc *Service, certDir string) (*websocket.Con
 
 	cert, err := tls.LoadX509KeyPair(serverCert, serverKey)
 	require.NoError(t, err)
-	caCert, err := os.ReadFile(caFile)
+	caCert, err := os.ReadFile(caFile) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -275,7 +275,7 @@ func setupTestServer(t *testing.T, svc *Service, certDir string) (*websocket.Con
 		Certificates:       []tls.Certificate{cert},
 		ClientCAs:          caCertPool,
 		ClientAuth:         tls.RequireAndVerifyClientCert,
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // test-only TLS config
 	}
 	srv.StartTLS()
 
@@ -285,7 +285,7 @@ func setupTestServer(t *testing.T, svc *Service, certDir string) (*websocket.Con
 		TLSClientConfig: &tls.Config{
 			RootCAs:            caCertPool,
 			Certificates:       []tls.Certificate{clientCertObj},
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: true, //nolint:gosec // test-only TLS config
 		},
 	}
 	wsURL := strings.Replace(srv.URL, "https", "wss", 1) + "/ws"
@@ -331,7 +331,7 @@ func TestHandleConnection(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 
 	messenger := newFakeMessenger()
@@ -437,7 +437,7 @@ func TestHandleConnection_VersionMismatch(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 	deps.SetMessenger(newFakeMessenger())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -490,7 +490,7 @@ func TestHandleConnection_Batching(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 
 	messenger := newFakeMessenger()
@@ -560,7 +560,7 @@ func TestHandleConnection_ClientBatch(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 
 	messenger := newFakeMessenger()
@@ -632,7 +632,7 @@ func TestHandleConnection_ClientBatch_NoAckOnFailure(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 
 	messenger := newFakeMessenger()
@@ -840,7 +840,7 @@ func TestHandleConnection_PostHandshakeVersionMismatch(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 	deps.SetMessenger(newFakeMessenger())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -901,7 +901,7 @@ func TestHandleConnection_BadHandshake(t *testing.T) {
 	deps := core.Dependencies{}
 	deps.SetLogger(&core.FakeLogger{})
 	fakeOs := &core.FakeOsProvider{Home: home}
-	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) }
+	fakeOs.ReadFileFunc = func(name string) ([]byte, error) { return os.ReadFile(name) } //nolint:gosec // test-only file read
 	deps.SetOsProvider(fakeOs)
 	deps.SetMessenger(newFakeMessenger())
 	ctx, cancel := context.WithCancel(context.Background())

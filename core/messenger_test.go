@@ -481,7 +481,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	logPath := fmt.Sprintf("%s/bad-test-json_queue_%s.log", tmpDir, time.Now().Format("20060102"))
-	err = os.WriteFile(logPath, []byte("invalid json\n"), 0644)
+	err = os.WriteFile(logPath, []byte("invalid json\n"), 0600)
 	assert.NoError(t, err)
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -544,7 +544,7 @@ func TestMessenger_Subscribe_UnmarshalError_AdvancesPastCorruptMessage(t *testin
 	validMsg := Message{ChannelName: channelName, Text: "valid-after-corrupt"}
 	validBytes, _ := json.Marshal(validMsg)
 	content := corruptLine + "\n" + string(validBytes) + "\n"
-	err = os.WriteFile(logPath, []byte(content), 0644)
+	err = os.WriteFile(logPath, []byte(content), 0600)
 	assert.NoError(t, err)
 
 	var received []string

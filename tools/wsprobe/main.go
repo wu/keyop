@@ -17,7 +17,7 @@ import (
 )
 
 func mustReadFile(p string) []byte {
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) //nolint:gosec // reading known file path for probe tool
 	if err != nil {
 		log.Fatalf("failed to read %s: %v", p, err)
 	}
@@ -59,13 +59,13 @@ func main() {
 	}
 
 	u := url.URL{Scheme: "wss", Host: fmt.Sprintf("%s:%d", *host, *port), Path: "/ws"}
-	log.Printf("connecting to %s", u.String())
+	log.Printf("connecting to %s", u.String()) //nolint:gosec // probe-only logging
 	dialer := websocket.Dialer{TLSClientConfig: tlsCfg}
 	conn, resp, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		if resp != nil {
 			body, _ := io.ReadAll(resp.Body)
-			log.Fatalf("dial failed: %v; resp status=%s; body=%s", err, resp.Status, string(body))
+			log.Fatalf("dial failed: %v; resp status=%s; body=%s", err, resp.Status, string(body)) //nolint:gosec // logging response body for probe
 		}
 		log.Fatalf("dial failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("connected (HTTP status %v)", resp.Status)
+	log.Printf("connected (HTTP status %v)", resp.Status) //nolint:gosec // probe-only logging
 
 	// build channel list
 	chList := splitAndTrim(*channels)
@@ -116,7 +116,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to read welcome: %v", err)
 	}
-	log.Printf("received: %s", string(message))
+	log.Printf("received: %s", string(message)) //nolint:gosec // probe-only logging
 
 	// clear deadline
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
@@ -180,6 +180,6 @@ func readLoop(conn *websocket.Conn) {
 			log.Printf("read error: %v", err)
 			return
 		}
-		log.Printf("recv: %s", string(msg))
+		log.Printf("recv: %s", string(msg)) //nolint:gosec // probe-only logging
 	}
 }

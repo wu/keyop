@@ -437,8 +437,8 @@ func TestService_UntrustedClientCert_Fails(t *testing.T) {
 	err = util.GenerateTestCerts(tmpDir)
 	assert.NoError(t, err)
 
-	untrustedCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-client.crt"))
-	untrustedKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-client.key"))
+	untrustedCertPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-client.crt")) //nolint:gosec // test-only file read
+	untrustedKeyPEM, _ := os.ReadFile(filepath.Join(tmpDir, "keyop-client.key"))  //nolint:gosec // test-only file read
 	untrustedCert, _ := tls.X509KeyPair(untrustedCertPEM, untrustedKeyPEM)
 
 	osProvider := deps.MustGetOsProvider()

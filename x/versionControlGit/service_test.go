@@ -27,10 +27,10 @@ func testDepsWithFakeOs(t *testing.T, tempDir string) (core.Dependencies, *core.
 	fOs := &core.FakeOsProvider{Home: tempDir}
 
 	fOs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
-		if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(name), 0o750); err != nil {
 			return nil, err
 		}
-		return os.OpenFile(name, flag, perm)
+		return os.OpenFile(name, flag, perm) //nolint:gosec // test-only file open using variable path
 	}
 	fOs.MkdirAllFunc = func(path string, perm os.FileMode) error {
 		return os.MkdirAll(path, perm)
@@ -339,7 +339,7 @@ func Test_handleMessage_storeFullMessageAndGitCommit(t *testing.T) {
 
 	filename := sanitizeFilename(msg.Summary) + ".txt"
 	p := filepath.Join(tmp, filename)
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	var parsed core.Message
 	require.NoError(t, json.Unmarshal(b, &parsed))
@@ -367,7 +367,7 @@ func Test_handleMessage_fallbackSubjectFromText(t *testing.T) {
 	require.NoError(t, svc.handleMessage(msg))
 
 	filename := sanitizeFilename("first line") + ".txt"
-	_, err := os.ReadFile(filepath.Join(tmp, filename))
+	_, err := os.ReadFile(filepath.Join(tmp, filename)) //nolint:gosec // test-only file read
 	require.NoError(t, err, "file should be named after the first line of Text")
 	assert.Empty(t, fm.Messages)
 }
@@ -420,7 +420,7 @@ func Test_handleMessage_dataPath_stringNode(t *testing.T) {
 	}
 	require.NoError(t, svc.handleMessage(msg))
 
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-1")+".txt"))
+	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-1")+".txt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	assert.Equal(t, "hello world", string(b))
 	assert.Empty(t, fm.Messages)
@@ -445,7 +445,7 @@ func Test_handleMessage_dataPath_objectNode(t *testing.T) {
 	}
 	require.NoError(t, svc.handleMessage(msg))
 
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-obj")+".txt"))
+	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-obj")+".txt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"a": 1`)
 	assert.Empty(t, fm.Messages)
@@ -471,7 +471,7 @@ func Test_handleMessage_dataPath_extractFailure_fallsBackToFullMessage(t *testin
 	require.NoError(t, svc.handleMessage(msg))
 
 	// file should exist and contain the full JSON-marshaled message
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("fallback-test")+".txt"))
+	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("fallback-test")+".txt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	var parsed core.Message
 	require.NoError(t, json.Unmarshal(b, &parsed))
@@ -568,7 +568,7 @@ func Test_handleMessage_gitAddError_emitsError(t *testing.T) {
 	require.NoError(t, svc.handleMessage(msg))
 
 	// file should still have been written
-	_, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("add-err")+".txt"))
+	_, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("add-err")+".txt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 
 	require.Len(t, fm.Messages, 1)

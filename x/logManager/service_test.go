@@ -76,7 +76,7 @@ func TestService_Check(t *testing.T) {
 	// Truncate to seconds because some filesystems or OS providers might have precision differences
 	assert.Equal(t, oldTime.Truncate(time.Second), gzInfo.ModTime().Truncate(time.Second))
 
-	f, err := os.Open(oldFile + ".gz")
+	f, err := os.Open(oldFile + ".gz") //nolint:gosec // test-only read
 	assert.NoError(t, err)
 	defer func() {
 		if err := f.Close(); err != nil {

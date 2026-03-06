@@ -84,7 +84,7 @@ func (svc Service) temp() (Event, error) {
 
 	temp := Event{}
 
-	contentBytes, err := os.ReadFile(svc.DevicePath)
+	contentBytes, err := os.ReadFile(svc.DevicePath) //nolint:gosec // devicePath is operator-configured (not user input)
 	if err != nil {
 		temp.Error = fmt.Sprintf("could not read from %s: %s", svc.DevicePath, err.Error())
 		logger.Error("temp", "data", temp)

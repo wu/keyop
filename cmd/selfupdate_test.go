@@ -22,7 +22,7 @@ func TestInstallUpdate(t *testing.T) {
 	}()
 
 	exePath := filepath.Join(tmpDir, "keyop")
-	err = os.WriteFile(exePath, []byte("original binary"), 0644)
+	err = os.WriteFile(exePath, []byte("original binary"), 0600)
 	assert.NoError(t, err)
 
 	newContent := "new binary content"
@@ -50,7 +50,7 @@ func TestInstallUpdate(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify content
-	content, err := os.ReadFile(exePath)
+	content, err := os.ReadFile(exePath) //nolint:gosec // test-only read of temp file
 	assert.NoError(t, err)
 	assert.Equal(t, newContent, string(content))
 

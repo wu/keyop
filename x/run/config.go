@@ -96,7 +96,7 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 		p := filepath.Join(dir, file.Name())
 		logger.Info("Loading service config file", "path", p)
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) //nolint:gosec // reading trusted config file under config dir
 		if err != nil {
 			return nil, err
 		}

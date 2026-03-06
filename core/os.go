@@ -92,10 +92,10 @@ type OsProvider struct{}
 func (OsProvider) Hostname() (string, error)    { return os.Hostname() }
 func (OsProvider) UserHomeDir() (string, error) { return os.UserHomeDir() }
 func (OsProvider) ReadFile(name string) ([]byte, error) {
-	return os.ReadFile(name)
+	return os.ReadFile(name) //nolint:gosec // intentional OS wrapper forwarding variable path
 }
 func (OsProvider) OpenFile(name string, flag int, perm os.FileMode) (FileApi, error) {
-	return os.OpenFile(name, flag, perm)
+	return os.OpenFile(name, flag, perm) //nolint:gosec // intentional OS wrapper
 }
 func (OsProvider) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
@@ -116,7 +116,7 @@ func (OsProvider) Remove(name string) error {
 	return os.Remove(name)
 }
 func (OsProvider) Command(name string, arg ...string) CommandApi {
-	return exec.Command(name, arg...)
+	return exec.Command(name, arg...) //nolint:gosec // intentional OS wrapper for executing configured commands
 }
 
 // FakeOsProvider is provided for testing

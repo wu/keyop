@@ -121,6 +121,7 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				}
 
 				// Delay before restart, unless shutting down
+				//nolint:gosec // non-crypto randomness for scheduling jitter
 				jitter := time.Duration(rand.Int63n(int64(task.Interval) / 20)) // up to 5% jitter
 				timer := time.NewTimer(task.Interval + jitter)
 				select {

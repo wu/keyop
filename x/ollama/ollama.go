@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -63,14 +64,14 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
+	client := &http.Client{Timeout: c.Timeout}
+	resp, err := client.Do(httpReq) //nolint:gosec // request to configured host/port
 	if err != nil {
 		return nil, fmt.Errorf("failed to call ollama api: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("ollama: failed to close response body: %v\n", err)
+			log.Printf("ollama: failed to close response body: %v", err)
 		}
 	}()
 

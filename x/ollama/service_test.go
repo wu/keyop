@@ -40,7 +40,7 @@ func testDeps(t *testing.T) core.Dependencies {
 		Host: "test-host",
 		Home: tmpDir,
 		OpenFileFunc: func(name string, flag int, perm os.FileMode) (core.FileApi, error) {
-			return os.OpenFile(name, flag, perm)
+			return os.OpenFile(name, flag, perm) //nolint:gosec // test-only file open
 		},
 		MkdirAllFunc: os.MkdirAll,
 		StatFunc:     os.Stat,

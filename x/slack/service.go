@@ -132,7 +132,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to Slack API
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (svc *Service) getChannelName(channelID string) string {
 	req.Header.Set("Authorization", "Bearer "+svc.botToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to Slack API
 	if err != nil {
 		logger.Error("Failed to call conversations.info", "error", err)
 		return channelID
@@ -246,7 +246,7 @@ func (svc *Service) getUserName(userID string) string {
 	req.Header.Set("Authorization", "Bearer "+svc.botToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to Slack API
 	if err != nil {
 		logger.Error("Failed to call users.info", "error", err)
 		return userID
@@ -314,7 +314,7 @@ func (svc *Service) Check() error {
 	req.Header.Set("Authorization", "Bearer "+svc.appToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // request to Slack API
 	if err != nil {
 		return err
 	}

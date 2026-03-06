@@ -106,7 +106,7 @@ func (p *RGBMatrixPlugin) Initialize() error {
 }
 
 func loadFontFace(path string, size float64) (font.Face, error) {
-	fontBytes, err := os.ReadFile(path)
+	fontBytes, err := os.ReadFile(path) //nolint:gosec // reading bundled resource file path
 	if err != nil {
 		return nil, fmt.Errorf("failed to read font file %s: %w", path, err)
 	}

@@ -59,6 +59,7 @@ WantedBy=multi-user.target
 
 	logger.Info("Installing systemd service", "path", servicePath)
 
+	//nolint:gosec // systemd unit file is expected to be world-readable
 	f, err := osProvider.OpenFile(servicePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create service file (do you have root privileges?): %w", err)

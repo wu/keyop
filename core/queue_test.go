@@ -172,7 +172,7 @@ func TestPersistentQueue_Rotation(t *testing.T) {
 	// Manually create an old file
 	oldDate := time.Now().AddDate(0, 0, -1).Format("20060102")
 	oldFile := filepath.Join(tmpDir, "test_queue_queue_"+oldDate+".log")
-	err = os.WriteFile(oldFile, []byte("old_item\n"), 0644)
+	err = os.WriteFile(oldFile, []byte("old_item\n"), 0600)
 	require.NoError(t, err)
 
 	// Enqueue something today
@@ -445,7 +445,7 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	// 6. Enqueue item3. We'll manually create a file with a NEWER date to ensure it's a different file.
 	newDate := time.Now().Add(24 * time.Hour).Format("20060102")
 	newFile := filepath.Join(tmpDir, "test_queue_queue_"+newDate+".log")
-	err = os.WriteFile(newFile, []byte("item3\n"), 0644)
+	err = os.WriteFile(newFile, []byte("item3\n"), 0600)
 	require.NoError(t, err)
 
 	// 7. Dequeue should handle the missing file error, log it, and find item3.

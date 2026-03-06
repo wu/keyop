@@ -50,7 +50,7 @@ func TestProcessService(t *testing.T) {
 		assert.NotNil(t, svc.cmd.Process)
 
 		// Check PID file
-		pidData, err := os.ReadFile(pidFile)
+		pidData, err := os.ReadFile(pidFile) //nolint:gosec // test-only read of PID file
 		assert.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%d", svc.cmd.Process.Pid), string(pidData))
 
@@ -84,7 +84,7 @@ func TestProcessService(t *testing.T) {
 		assert.Contains(t, messenger.SentMessages[0].Text, "status restarted")
 
 		// Check PID file updated
-		pidData, err := os.ReadFile(pidFile)
+		pidData, err := os.ReadFile(pidFile) //nolint:gosec // test-only read of PID file
 		assert.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%d", svc.cmd.Process.Pid), string(pidData))
 	})

@@ -68,7 +68,7 @@ func (svc *Service) Check() error {
 	insecure, _ := svc.Cfg.Config["insecure_skip_verify"].(bool)
 
 	conn, err := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
-		InsecureSkipVerify: insecure,
+		InsecureSkipVerify: insecure, //nolint:gosec // operator-configured TLS verification
 	})
 	if err != nil {
 		logger.Error("failed to connect to host", "url", svc.url, "error", err)

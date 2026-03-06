@@ -130,9 +130,10 @@ func (svc *Service) Initialize() error {
 	})
 
 	server := &http.Server{
-		Addr:      fmt.Sprintf(":%d", svc.Port),
-		Handler:   mux,
-		TLSConfig: tlsConfig,
+		Addr:              fmt.Sprintf(":%d", svc.Port),
+		Handler:           mux,
+		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: handshakeTimeout,
 	}
 
 	go func() {

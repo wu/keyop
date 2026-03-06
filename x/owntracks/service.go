@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Service struct {
@@ -97,8 +98,12 @@ func (svc *Service) Initialize() error {
 		}
 	}()
 
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	go func() {
-		if err := http.Serve(ln, mux); err != nil {
+		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			logger.Error("owntracks http server failed", "error", err)
 		}
 	}()

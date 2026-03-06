@@ -214,7 +214,7 @@ func setupClientBatchTest(t *testing.T, handler http.HandlerFunc) (wsURL string,
 
 	cert, err := tls.LoadX509KeyPair(serverCert, serverKey)
 	require.NoError(t, err)
-	caCertBytes, err := os.ReadFile(filepath.Join(certsDir, "ca.crt"))
+	caCertBytes, err := os.ReadFile(filepath.Join(certsDir, "ca.crt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCertBytes)
@@ -223,7 +223,7 @@ func setupClientBatchTest(t *testing.T, handler http.HandlerFunc) (wsURL string,
 		Certificates:       []tls.Certificate{cert},
 		ClientCAs:          caCertPool,
 		ClientAuth:         tls.RequireAndVerifyClientCert,
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // test-only server
 	}
 
 	server := httptest.NewUnstartedServer(handler)
@@ -1273,7 +1273,7 @@ func setupWrongCAServer(t *testing.T, _ string, handler http.HandlerFunc) (wsURL
 	// rejection (the server won't verify client certs in this helper).
 	tlsCfg := &tls.Config{
 		Certificates:       []tls.Certificate{cert},
-		InsecureSkipVerify: true, //nolint:gosec — test-only server
+		InsecureSkipVerify: true, //nolint:gosec // test-only server
 	}
 
 	server := httptest.NewUnstartedServer(handler)
@@ -1435,7 +1435,7 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 
 	cert, err := tls.LoadX509KeyPair(serverCert, serverKey)
 	require.NoError(t, err)
-	caCertBytes, err := os.ReadFile(filepath.Join(clientCertsDir, "ca.crt"))
+	caCertBytes, err := os.ReadFile(filepath.Join(clientCertsDir, "ca.crt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCertBytes)
@@ -1444,7 +1444,7 @@ func TestClientSPKIPinMismatch(t *testing.T) {
 		Certificates:       []tls.Certificate{cert},
 		ClientCAs:          caCertPool,
 		ClientAuth:         tls.RequireAndVerifyClientCert,
-		InsecureSkipVerify: true, //nolint:gosec — test-only server
+		InsecureSkipVerify: true, //nolint:gosec // test-only server
 	}
 
 	server := httptest.NewUnstartedServer(handler)
@@ -1579,7 +1579,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load the leaf cert to compute the correct SPKI pin.
-	leafCertBytes, err := os.ReadFile(serverCert)
+	leafCertBytes, err := os.ReadFile(serverCert) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	tlsCert, err := tls.LoadX509KeyPair(serverCert, serverKey)
 	require.NoError(t, err)
@@ -1589,7 +1589,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 	spkiSum := sha256.Sum256(parsedLeaf.RawSubjectPublicKeyInfo)
 	spkiPin := hex.EncodeToString(spkiSum[:])
 
-	caCertBytes, err := os.ReadFile(filepath.Join(clientCertsDir, "ca.crt"))
+	caCertBytes, err := os.ReadFile(filepath.Join(clientCertsDir, "ca.crt")) //nolint:gosec // test-only file read
 	require.NoError(t, err)
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCertBytes)
@@ -1598,7 +1598,7 @@ func TestClientSPKIPinMatch(t *testing.T) {
 		Certificates:       []tls.Certificate{tlsCert},
 		ClientCAs:          caCertPool,
 		ClientAuth:         tls.RequireAndVerifyClientCert,
-		InsecureSkipVerify: true, //nolint:gosec — test-only server
+		InsecureSkipVerify: true, //nolint:gosec // test-only server
 	}
 
 	server := httptest.NewUnstartedServer(handler)

@@ -41,7 +41,7 @@ func NewPersistentQueue(name string, dir string, osProvider OsProviderApi, logge
 	if osProvider == nil {
 		return nil, fmt.Errorf("osProvider cannot be nil")
 	}
-	if err := osProvider.MkdirAll(dir, 0755); err != nil {
+	if err := osProvider.MkdirAll(dir, 0750); err != nil { //nolint:gosec // restrict queue directory permissions
 		return nil, err
 	}
 	pq := &PersistentQueue{
@@ -61,7 +61,7 @@ func (pq *PersistentQueue) Enqueue(entry string) error {
 	dateStr := time.Now().Format("20060102")
 	fileName := filepath.Join(pq.dir, fmt.Sprintf("%s_queue_%s.log", pq.name, dateStr))
 
-	f, err := pq.osProvider.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := pq.osProvider.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (pq *PersistentQueue) loadState(readerName string) (readerState, error) {
 	if _, err := pq.osProvider.Stat(stateFile); os.IsNotExist(err) {
 		return state, nil
 	}
-	f, err := pq.osProvider.OpenFile(stateFile, os.O_RDONLY, 0644)
+	f, err := pq.osProvider.OpenFile(stateFile, os.O_RDONLY, 0600)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return state, nil
@@ -267,7 +267,7 @@ func (pq *PersistentQueue) saveState(readerName string, state readerState) error
 	}
 	stateFile := filepath.Join(pq.dir, fmt.Sprintf("reader_state_%s_%s.json", pq.name, readerName))
 	// Use a temporary file for atomic write if possible, but here we just overwrite
-	f, err := pq.osProvider.OpenFile(stateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := pq.osProvider.OpenFile(stateFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (pq *PersistentQueue) listQueueFiles() ([]string, error) {
 
 func (pq *PersistentQueue) readEntry(fileName string, offset int64) (string, int64, error) {
 	fullPath := filepath.Join(pq.dir, fileName)
-	f, err := pq.osProvider.OpenFile(fullPath, os.O_RDONLY, 0644)
+	f, err := pq.osProvider.OpenFile(fullPath, os.O_RDONLY, 0600)
 	if err != nil {
 		return "", offset, err
 	}

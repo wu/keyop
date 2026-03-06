@@ -31,7 +31,7 @@ func (s *FileStateStore) getFilePath(key string) string {
 func (s *FileStateStore) Save(key string, value interface{}) error {
 	path := s.getFilePath(key)
 
-	err := s.os.MkdirAll(s.DataDir, 0755)
+	err := s.os.MkdirAll(s.DataDir, 0750)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (s *FileStateStore) Save(key string, value interface{}) error {
 		return err
 	}
 
-	f, err := s.os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := s.os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (s *FileStateStore) Save(key string, value interface{}) error {
 func (s *FileStateStore) Load(key string, value interface{}) error {
 	path := s.getFilePath(key)
 
-	f, err := s.os.OpenFile(path, os.O_RDONLY, 0644)
+	f, err := s.os.OpenFile(path, os.O_RDONLY, 0600)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // No state yet, not an error

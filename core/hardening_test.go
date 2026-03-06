@@ -235,7 +235,7 @@ func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	logPath := filepath.Join(tmpDir, fmt.Sprintf("%s_queue_%s.log", channel, time.Now().Format("20060102")))
-	if err := os.WriteFile(logPath, []byte("invalid json\n"), 0644); err != nil {
+	if err := os.WriteFile(logPath, []byte("invalid json\n"), 0600); err != nil { //nolint:gosec // restrict permissions for test log file
 		assert.NoError(t, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

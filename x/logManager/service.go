@@ -119,7 +119,7 @@ func (svc *Service) gzipFile(srcPath string, modTime time.Time) error {
 		}
 	}()
 
-	dest, err := osProvider.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	dest, err := osProvider.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}

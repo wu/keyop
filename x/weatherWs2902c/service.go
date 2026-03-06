@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -130,8 +131,13 @@ func (svc *Service) Check() error {
 	addr := fmt.Sprintf(":%d", svc.Port)
 	logger.Info("weatherWs2902c: starting weather data service", "addr", addr)
 
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("weatherWs2902c: http server failed", "error", err)
 		}
 	}()

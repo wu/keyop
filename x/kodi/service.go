@@ -16,7 +16,7 @@ type Service struct {
 	Host     string
 	Port     int
 	Username string
-	Password string
+	Password string //nolint:gosec // configuration-provided credential
 }
 
 type KodiState struct {
@@ -240,6 +240,7 @@ func (svc *Service) callKodi(url string, method string, params interface{}, resu
 	req.SetBasicAuth(svc.Username, svc.Password)
 
 	client := &http.Client{}
+	//nolint:gosec // URL is operator-configured (trusted) in Kodi plugin
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

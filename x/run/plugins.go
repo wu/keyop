@@ -36,7 +36,7 @@ func LoadPlugins(deps core.Dependencies) error {
 	configPath := pluginConfigPath()
 
 	logger.Info("Loading plugins config", "path", configPath)
-	b, err := os.ReadFile(configPath)
+	b, err := os.ReadFile(configPath) //nolint:gosec // reading trusted plugins config file
 	if err != nil {
 		if os.IsNotExist(err) {
 			logger.Info("Plugins config not found, skipping plugin loading", "path", configPath)
