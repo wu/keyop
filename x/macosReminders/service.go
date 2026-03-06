@@ -2,6 +2,7 @@ package macosReminders
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"keyop/core"
@@ -200,7 +201,7 @@ func parseSwiftJSONLines(r io.Reader, onlyUncompleted bool, inboxName string) (m
 	for {
 		var obj map[string]interface{}
 		if err := dec.Decode(&obj); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, nil, err

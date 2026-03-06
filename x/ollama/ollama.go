@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -107,7 +108,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 	var fullResponse string
 	for {
 		line, err := reader.ReadBytes('\n')
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("error reading stream: %w", err)
 		}
 
@@ -128,7 +129,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 			}
 		}
 
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
