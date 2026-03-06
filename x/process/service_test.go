@@ -6,7 +6,10 @@ import (
 	"keyop/core/testutil"
 	"log/slog"
 	"os"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -18,14 +21,12 @@ func TestProcessService(t *testing.T) {
 	deps.SetOsProvider(core.OsProvider{}) // Use real OS for process execution
 	messenger := testutil.NewFakeMessenger()
 	deps.SetMessenger(messenger)
+	// use a real file state store in temp dir for pid persistence
+	tmp := t.TempDir()
+	deps.SetStateStore(core.NewFileStateStore(tmp, deps.MustGetOsProvider()))
 
-	pidFile := "test.pid"
-	//goland:noinspection GoUnhandledErrorResult
-	t.Cleanup(func() {
-		if err := os.Remove(pidFile); err != nil {
-			t.Logf("failed to remove %s: %v", pidFile, err)
-		}
-	})
+	// no pid file; rely on state store
+	// cleanup handled by t.TempDir()
 
 	cfg := core.ServiceConfig{
 		Name: "test-process",
@@ -37,7 +38,6 @@ func TestProcessService(t *testing.T) {
 		},
 		Config: map[string]interface{}{
 			"command": "sleep 10",
-			"pidFile": pidFile,
 		},
 	}
 
@@ -46,55 +46,92 @@ func TestProcessService(t *testing.T) {
 	t.Run("Start process", func(t *testing.T) {
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.NotNil(t, svc.cmd)
-		assert.NotNil(t, svc.cmd.Process)
-
-		// Check PID file
-		pidData, err := os.ReadFile(pidFile) //nolint:gosec // test-only read of PID file
+		// read pid from state store
+		var pid int
+		err = deps.MustGetStateStore().Load(fmt.Sprintf("process_%s_pid", cfg.Name), &pid)
 		assert.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("%d", svc.cmd.Process.Pid), string(pidData))
+		assert.NotZero(t, pid)
 
-		assert.Len(t, messenger.SentMessages, 1)
-		assert.Contains(t, messenger.SentMessages[0].Text, "status started")
+		// expect a process_start and a process_status(ok)
+		if !assert.GreaterOrEqual(t, len(messenger.SentMessages), 2) {
+			t.Fatalf("unexpected messages: %#v", messenger.SentMessages)
+		}
+		// find process_start and process_status messages
+		var sawStart, sawOk bool
+		for _, m := range messenger.SentMessages {
+			if m.Event == "process_start" && m.Text != "" && strings.Contains(m.Text, "started") {
+				sawStart = true
+			}
+			if m.Event == "process_status" && m.Status == "ok" {
+				sawOk = true
+			}
+		}
+		assert.True(t, sawStart, "did not see process_start message")
+		assert.True(t, sawOk, "did not see process_status ok message")
 	})
 
 	t.Run("Process still running", func(t *testing.T) {
 		messenger.SentMessages = nil
 		err := svc.Check()
 		assert.NoError(t, err)
-		assert.Len(t, messenger.SentMessages, 1)
-		assert.Contains(t, messenger.SentMessages[0].Text, "status running")
+		// expect a single process_status with ok
+		if !assert.Len(t, messenger.SentMessages, 1) {
+			t.Fatalf("unexpected messages: %#v", messenger.SentMessages)
+		}
+		assert.Equal(t, "process_status", messenger.SentMessages[0].Event)
+		assert.Equal(t, "ok", messenger.SentMessages[0].Status)
 	})
 
 	t.Run("Restart process if died", func(t *testing.T) {
-		oldPid := svc.cmd.Process.Pid
-		// Kill the process
-		err := svc.cmd.Process.Kill()
-		assert.NoError(t, err)
-		//goland:noinspection GoUnhandledErrorResult
-		if _, err := svc.cmd.Process.Wait(); err != nil {
-			t.Logf("svc.cmd.Process.Wait failed: %v", err)
+		// read current pid from the state store
+		var oldPid int
+		if err := deps.MustGetStateStore().Load(fmt.Sprintf("process_%s_pid", cfg.Name), &oldPid); err != nil {
+			t.Fatalf("failed to load pid: %v", err)
 		}
+		assert.NotZero(t, oldPid)
+
+		// Kill the process by PID to simulate an external kill signal
+		if err := syscall.Kill(oldPid, syscall.SIGKILL); err != nil {
+			t.Fatalf("failed to kill pid %d: %v", oldPid, err)
+		}
+
+		// give the system a moment
+		time.Sleep(500 * time.Millisecond)
 
 		messenger.SentMessages = nil
-		err = svc.Check()
-		assert.NoError(t, err)
-		assert.NotEqual(t, oldPid, svc.cmd.Process.Pid)
-		assert.Len(t, messenger.SentMessages, 1)
-		assert.Contains(t, messenger.SentMessages[0].Text, "status restarted")
+		if err := svc.Check(); err != nil {
+			t.Fatalf("check failed: %v", err)
+		}
 
-		// Check PID file updated
-		pidData, err := os.ReadFile(pidFile) //nolint:gosec // test-only read of PID file
-		assert.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("%d", svc.cmd.Process.Pid), string(pidData))
+		var newPid int
+		if err := deps.MustGetStateStore().Load(fmt.Sprintf("process_%s_pid", cfg.Name), &newPid); err != nil {
+			t.Fatalf("failed to load new pid: %v", err)
+		}
+		assert.NotZero(t, newPid)
+		assert.NotEqual(t, oldPid, newPid)
+		// expect at least a process_start and a final process_status ok
+		if !assert.GreaterOrEqual(t, len(messenger.SentMessages), 2) {
+			t.Fatalf("unexpected messages: %#v", messenger.SentMessages)
+		}
+		var sawStart, sawOk bool
+		for _, m := range messenger.SentMessages {
+			if m.Event == "process_start" {
+				sawStart = true
+			}
+			if m.Event == "process_status" && m.Status == "ok" {
+				sawOk = true
+			}
+		}
+		assert.True(t, sawStart, "did not see process_start message")
+		assert.True(t, sawOk, "did not see final process_status ok message")
+
 	})
 
-	// Cleanup
-	if svc.cmd != nil && svc.cmd.Process != nil {
-		//goland:noinspection GoUnhandledErrorResult
-		if err := svc.cmd.Process.Kill(); err != nil {
-			t.Logf("svc.cmd.Process.Kill failed: %v", err)
-		}
+	// Cleanup: kill any process we started
+	var finalPid int
+	_ = deps.MustGetStateStore().Load(fmt.Sprintf("process_%s_pid", cfg.Name), &finalPid)
+	if finalPid != 0 {
+		_ = syscall.Kill(finalPid, syscall.SIGKILL)
 	}
 }
 
@@ -135,22 +172,5 @@ func TestValidateConfig(t *testing.T) {
 		errs := svc.ValidateConfig()
 		assert.Len(t, errs, 1)
 		assert.Contains(t, errs[0].Error(), "command")
-	})
-
-	t.Run("missing pidFile", func(t *testing.T) {
-		cfg := core.ServiceConfig{
-			Pubs: map[string]core.ChannelInfo{
-				"events":  {Name: "e"},
-				"metrics": {Name: "m"},
-				"errors":  {Name: "er"},
-			},
-			Config: map[string]interface{}{
-				"command": "ls",
-			},
-		}
-		svc := NewService(deps, cfg)
-		errs := svc.ValidateConfig()
-		assert.Len(t, errs, 1)
-		assert.Contains(t, errs[0].Error(), "pidFile")
 	})
 }
