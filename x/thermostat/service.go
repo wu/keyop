@@ -24,6 +24,7 @@ var validModes = map[string]bool{
 	"off":  true,
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps: deps,
@@ -61,6 +62,7 @@ func getValidModes() []string {
 	return modes
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 
@@ -105,11 +107,13 @@ func (svc Service) ValidateConfig() []error {
 	return errs
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["temp"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["temp"].MaxAge, svc.tempHandler)
 }
 
+// Event describes a thermostat payload containing current temperature and control state used by the thermostat service.
 type Event struct {
 	HeaterTargetState string  `json:"heaterTargetState"`
 	CoolerTargetState string  `json:"coolerTargetState"`
@@ -233,6 +237,7 @@ func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
 	return thermostatEvent
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc Service) Check() error {
 	return nil
 }

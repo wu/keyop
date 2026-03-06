@@ -7,12 +7,17 @@ import (
 )
 
 var (
-	Version   = "dev"
-	Commit    = "none"
-	Branch    = "none"
+	// Version contains the current version string.
+	Version = "dev"
+	// Commit contains the git commit SHA used to build this binary.
+	Commit = "none"
+	// Branch contains the git branch name used to build this binary.
+	Branch = "none"
+	// BuildTime contains the build timestamp for the binary.
 	BuildTime = "unknown"
 )
 
+// NewVersionCmd returns a cobra command that prints build/version information.
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",

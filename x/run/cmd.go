@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCmd builds the run subcommand responsible for loading plugins, services, and starting the kernel.
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	runCmd := &cobra.Command{
 		Use:   "run",

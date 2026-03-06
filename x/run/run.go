@@ -9,6 +9,7 @@ import (
 	"syscall"
 )
 
+// ServiceWrapper bundles a constructed service instance with its core configuration and constructor info used by the runtime.
 type ServiceWrapper struct {
 	Service core.Service
 	Config  core.ServiceConfig

@@ -22,6 +22,7 @@ type Service struct {
 	SkipServices []string
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	windowSize := 10
 	if ws, ok := cfg.Config["window_size"].(float64); ok {
@@ -64,11 +65,13 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	return util.ValidateConfig("subs", svc.Cfg.Subs, []string{"metrics"}, logger)
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["metrics"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["metrics"].MaxAge, svc.messageHandler)
@@ -164,6 +167,7 @@ func (svc *Service) reportAnomalyStatus(msg core.Message, mse float64, status st
 	return messenger.Send(newMessage)
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	return nil
 }
@@ -180,6 +184,7 @@ type Autoencoder struct {
 	LearningRate float64
 }
 
+// NewAutoencoder constructs an Autoencoder with the specified input and hidden layer sizes.
 func NewAutoencoder(inputSize, hiddenSize int) *Autoencoder {
 	ae := &Autoencoder{
 		InputSize:    inputSize,
@@ -215,6 +220,7 @@ func sigmoidDeriv(x float64) float64 {
 	return sx * (1.0 - sx)
 }
 
+// Forward runs the autoencoder forward pass, returning hidden activations and reconstructed output.
 func (ae *Autoencoder) Forward(input []float64) ([]float64, []float64) {
 	hidden := make([]float64, ae.HiddenSize)
 	for i := 0; i < ae.HiddenSize; i++ {
@@ -236,6 +242,7 @@ func (ae *Autoencoder) Forward(input []float64) ([]float64, []float64) {
 	return hidden, output
 }
 
+// Train performs a single training step on the input vector and returns the mean squared reconstruction error.
 func (ae *Autoencoder) Train(input []float64) float64 {
 	hidden, output := ae.Forward(input)
 

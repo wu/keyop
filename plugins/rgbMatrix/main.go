@@ -37,6 +37,7 @@ type RGBMatrixPlugin struct {
 	nameMap   map[string]string
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (p *RGBMatrixPlugin) Initialize() error {
 	p.deps.MustGetLogger().Info("RGBMatrixPlugin initializing")
 
@@ -132,6 +133,7 @@ func (p *RGBMatrixPlugin) colorRGBA(r, g, b, a uint8) color.RGBA {
 	return color.RGBA{r, g, b, a}
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (p *RGBMatrixPlugin) Check() error {
 	logger := p.deps.MustGetLogger()
 	logger.Warn("RGBMatrixPlugin Check called")
@@ -316,10 +318,12 @@ func (p *RGBMatrixPlugin) getTempColor(status string) color.RGBA {
 	}
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (p *RGBMatrixPlugin) ValidateConfig() []error {
 	return nil
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &RGBMatrixPlugin{
 		deps: deps,

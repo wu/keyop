@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// WeatherData models posted weather sensor data (temperature, humidity, pressure, etc.) expected by the /weather endpoint.
 type WeatherData struct {
 	Barometer      float64 `json:"baromAbsIn"`
 	Baromrelin     float64 `json:"baromRelIn"`
@@ -68,6 +69,7 @@ type Service struct {
 	FieldMetricNames map[string]string
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps:             deps,
@@ -98,6 +100,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return svc
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
@@ -117,10 +120,12 @@ func (svc *Service) ValidateConfig() []error {
 	return errs
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	return nil
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 
 	logger := svc.Deps.MustGetLogger()
@@ -288,6 +293,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// ParseWeatherData extracts weather form values from the HTTP request and returns a WeatherData object.
 func (svc *Service) ParseWeatherData(req *http.Request) *WeatherData {
 	baromabsin, _ := strconv.ParseFloat(req.FormValue("baromabsin"), 64)
 	baromrelin, _ := strconv.ParseFloat(req.FormValue("baromrelin"), 64)

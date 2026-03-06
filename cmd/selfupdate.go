@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewSelfUpdateCmd builds a self-update command that downloads and installs updates.
 func NewSelfUpdateCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "selfupdate",

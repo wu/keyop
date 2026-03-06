@@ -1,3 +1,5 @@
+// Package ollama provides the ollama package.
+
 package ollama
 
 import (
@@ -12,17 +14,20 @@ import (
 	"time"
 )
 
+// Message is a chat-style payload carrying text and optional metadata used for requests and responses.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
+// ChatRequest models a request sent to the Ollama backend, including prompt, model and streaming options.
 type ChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Stream   bool      `json:"stream"`
 }
 
+// ChatResponse models a response from the Ollama backend, containing generated text and optional metadata.
 type ChatResponse struct {
 	Model     string    `json:"model"`
 	CreatedAt time.Time `json:"created_at"`
@@ -30,6 +35,7 @@ type ChatResponse struct {
 	Done      bool      `json:"done"`
 }
 
+// Client is a thin HTTP client for talking to an Ollama-compatible API; it supports streaming and non-streaming calls.
 type Client struct {
 	Host    string
 	Port    int
@@ -37,6 +43,7 @@ type Client struct {
 	Stream  bool
 }
 
+// NewClient constructs an Ollama API client configured with host, port, timeout and streaming flag.
 func NewClient(host string, port int, timeout time.Duration, stream bool) *Client {
 	return &Client{
 		Host:    host,
@@ -46,6 +53,7 @@ func NewClient(host string, port int, timeout time.Duration, stream bool) *Clien
 	}
 }
 
+// Chat sends messages to the Ollama API, optionally streaming partial responses to onResponse; returns updated conversation messages.
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, onResponse func(string) error) ([]Message, error) {
 	url := fmt.Sprintf("http://%s:%d/api/chat", c.Host, c.Port)
 
@@ -129,6 +137,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, onR
 	return updatedMessages, nil
 }
 
+// Summarize requests a concise summary of the provided conversation messages from the Ollama API.
 func (c *Client) Summarize(ctx context.Context, model string, messages []Message) (Message, error) {
 	prompt := "Please summarize the following conversation history concisely:"
 	for _, m := range messages {

@@ -18,6 +18,7 @@ type Service struct {
 	MaxTemp    *float64
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps: deps,
@@ -35,6 +36,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return svc
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc Service) ValidateConfig() []error {
 	var errs []error
 
@@ -51,6 +53,7 @@ func (svc Service) ValidateConfig() []error {
 	return errs
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc Service) Initialize() error {
 
 	if svc.DevicePath == "" {
@@ -64,6 +67,7 @@ func (svc Service) Initialize() error {
 	return nil
 }
 
+// Event contains parsed temperature readings and metadata returned by the temp service (TempC, TempF, Raw, Error).
 type Event struct {
 	TempC float32 `json:"TempC,omitempty"`
 	TempF float32 `json:"TempF,omitempty"`
@@ -71,6 +75,7 @@ type Event struct {
 	Error string  `json:"Error,omitempty"`
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc Service) Check() error {
 	_, err := svc.temp()
 	return err

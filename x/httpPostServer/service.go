@@ -23,6 +23,7 @@ type Service struct {
 	hostname  string
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	logger := deps.MustGetLogger()
 
@@ -50,6 +51,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return svc
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
@@ -107,6 +109,7 @@ func (svc Service) ValidateConfig() []error {
 	return errs
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	osProvider := svc.Deps.MustGetOsProvider()
@@ -229,6 +232,7 @@ func (svc Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc Service) Check() error {
 	return nil
 }

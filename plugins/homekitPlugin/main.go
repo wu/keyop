@@ -18,6 +18,7 @@ type HomekitPlugin struct {
 	transport hc.Transport
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (p *HomekitPlugin) Initialize() error {
 	logger := p.deps.MustGetLogger()
 	logger.Info("HomekitPlugin initializing")
@@ -92,16 +93,19 @@ func (p *HomekitPlugin) tempHandler(msg core.Message) error {
 	return nil
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (p *HomekitPlugin) Check() error {
 	return nil
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (p *HomekitPlugin) ValidateConfig() []error {
 	logger := p.deps.MustGetLogger()
 	errs := util.ValidateConfig("subs", p.cfg.Subs, []string{"temp"}, logger)
 	return errs
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &HomekitPlugin{
 		deps: deps,

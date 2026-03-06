@@ -27,6 +27,7 @@ type Service struct {
 	deviceMetrics map[string]string
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps: deps,
@@ -34,10 +35,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	return nil
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	prefix, _ := svc.Cfg.Config["metric_prefix"].(string)
 	if prefix == "" {
@@ -59,6 +62,7 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()

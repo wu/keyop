@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewUninstallCmd returns a cobra command that uninstalls the systemd service.
 func NewUninstallCmd(deps core.Dependencies) *cobra.Command {
 	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",

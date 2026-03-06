@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCmd builds the systemctl subcommand providing installation and management helpers.
 func NewCmd(deps core.Dependencies) *cobra.Command {
 	installCmd := &cobra.Command{
 		Use:   "systemctl",

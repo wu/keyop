@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// NewRootCmd builds the root CLI command and registers subcommands.
 func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "keyop",
@@ -29,6 +30,8 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 
 	return rootCmd
 }
+
+// Execute parses flags, initializes dependencies, and runs the root command; it exits on failure.
 func Execute() {
 
 	var console bool

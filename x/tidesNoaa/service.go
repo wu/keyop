@@ -42,6 +42,7 @@ type Service struct {
 }
 
 // NewService creates a new tidesNoaa Service with default NOAA API endpoints.
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps:         deps,
@@ -153,6 +154,7 @@ func (svc *Service) Initialize() error {
 
 // Check ensures tide data is up to date for today through the next fetchDays
 // days, then sends a message with the current water level.
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	now := time.Now()

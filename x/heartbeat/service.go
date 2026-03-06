@@ -38,6 +38,7 @@ type Service struct {
 }
 
 // NewService creates a new heartbeat service instance with an instance-scoped runtime state.
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps:      deps,

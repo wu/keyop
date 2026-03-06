@@ -42,6 +42,7 @@ import (
 	"keyop/x/webSocketServer"
 )
 
+// ServiceRegistry maps service type names to constructors used by the run command and plugin loader.
 var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceConfig) core.Service{
 	"anomalyDetector": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return anomalyDetector.NewService(deps, cfg)

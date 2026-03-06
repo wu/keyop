@@ -30,10 +30,12 @@ type Service struct {
 	dataPath string
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{Deps: deps, Cfg: cfg}
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 	var errs []error
@@ -63,6 +65,7 @@ func (svc *Service) ValidateConfig() []error {
 	return errs
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
@@ -114,6 +117,7 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error { return nil }
 
 func (svc *Service) handleMessage(msg core.Message) error {

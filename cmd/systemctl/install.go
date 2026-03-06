@@ -1,3 +1,4 @@
+// Package systemctl implements the systemctl service for keyop and provides ValidateConfig, Initialize and Check hooks.
 package systemctl
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewInstallCmd returns a cobra command that installs keyop as a systemd service.
 func NewInstallCmd(deps core.Dependencies) *cobra.Command {
 	var user string
 	var group string

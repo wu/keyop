@@ -1,3 +1,4 @@
+// Package core implements the core service for keyop and provides ValidateConfig, Initialize and Check hooks.
 package core
 
 // RuntimePlugin defines the interface for external plugins that can register

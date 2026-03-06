@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewStartCmd returns a cobra command that starts the systemd service.
 func NewStartCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "start",
@@ -17,6 +18,7 @@ func NewStartCmd(deps core.Dependencies) *cobra.Command {
 	}
 }
 
+// NewStopCmd returns a cobra command that stops the systemd service.
 func NewStopCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
@@ -27,6 +29,7 @@ func NewStopCmd(deps core.Dependencies) *cobra.Command {
 	}
 }
 
+// NewRestartCmd returns a cobra command that restarts the systemd service.
 func NewRestartCmd(deps core.Dependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart",

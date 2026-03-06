@@ -18,6 +18,7 @@ type Service struct {
 	mu            sync.Mutex
 }
 
+// NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps:          deps,
@@ -26,10 +27,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	return nil
 }
 
+// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	state := svc.Deps.MustGetStateStore()
 	err := state.Load(svc.Cfg.Name, &svc.lastMoonPhase)
@@ -40,6 +43,7 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
+// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	now := time.Now()
 	phase := astral.MoonPhase(now)

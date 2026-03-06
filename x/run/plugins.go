@@ -10,10 +10,12 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// PluginsConfig describes the plugins.yaml structure: a list of plugins, their paths, and per-plugin config overrides.
 type PluginsConfig struct {
 	Plugins []PluginInfo `yaml:"plugins"`
 }
 
+// PluginInfo contains metadata for a single plugin entry (path, enabled flag, and configuration) as read from plugins.yaml.
 type PluginInfo struct {
 	Name    string `yaml:"name"`
 	Path    string `yaml:"path"`
@@ -31,6 +33,7 @@ func pluginConfigPath() string {
 	return filepath.Join(home, ".keyop", "conf", "plugins.yaml")
 }
 
+// LoadPlugins reads the plugins configuration, loads enabled plugins, and registers their services and payload types.
 func LoadPlugins(deps core.Dependencies) error {
 	logger := deps.MustGetLogger()
 	configPath := pluginConfigPath()

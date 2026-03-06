@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Task describes a scheduled runnable unit for the kernel; it contains the service name, interval, context and the Run function executed by the kernel.
 type Task struct {
 	Name             string
 	Interval         time.Duration
@@ -18,6 +19,7 @@ type Task struct {
 	ErrorChannelName string
 }
 
+// StartKernel runs the provided tasks under the kernel, handling scheduling, jitter and graceful shutdown.
 func StartKernel(deps core.Dependencies, tasks []Task) error {
 	logger := deps.MustGetLogger()
 	globalCtx := deps.MustGetContext()
