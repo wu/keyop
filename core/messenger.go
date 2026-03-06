@@ -3,9 +3,10 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -355,16 +356,23 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 						break
 					}
 
-					// Truncated exponential backoff with jitter
-					backoff := m.retryBackoffBase * time.Duration(1<<uint(envelope.RetryCount-1))
-					if backoff > m.retryBackoffMax || backoff < m.retryBackoffBase {
+					backoff := m.retryBackoffBase
+					for i := 1; i < envelope.RetryCount && backoff < m.retryBackoffMax/2; i++ {
+						backoff *= 2
+					}
+					if backoff > m.retryBackoffMax {
 						backoff = m.retryBackoffMax
 					}
 
-					jitter := time.Duration(rand.Float64() * float64(backoff))
-					sleepTime := (backoff / 2) + jitter
-					if sleepTime > m.retryBackoffMax {
-						sleepTime = m.retryBackoffMax
+					// full jitter: [0, backoff)
+					sleepTime := time.Duration(0)
+					if backoff > 0 {
+						n, err := rand.Int(rand.Reader, big.NewInt(int64(backoff)))
+						if err != nil {
+							sleepTime = backoff / 2
+						} else {
+							sleepTime = time.Duration(n.Int64())
+						}
 					}
 
 					// Use a very small sleep time during tests to avoid hanging
