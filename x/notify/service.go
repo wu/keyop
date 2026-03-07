@@ -1,9 +1,16 @@
-// Package notify provides macOS user notification integration for services.
+// Package notify implements a service that converts messages arriving on the configured 'alerts'
+// channel into pop-up system notifications. The service will alert with the content of the 'Text' field
+// if it exists.  It will include the timestamp in the notification text and the service/host in the
+// notification title to provide context.
+//
+// Currently, it only works on macOS, as it relies on the 'osascript' command to generate notifications.
+// The service validates that it runs on Darwin (macOS) and will return a configuration error
+// on other platforms.
 //
 // Rate limiting
 //   - The service supports a per-minute rate limit controlled by the configuration key
 //     `rate_limit_per_minute` (integer). If not specified, the default is 5 events per minute.
-//   - The limiter uses a rolling 60 second window divided into 10 buckets (6s each). Events are
+//   - The limiter uses a rolling 60-second window divided into 10 buckets (6s each). Events are
 //     counted into the current bucket; when the total across all buckets exceeds the configured
 //     limit, further incoming messages are dropped until the window advances.
 //   - When the rate limit is first exceeded, the service emits a "rate_limit" event with a short
@@ -30,12 +37,6 @@ type NotificationEvent struct {
 // PayloadType returns the canonical payload type for notification events.
 func (e NotificationEvent) PayloadType() string { return "service.notification.v1" }
 
-// Service converts text payloads into native macOS user notifications.
-// The service monitors the alerts channel and emits a typed notification event
-// after successfully delivering a user notification.
-//
-// NOTE: This service is an adapter for external macOS notification APIs and
-// currently only supports macOS (darwin) via the `osascript` command.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig
@@ -148,7 +149,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Event:       "rate_limit",
-				Summary:     summary,
+				Text:        summary,
 				Data:        e,
 			}); sendErr != nil {
 				logger.Error("Failed to send rate-limit event", "error", sendErr)
@@ -187,7 +188,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return err
 	}
 
-	// On success, emit a minimal notification event with the spoken text in the Summary.
+	// On success, emit a minimal notification event with the spoken text in the Text.
 	e := NotificationEvent{Now: time.Now(), Summary: text}
 	if sendErr := messenger.Send(core.Message{
 		Correlation: correlation,
@@ -195,7 +196,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "notification",
-		Summary:     text,
+		Text:        text,
 		Data:        e,
 	}); sendErr != nil {
 		logger.Error("Failed to send notification event", "error", sendErr)

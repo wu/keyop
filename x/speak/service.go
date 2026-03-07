@@ -7,7 +7,7 @@
 // on other platforms.
 //
 // When 'say' exits with success, a "speech" event (payload type service.speech.v1) will be emitted
-// with the spoken text in the Message Summary.  If there is an error returned from the say command,
+// with the spoken text in the Message text.  If there is an error returned from the say command,
 // an error event will be emitted with the error details.
 //
 // Rate limiting
@@ -45,7 +45,7 @@ import (
 )
 
 // SpeechEvent represents a spoken-text event emitted by the 'speak' service.
-// It intentionally carries only a timestamp and the spoken text in the Summary field.
+// It intentionally carries only a timestamp and the spoken text in the Text field.
 type SpeechEvent struct {
 	Now     time.Time `json:"now"`
 	Summary string    `json:"summary"`
@@ -171,6 +171,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				ServiceType: svc.Cfg.Type,
 				Event:       "rate_limit",
 				Summary:     summary,
+				Text:        summary,
 				Data:        e,
 			}); sendErr != nil {
 				logger.Error("Failed to send rate-limit event", "error", sendErr)
@@ -200,7 +201,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return err
 	}
 
-	// On success, emit a minimal speech event with the spoken text in the Summary.
+	// On success, emit a minimal speech event with the spoken text in the Text.
 	e := SpeechEvent{Now: time.Now(), Summary: text}
 	if sendErr := messenger.Send(core.Message{
 		Correlation: correlation,
@@ -208,7 +209,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "speech",
-		Summary:     text,
+		Text:        text,
 		Data:        e,
 	}); sendErr != nil {
 		logger.Error("Failed to send speech event", "error", sendErr)

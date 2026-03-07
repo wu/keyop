@@ -6,7 +6,23 @@
 import "keyop/x/notify"
 ```
 
-Package notify provides macOS user notification integration for services.
+Package notify implements a service that converts messages arriving on the configured 'alerts' channel into pop\-up
+system notifications. The service will alert with the content of the 'Text' field if it exists. It will include the
+timestamp in the notification text and the service/host in the notification title to provide context.
+
+Currently, it only works on macOS, as it relies on the 'osascript' command to generate notifications. The service
+validates that it runs on Darwin \(macOS\) and will return a configuration error on other platforms.
+
+Rate limiting
+
+- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\`
+  \(integer\). If not specified, the default is 5 events per minute.
+- The limiter uses a rolling 60\-second window divided into 10 buckets \(6s each\). Events are counted into the current
+  bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
+  the window advances.
+- When the rate limit is first exceeded, the service emits a "rate\_limit" event with a short summary indicating that
+  alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
+  state.
 
 ## Index
 
@@ -21,9 +37,10 @@ Package notify provides macOS user notification integration for services.
     - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
     - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
 
+
 <a name="NewService"></a>
 
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L38>)
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L49>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -33,21 +50,21 @@ NewService creates a new 'notify' service using the provided dependencies and co
 
 <a name="NotificationEvent"></a>
 
-## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L15-L18>)
+## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L32-L35>)
 
 NotificationEvent represents a notification event emitted by the 'notify' service. It intentionally contains a timestamp
 and a short summary of the notification.
 
 ```go
 type NotificationEvent struct {
-Now     time.Time `json:"now"`
-Summary string    `json:"summary"`
+    Now     time.Time `json:"now"`
+    Summary string    `json:"summary"`
 }
 ```
 
 <a name="NotificationEvent.PayloadType"></a>
 
-### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L21>)
+### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L38>)
 
 ```go
 func (e NotificationEvent) PayloadType() string
@@ -57,27 +74,23 @@ PayloadType returns the canonical payload type for notification events.
 
 <a name="Service"></a>
 
-## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L29-L35>)
+## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L40-L46>)
 
-Service converts text payloads into native macOS user notifications. The service monitors the alerts channel and emits a
-typed notification event after successfully delivering a user notification.
 
-NOTE: This service is an adapter for external macOS notification APIs and currently only supports macOS \(darwin\) via
-the \`osascript\` command.
 
 ```go
 type Service struct {
-Deps core.Dependencies
-Cfg  core.ServiceConfig
+    Deps core.Dependencies
+    Cfg  core.ServiceConfig
 
-// rate limiter
-limiter *util.RateLimiter
+    // rate limiter
+    limiter *util.RateLimiter
 }
 ```
 
 <a name="Service.Check"></a>
 
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L198>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L209>)
 
 ```go
 func (svc *Service) Check() error
@@ -87,7 +100,7 @@ Check performs the service's periodic work: collect data, evaluate state, and pu
 
 <a name="Service.Initialize"></a>
 
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L80>)
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L91>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -97,7 +110,7 @@ Initialize subscribes to the configured 'alerts' channel and sets up the message
 
 <a name="Service.Name"></a>
 
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L61>)
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L72>)
 
 ```go
 func (svc *Service) Name() string
@@ -107,7 +120,7 @@ Name returns the canonical name of the notify service type.
 
 <a name="Service.RegisterPayloads"></a>
 
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L46>)
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L57>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -117,7 +130,7 @@ RegisterPayloads registers the notification payload types with the provided regi
 
 <a name="Service.ValidateConfig"></a>
 
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L64>)
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L75>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -127,7 +140,7 @@ ValidateConfig validates the service configuration and returns any validation er
 
 <a name="Service.messageHandler"></a>
 
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L105>)
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L116>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error

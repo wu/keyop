@@ -9,13 +9,23 @@ import "keyop/x/speak"
 Package speak implements a service that converts incoming messages into spoken audio. The service will speak the '
 Summary' field if it exists, or the 'Text' field if the 'Summary' field is empty.
 
-Currently, it only works on macOS, as it relies on the 'say' command to speak text.
+Currently, it only works on macOS, as it relies on the 'say' command to speak text. The service validates that it runs
+on Darwin \(macOS\) and will return a configuration error on other platforms.
 
 When 'say' exits with success, a "speech" event \(payload type service.speech.v1\) will be emitted with the spoken text
-in the Message Summary. If there is an error returned from the say command, an error event will be emitted with the
-error details.
+in the Message text. If there is an error returned from the say command, an error event will be emitted with the error
+details.
 
-The service validates that it runs on Darwin \(macOS\) and will return a configuration error on other platforms.
+Rate limiting
+
+- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\`
+  \(integer\). If not specified, the default is 5 events per minute.
+- The limiter uses a rolling 60 second window divided into 10 buckets \(6s each\). Events are counted into the current
+  bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
+  the window advances.
+- When the rate limit is first exceeded, the service emits a "rate\_limit" event with a short summary indicating that
+  alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
+  state.
 
 ### MACOS SPECIFIC NOTES
 
@@ -45,7 +55,7 @@ the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 
 <a name="NewService"></a>
 
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58>)
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L67>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -55,23 +65,23 @@ NewService creates a new service using the provided dependencies and configurati
 
 <a name="Service"></a>
 
-## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L49-L55>)
+## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58-L64>)
 
 Service converts text payloads into spoken audio using the macOS speech synthesis APIs
 
 ```go
 type Service struct {
-Deps core.Dependencies
-Cfg  core.ServiceConfig
+    Deps core.Dependencies
+    Cfg  core.ServiceConfig
 
-// rate limiter
-limiter *util.RateLimiter
+    // rate limiter
+    limiter *util.RateLimiter
 }
 ```
 
 <a name="Service.Check"></a>
 
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L212>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L222>)
 
 ```go
 func (svc *Service) Check() error
@@ -81,7 +91,7 @@ Check is a no\-op for this service, it only reacts to incoming messages from a s
 
 <a name="Service.Initialize"></a>
 
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L100>)
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L109>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -91,7 +101,7 @@ Initialize subscribes to the configured 'alerts' channel
 
 <a name="Service.Name"></a>
 
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L81>)
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L90>)
 
 ```go
 func (svc *Service) Name() string
@@ -101,7 +111,7 @@ Name returns the canonical name of the 'speak' service type.
 
 <a name="Service.RegisterPayloads"></a>
 
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L66>)
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L75>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -111,7 +121,7 @@ RegisterPayloads registers the speak service payload types with the provided reg
 
 <a name="Service.ValidateConfig"></a>
 
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L84>)
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L93>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -121,7 +131,7 @@ ValidateConfig validates the service configuration and returns any validation er
 
 <a name="Service.messageHandler"></a>
 
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L125>)
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L134>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
@@ -129,21 +139,21 @@ func (svc *Service) messageHandler(msg core.Message) error
 
 <a name="SpeechEvent"></a>
 
-## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40-L43>)
+## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L49-L52>)
 
 SpeechEvent represents a spoken\-text event emitted by the 'speak' service. It intentionally carries only a timestamp
-and the spoken text in the Summary field.
+and the spoken text in the Text field.
 
 ```go
 type SpeechEvent struct {
-Now     time.Time `json:"now"`
-Summary string    `json:"summary"`
+    Now     time.Time `json:"now"`
+    Summary string    `json:"summary"`
 }
 ```
 
 <a name="SpeechEvent.PayloadType"></a>
 
-### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L46>)
+### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L55>)
 
 ```go
 func (e SpeechEvent) PayloadType() string
