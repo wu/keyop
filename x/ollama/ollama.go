@@ -1,5 +1,4 @@
-// Package ollama provides the ollama package.
-
+// Package ollama provides integration with the Ollama LLM server for local language model operations.
 package ollama
 
 import (

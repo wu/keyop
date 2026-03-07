@@ -1,3 +1,4 @@
+// Package sun computes solar position and daylight events used for scheduling and automation rules.
 package sun
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/sj14/astral/pkg/astral"
 )
 
+// Service calculates sun times (sunrise, sunset) and publishes events used by scheduling subsystems.
 type Service struct {
 	Deps      core.Dependencies
 	Cfg       core.ServiceConfig

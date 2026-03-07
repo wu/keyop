@@ -1,3 +1,4 @@
+// Package macosReminders integrates with the macOS Reminders app to fetch and emit reminder events and changes.
 package macosReminders
 
 import (
@@ -19,6 +20,7 @@ import (
 // information to the configured "task" pub channel.
 // It relies on the Swift helper (EventKit) to fetch reminders as JSON lines.
 
+// Service periodically reads reminders from macOS and publishes create/update/delete events for configured lists.
 type Service struct {
 	Deps            core.Dependencies
 	Cfg             core.ServiceConfig

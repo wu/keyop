@@ -1,3 +1,4 @@
+// Package nwsWeather fetches weather data and alerts from NOAA/NWS and converts them into internal events and metrics.
 package nwsWeather
 
 import (
@@ -11,6 +12,7 @@ import (
 	"time"
 )
 
+// Service polls NWS endpoints for alerts and current conditions, publishing structured events for consumers.
 type Service struct {
 	Deps        core.Dependencies
 	Cfg         core.ServiceConfig

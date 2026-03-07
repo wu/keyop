@@ -1,3 +1,4 @@
+// Package notifyMacos provides helper functions to send native macOS user notifications from services.
 package notifyMacos
 
 import (
@@ -8,6 +9,7 @@ import (
 
 // At this time, this service only works on MacOS, as it relies on the 'osascript' command to display notifications.
 
+// Service adapts application events into macOS user notifications and manages delivery semantics.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

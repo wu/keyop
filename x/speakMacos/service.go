@@ -1,3 +1,4 @@
+// Package speakMacos provides macOS text-to-speech capabilities for spoken notifications and alerts.
 package speakMacos
 
 import (
@@ -11,6 +12,7 @@ import (
 //       The exact location varies by MacOS version.  Try to search in Preferences for 'voice',
 //       update the preference for Spoken Content.
 
+// Service converts text payloads into spoken audio using the macOS speech synthesis APIs
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

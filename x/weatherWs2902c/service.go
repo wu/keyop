@@ -1,3 +1,4 @@
+// Package weatherWs2902c integrates with WS2902C weather stations and publishes sensor readings as metrics and events.
 package weatherWs2902c
 
 import (
@@ -62,6 +63,7 @@ var fieldMetricNames = map[string]string{
 	"Windspeedmph":   "windSpeed",
 }
 
+// Service reads sensor data from WS2902C devices, normalizes measurements, and emits metrics for consumers.
 type Service struct {
 	Deps             core.Dependencies
 	Cfg              core.ServiceConfig

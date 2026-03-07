@@ -1,3 +1,4 @@
+// Package run contains helpers for executing and supervising configured services from the CLI.
 package run
 
 import (

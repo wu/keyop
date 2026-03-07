@@ -1,3 +1,4 @@
+// Package kodi integrates with Kodi media center instances to monitor playback state and control media.
 package kodi
 
 import (
@@ -10,6 +11,7 @@ import (
 	"net/http"
 )
 
+// Service connects to a Kodi instance, tracks playback state, and emits events for playback changes and status.
 type Service struct {
 	Deps     core.Dependencies
 	Cfg      core.ServiceConfig
@@ -19,6 +21,7 @@ type Service struct {
 	Password string //nolint:gosec // configuration-provided credential
 }
 
+// KodiState represents the observed state of a Kodi instance (e.g., playing, paused, idle) and related metadata.
 type KodiState struct {
 	CurrentTitle string `json:"current_title"`
 }

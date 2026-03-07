@@ -1,3 +1,4 @@
+// Package pingMonitor periodically pings configured hosts and reports latency and availability metrics.
 package pingMonitor
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Service performs ICMP or TCP pings to target hosts, collects timing data, and emits metrics and events.
 type Service struct {
 	Deps          core.Dependencies
 	Cfg           core.ServiceConfig

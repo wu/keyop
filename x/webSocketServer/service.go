@@ -1,3 +1,4 @@
+// Package webSocketServer implements a websocket server
 package webSocketServer
 
 import (
@@ -30,6 +31,7 @@ const (
 	ackTimeout       = wsp.AckTimeout
 )
 
+// Service accepts websocket client connections, routes messages, and manages client sessions
 type Service struct {
 	Deps      core.Dependencies
 	Cfg       core.ServiceConfig

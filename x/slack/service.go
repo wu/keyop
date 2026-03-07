@@ -1,3 +1,4 @@
+// Package slack provides integration for sending messages and attachments to Slack channels and handling callbacks.
 package slack
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Service manages Slack integration credentials, message formatting, and delivery to configured channels.
 type Service struct {
 	Deps         core.Dependencies
 	Cfg          core.ServiceConfig

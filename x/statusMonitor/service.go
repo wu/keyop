@@ -1,3 +1,4 @@
+// Package statusMonitor aggregates status information from multiple services and publishes an overall health summary.
 package statusMonitor
 
 import (
@@ -16,6 +17,7 @@ type serviceState struct {
 	AlertCount    int       `json:"alertCount,omitempty"`
 }
 
+// Service collects per-service status events and computes an aggregate health score for dashboards and alerts.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

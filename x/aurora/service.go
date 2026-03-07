@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+// Service polls the NOAA aurora API on a schedule and publishes aurora activity events and metrics to subscribers.
 type Service struct {
 	Deps      core.Dependencies
 	Cfg       core.ServiceConfig

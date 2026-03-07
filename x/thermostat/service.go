@@ -1,3 +1,4 @@
+// Package thermostat controls HVAC devices, applies schedules, and manages temperature setpoints for zones.
 package thermostat
 
 import (
@@ -6,6 +7,7 @@ import (
 	"keyop/util"
 )
 
+// Service orchestrates thermostat control loops, schedules, and integration with temperature sensors.
 type Service struct {
 	Deps        core.Dependencies
 	Cfg         core.ServiceConfig

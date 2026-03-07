@@ -1,3 +1,4 @@
+// Package owntracks processes location updates from OwnTracks devices and publishes location events to channels.
 package owntracks
 
 import (
@@ -12,6 +13,7 @@ import (
 	"time"
 )
 
+// Service accepts OwnTracks payloads, normalizes them, and republishes as internal presence/location events.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

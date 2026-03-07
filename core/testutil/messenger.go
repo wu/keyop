@@ -1,3 +1,4 @@
+// Package testutil provides helpers and fakes used by unit tests, including a fake messenger implementation for capturing messages.
 package testutil
 
 import (

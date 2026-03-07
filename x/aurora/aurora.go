@@ -1,3 +1,4 @@
+// Package aurora fetches aurora activity data from NOAA services and converts it into application events and metrics.
 package aurora
 
 import (

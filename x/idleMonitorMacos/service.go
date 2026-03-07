@@ -1,3 +1,4 @@
+// Package idleMonitorMacos monitors macOS user idle/active state and emits events used for presence and automation.
 package idleMonitorMacos
 
 import (
@@ -10,6 +11,7 @@ import (
 	"time"
 )
 
+// Service monitors the macOS idle APIs to detect user activity and publishes idle/active events.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

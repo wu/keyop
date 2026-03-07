@@ -1,3 +1,4 @@
+// Package moon calculates lunar phases and related astronomical data used for scheduling and notifications.
 package moon
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/soniakeys/meeus/v3/moonphase"
 )
 
+// Service computes lunar-phase related metrics and publishes events when phases change or match configured criteria.
 type Service struct {
 	Deps          core.Dependencies
 	Cfg           core.ServiceConfig

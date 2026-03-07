@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// Service syncs and watches macOS Notes changes and translates them into application events for downstream consumers.
 type Service struct {
 	Deps        core.Dependencies
 	Cfg         core.ServiceConfig

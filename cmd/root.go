@@ -1,3 +1,4 @@
+// Package cmd provides CLI command definitions and bootstrapping for the keyop application.
 package cmd
 
 import (

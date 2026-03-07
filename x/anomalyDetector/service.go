@@ -1,3 +1,4 @@
+// Package anomalyDetector implements anomaly detection over metric streams and emits anomaly events when thresholds are crossed.
 package anomalyDetector
 
 import (
@@ -9,6 +10,7 @@ import (
 	"sync"
 )
 
+// Service implements the anomaly detection logic for a configured stream of metrics, tracking state and publishing anomaly events.
 type Service struct {
 	Deps         core.Dependencies
 	Cfg          core.ServiceConfig

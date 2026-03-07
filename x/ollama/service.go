@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// Service provides an interface to send prompts to an Ollama server and relay responses into application events.
 type Service struct {
 	Deps          core.Dependencies
 	Cfg           core.ServiceConfig

@@ -1,3 +1,4 @@
+// Package condition evaluates configured boolean conditions used across services to gate actions or generate alerts.
 package condition
 
 import (
@@ -9,6 +10,7 @@ import (
 // ConditionConfig is an alias for core.ConditionConfig kept for backwards compatibility.
 type ConditionConfig = core.ConditionConfig
 
+// Service provides the condition evaluation engine that runs configured expressions and emits results for other services.
 type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig

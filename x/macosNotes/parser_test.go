@@ -1,3 +1,4 @@
+// Package macosNotes contains tests and helpers for the macOS Notes parser used in integration tests.
 package macosNotes
 
 import (

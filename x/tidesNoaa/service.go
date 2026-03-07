@@ -1,3 +1,4 @@
+// Package tidesNoaa retrieves tide predictions from NOAA and publishes tide events for automation and alerts.
 package tidesNoaa
 
 import (

@@ -1,3 +1,4 @@
+// Package webSocketClient provides a reusable websocket client implementation for streaming integrations.
 package webSocketClient
 
 import (
@@ -33,6 +34,7 @@ const (
 	ackTimeout      = wsp.AckTimeout
 )
 
+// Service manages websocket connections, message dispatch, and reconnection logic for streaming upstreams.
 type Service struct {
 	Deps              core.Dependencies
 	Cfg               core.ServiceConfig

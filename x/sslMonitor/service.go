@@ -1,3 +1,4 @@
+// Package sslMonitor checks TLS/SSL certificate health for configured endpoints and emits expiration warnings.
 package sslMonitor
 
 import (
@@ -8,6 +9,7 @@ import (
 	"time"
 )
 
+// Service inspects remote certificates, records expiry information, and publishes alerts when renewal is required.
 type Service struct {
 	Deps           core.Dependencies
 	Cfg            core.ServiceConfig
