@@ -1,6 +1,0 @@
-x: notifyMacos
-subs:
-  alerts:
-    name: alerts
-    description: Notify Text field from messages from the alerts channel
-

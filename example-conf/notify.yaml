@@ -1,0 +1,26 @@
+x: notify
+
+config:
+
+  rate_limit_per_minute: 20
+
+  pub_preprocess:
+
+    - when: 'event eq "rate_limit"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+
+    - when: 'event eq "notification"'
+      updates:
+        channelName: notify
+
+
+subs:
+  alerts:
+    name: alerts
+    description: Notify Text field from messages from the alerts channel
+
