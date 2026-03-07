@@ -1,0 +1,20 @@
+x: speak
+
+config:
+
+  pub_preprocess:
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+
+    - when: 'event eq "speech"'
+      updates:
+        channelName: spoken
+
+
+subs:
+  alerts:
+    name: alerts
+    description: Speak "Summary" or "Text" field from messages from the alerts channel
+
+

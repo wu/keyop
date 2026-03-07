@@ -1,4 +1,4 @@
-package speakMacos
+package speak
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func TestService_ValidateConfig(t *testing.T) {
 func TestService_Initialize(t *testing.T) {
 	deps := testDeps(t, nil)
 	cfg := core.ServiceConfig{
-		Name: "speakMacos-test",
+		Name: "speak-test",
 		Subs: map[string]core.ChannelInfo{
 			"alerts": {Name: "speech-channel"},
 		},
@@ -96,7 +96,7 @@ func TestService_MessageHandler(t *testing.T) {
 	t.Run("empty text", func(t *testing.T) {
 		deps := testDeps(t, nil)
 		cfg := core.ServiceConfig{
-			Name: "speakMacos-test",
+			Name: "speak-test",
 			Subs: map[string]core.ChannelInfo{
 				"alerts": {Name: "speech-channel"},
 			},
@@ -121,7 +121,7 @@ func TestService_MessageHandler(t *testing.T) {
 
 		deps := testDeps(t, fakeOs)
 		cfg := core.ServiceConfig{
-			Name: "speakMacos-test",
+			Name: "speak-test",
 			Subs: map[string]core.ChannelInfo{
 				"alerts": {Name: "speech-channel"},
 			},

@@ -1,6 +1,0 @@
-x: speakMacos
-subs:
-  alerts:
-    name: alerts
-    description: Speak Text field from messages from the alerts channel
-
