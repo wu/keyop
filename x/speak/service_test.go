@@ -2,9 +2,11 @@ package speak
 
 import (
 	"context"
+	"fmt"
 	"keyop/core"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,8 +104,10 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
+		err := svc.Initialize()
+		require.NoError(t, err)
 		msg := core.Message{Text: ""}
-		err := svc.messageHandler(msg)
+		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 	})
 
@@ -127,12 +131,58 @@ func TestService_MessageHandler(t *testing.T) {
 			},
 		}
 		svc := NewService(deps, cfg).(*Service)
+		err := svc.Initialize()
+		require.NoError(t, err)
 
 		msg := core.Message{Text: "hello world"}
-		err := svc.messageHandler(msg)
+		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 
 		assert.Equal(t, "say", capturedName)
 		assert.Equal(t, []string{"hello world"}, capturedArgs)
+	})
+
+	// rate limiting behavior
+	t.Run("rate limit", func(t *testing.T) {
+		var captured []string
+
+		fakeOs := core.FakeOsProvider{
+			CommandFunc: func(name string, arg ...string) core.CommandApi {
+				captured = append(captured, strings.Join(arg, " "))
+				return &core.FakeCommand{}
+			},
+		}
+
+		deps := testDeps(t, fakeOs)
+		cfg := core.ServiceConfig{
+			Name: "speak-test",
+			Subs: map[string]core.ChannelInfo{
+				"alerts": {Name: "speech-channel"},
+			},
+		}
+		svc := NewService(deps, cfg).(*Service)
+
+		// Initialize to set up buckets
+		err := svc.Initialize()
+		require.NoError(t, err)
+
+		// send 7 messages quickly
+		for i := 0; i < 7; i++ {
+			msg := core.Message{Text: fmt.Sprintf("msg %d", i+1)}
+			err := svc.messageHandler(msg)
+			require.NoError(t, err)
+		}
+
+		// Expect 5 spoken texts + 1 rate-limit summary = 6 calls to 'say'
+		require.Equal(t, 6, len(captured))
+
+		found := false
+		for _, c := range captured {
+			if strings.Contains(c, "Too many text alerts") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found)
 	})
 }

@@ -1,4 +1,14 @@
 // Package notify provides macOS user notification integration for services.
+//
+// Rate limiting
+//   - The service supports a per-minute rate limit controlled by the configuration key
+//     `rate_limit_per_minute` (integer). If not specified, the default is 5 events per minute.
+//   - The limiter uses a rolling 60 second window divided into 10 buckets (6s each). Events are
+//     counted into the current bucket; when the total across all buckets exceeds the configured
+//     limit, further incoming messages are dropped until the window advances.
+//   - When the rate limit is first exceeded, the service emits a "rate_limit" event with a short
+//     summary indicating that alerts were skipped. Subsequent dropped events do not re-emit the
+//     summary until an allowed event resets the warning state.
 package notify
 
 import (

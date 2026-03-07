@@ -2,7 +2,14 @@ x: speak
 
 config:
 
+  rate_limit_per_minute: 5
+
   pub_preprocess:
+
+    - when: 'event eq "rate_limit"'
+      updates:
+        channelName: alerts
+
     - when: 'event eq "error"'
       updates:
         channelName: errors

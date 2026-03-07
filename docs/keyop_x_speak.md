@@ -45,7 +45,7 @@ the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 
 <a name="NewService"></a>
 
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L54>)
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -55,7 +55,7 @@ NewService creates a new service using the provided dependencies and configurati
 
 <a name="Service"></a>
 
-## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L48-L51>)
+## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L49-L55>)
 
 Service converts text payloads into spoken audio using the macOS speech synthesis APIs
 
@@ -63,12 +63,15 @@ Service converts text payloads into spoken audio using the macOS speech synthesi
 type Service struct {
 Deps core.Dependencies
 Cfg  core.ServiceConfig
+
+// rate limiter
+limiter *util.RateLimiter
 }
 ```
 
 <a name="Service.Check"></a>
 
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L160>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L212>)
 
 ```go
 func (svc *Service) Check() error
@@ -78,7 +81,7 @@ Check is a no\-op for this service, it only reacts to incoming messages from a s
 
 <a name="Service.Initialize"></a>
 
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L96>)
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L100>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -88,7 +91,7 @@ Initialize subscribes to the configured 'alerts' channel
 
 <a name="Service.Name"></a>
 
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L77>)
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L81>)
 
 ```go
 func (svc *Service) Name() string
@@ -98,7 +101,7 @@ Name returns the canonical name of the 'speak' service type.
 
 <a name="Service.RegisterPayloads"></a>
 
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L62>)
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L66>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -108,7 +111,7 @@ RegisterPayloads registers the speak service payload types with the provided reg
 
 <a name="Service.ValidateConfig"></a>
 
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L80>)
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L84>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -118,7 +121,7 @@ ValidateConfig validates the service configuration and returns any validation er
 
 <a name="Service.messageHandler"></a>
 
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L101>)
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L125>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
@@ -126,7 +129,7 @@ func (svc *Service) messageHandler(msg core.Message) error
 
 <a name="SpeechEvent"></a>
 
-## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L39-L42>)
+## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40-L43>)
 
 SpeechEvent represents a spoken\-text event emitted by the 'speak' service. It intentionally carries only a timestamp
 and the spoken text in the Summary field.
@@ -140,7 +143,7 @@ Summary string    `json:"summary"`
 
 <a name="SpeechEvent.PayloadType"></a>
 
-### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L45>)
+### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L46>)
 
 ```go
 func (e SpeechEvent) PayloadType() string

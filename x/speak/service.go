@@ -3,13 +3,22 @@
 // 'Summary' field is empty.
 //
 // Currently, it only works on macOS, as it relies on the 'say' command to speak text.
+// The service validates that it runs on Darwin (macOS) and will return a configuration error
+// on other platforms.
 //
 // When 'say' exits with success, a "speech" event (payload type service.speech.v1) will be emitted
 // with the spoken text in the Message Summary.  If there is an error returned from the say command,
 // an error event will be emitted with the error details.
 //
-// The service validates that it runs on Darwin (macOS) and will return a configuration error
-// on other platforms.
+// Rate limiting
+//   - The service supports a per-minute rate limit controlled by the configuration key
+//     `rate_limit_per_minute` (integer). If not specified, the default is 5 events per minute.
+//   - The limiter uses a rolling 60 second window divided into 10 buckets (6s each). Events are
+//     counted into the current bucket; when the total across all buckets exceeds the configured
+//     limit, further incoming messages are dropped until the window advances.
+//   - When the rate limit is first exceeded, the service emits a "rate_limit" event with a short
+//     summary indicating that alerts were skipped. Subsequent dropped events do not re-emit the
+//     summary until an allowed event resets the warning state.
 //
 // # MACOS SPECIFIC NOTES
 //
@@ -31,6 +40,7 @@ import (
 	"keyop/core"
 	"keyop/util"
 	"runtime"
+	"strconv"
 	"time"
 )
 
@@ -48,6 +58,9 @@ func (e SpeechEvent) PayloadType() string { return "service.speech.v1" }
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig
+
+	// rate limiter
+	limiter *util.RateLimiter
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -94,6 +107,26 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize subscribes to the configured 'alerts' channel
 func (svc *Service) Initialize() error {
+	// create rate limiter from config
+	limit := 5
+	if svc.Cfg.Config != nil {
+		if v, ok := svc.Cfg.Config["rate_limit_per_minute"]; ok {
+			switch t := v.(type) {
+			case int:
+				limit = t
+			case int64:
+				limit = int(t)
+			case float64:
+				limit = int(t)
+			case string:
+				if n, err := strconv.Atoi(t); err == nil {
+					limit = n
+				}
+			}
+		}
+	}
+	svc.limiter = util.NewRateLimiter(limit)
+
 	messenger := svc.Deps.MustGetMessenger()
 	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["alerts"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["alerts"].MaxAge, svc.messageHandler)
 }
@@ -118,11 +151,39 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		correlation = msg.Uuid
 	}
 
+	now := time.Now()
+	allowed, firstDrop := svc.limiter.AddEventAt(now)
+	if !allowed {
+		logger.Warn("Rate limit exceeded", "count", svc.limiter.Total())
+		if firstDrop {
+			summary := "Too many text alerts; some alerts have been skipped."
+			osProvider := svc.Deps.MustGetOsProvider()
+			cmd := osProvider.Command("say", summary)
+			if err := cmd.Run(); err != nil {
+				logger.Error("Failed to execute say for rate-limit summary", "error", err)
+			}
+			// emit rate_limit event for the summary
+			e := SpeechEvent{Now: time.Now(), Summary: summary}
+			if sendErr := messenger.Send(core.Message{
+				Correlation: correlation,
+				ChannelName: svc.Cfg.Name,
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Event:       "rate_limit",
+				Summary:     summary,
+				Data:        e,
+			}); sendErr != nil {
+				logger.Error("Failed to send rate-limit event", "error", sendErr)
+			}
+		}
+		// drop the original alert
+		return nil
+	}
+
 	logger.Info("Speaking text", "text", text)
 	osProvider := svc.Deps.MustGetOsProvider()
 	cmd := osProvider.Command("say", text)
-	err := cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		logger.Error("Failed to execute say command", "error", err)
 		// send error event with the error message
 		if sendErr := messenger.Send(core.Message{
