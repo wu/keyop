@@ -75,8 +75,6 @@
 - **Logging**: Uses `slog` with color output in console mode, or logs to `~/.keyop/logs` by default.
 - **Timezone**: Defaults to America/Los_Angeles; falls back to UTC if unavailable.
 - **Web UI**: Static assets are copied to `/webui-static` in Docker images.
-- **Camel Case**: Treat acronyms as normal words (e.g., `HtmlClient`, not `HTMLClient`) and use "Id" instead of "ID" for
-  identifiers.
 
 ## additional notes
 
