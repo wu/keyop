@@ -1,3 +1,13 @@
+## [1.4.0](https://github.com/wu/keyop/compare/1.3.0...1.4.0) (2026-03-07)
+
+### Features
+
+* speak service improvements ([805ff7a](https://github.com/wu/keyop/commit/805ff7af0aa97fa58aa7db153d18815cda501b5c))
+
+### Refactoring
+
+* add missing package and exported variable comments ([89026fe](https://github.com/wu/keyop/commit/89026fe70e29b51976336d5acf1a281bcaf1fd4b))
+
 ## [1.3.0](https://github.com/wu/keyop/compare/1.2.1...1.3.0) (2026-03-06)
 
 ### Features
