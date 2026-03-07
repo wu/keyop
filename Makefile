@@ -129,6 +129,16 @@ bench:
 test:
 	@go test ./...
 
+.PHONY: docs
+docs:
+	@command -v gomarkdoc >/dev/null 2>&1 || (echo "Installing gomarkdoc"; GO111MODULE=on go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest)
+	@mkdir -p docs
+	@set -e; for pkg in $(shell go list ./...); do \
+		fname=$$(echo $$pkg | sed 's|/|_|g'); \
+		echo "Generating docs for $$pkg -> docs/$$fname.md"; \
+		gomarkdoc $$pkg -u -o docs/$$fname.md || echo "gomarkdoc failed for $$pkg"; \
+	done
+
 # Docker convenience targets
 .PHONY: docker-build docker-push docker-run
 
