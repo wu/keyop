@@ -4,6 +4,15 @@
 //
 // Currently, it only works on macOS, as it relies on the 'say' command to speak text.
 //
+// When 'say' exits with success, a "speech" event (payload type service.speech.v1) will be emitted
+// with the spoken text in the Message Summary.  If there is an error returned from the say command,
+// an error event will be emitted with the error details.
+//
+// The service validates that it runs on Darwin (macOS) and will return a configuration error
+// on other platforms.
+//
+// # MACOS SPECIFIC NOTES
+//
 // To use the higher quality siri voices on macOS, it uses the default "system voice"
 // setting.  While it is possible to specify a voice to the 'say' command, the choices are
 // limited and don't include the highest quality voices.
@@ -15,13 +24,6 @@
 // for Tahoe.  Try to search in Preferences for 'voice', look for something like "Voice (spoken content)".
 // In the system voice drop-down, choose the siri voice option, mine was near the top and was
 // named "Siri (Voice 2)".
-//
-// When 'say' exits with success, a "speech" event (payload type service.speech.v1) will be emitted
-// with the spoken text in the Message Summary.  If there is an error returned from the say command,
-// an error event will be emitted with the error details.
-//
-// The service validates that it runs on Darwin (macOS) and will return a configuration error
-// on other platforms.
 package speak
 
 import (
