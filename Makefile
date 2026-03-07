@@ -118,6 +118,14 @@ lint-fix: fmt
 		echo "golangci-lint not available; run 'make fmt' and install golangci-lint to do --fix"; \
 	fi
 
+# Run the benchmark for messenger throughput. Example:
+#   make bench MESSAGES=10000
+# Defaults to running with 10000 messages if MESSAGES is not set.
+bench:
+	@MESSAGES=$${MESSAGES:-10000}; \
+	echo "Running messenger benchmark with $$MESSAGES messages"; \
+	go test ./core -bench BenchmarkMessengerThroughput -benchmem -run TestNone -v -count=1 -benchtime=$${MESSAGES}x
+
 test:
 	@go test ./...
 
