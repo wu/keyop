@@ -37,6 +37,9 @@ type NotificationEvent struct {
 // PayloadType returns the canonical payload type for notification events.
 func (e NotificationEvent) PayloadType() string { return "service.notification.v1" }
 
+// Service converts text payloads into native macOS user notifications.
+// It subscribes to the configured 'alerts' channel and emits notification events on success.
+// When the rate limit is exceeded, a 'rate_limit' event is emitted with a short summary.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig
@@ -158,7 +161,6 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return nil
 	}
 
-	title = fmt.Sprintf("%s - %s", msg.ServiceName, msg.Hostname)
 	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
 	cmd := osProvider.Command("osascript", "-e", script)

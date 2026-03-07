@@ -147,7 +147,7 @@ func TestService_MessageHandler(t *testing.T) {
 		var captured []string
 
 		fakeOs := core.FakeOsProvider{
-			CommandFunc: func(name string, arg ...string) core.CommandApi {
+			CommandFunc: func(_ string, arg ...string) core.CommandApi {
 				captured = append(captured, strings.Join(arg, " "))
 				return &core.FakeCommand{}
 			},
