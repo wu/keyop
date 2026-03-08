@@ -285,7 +285,7 @@ func assertEventData(t *testing.T, messages []core.Message, idleSeconds float64,
 	t.Helper()
 	found := false
 	for _, msg := range messages {
-		if msg.Event == "status_update" {
+		if msg.Event == "idle_status" {
 			data, ok := msg.Data.(map[string]interface{})
 			if !ok {
 				continue

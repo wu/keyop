@@ -10,7 +10,7 @@ config:
   report_queue_file: ~/.keyop/data/status_queue_yyyymmdd.log
 
   pub_preprocess:
-    - when: 'event eq "status_update"'
+    - when: 'event eq "idle_status"'
       updates:
         channelName: status
 

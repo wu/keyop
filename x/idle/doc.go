@@ -5,7 +5,7 @@
 // Overview
 // The idle package uses macOS APIs to determine whether the local user is
 // currently "active" or "idle" (based on a configurable threshold). On
-// each periodic Check() the service emits a "status_update" message and
+// each periodic Check() the service emits an "idle_status" message and
 // associated metrics; these messages are used to derive per-host active
 // periods and to generate daily reports.
 //
@@ -56,7 +56,7 @@
 //   - determine the queue file path by replacing the token "yyyymmdd" in
 //     the configured queue_file template with the previous day's date
 //   - read the file and parse one JSON message per line
-//   - collect all "status_update" messages for each host that fall within
+//   - collect all "idle_status" messages for each host that fall within
 //     the previous day
 //   - construct per-host active periods by tracking transitions between
 //     status values and aggregating contiguous active spans

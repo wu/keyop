@@ -1,5 +1,5 @@
 //nolint:revive
-package macosMessages
+package txtmsg
 
 import (
 	"context"

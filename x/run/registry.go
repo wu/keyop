@@ -15,7 +15,6 @@ import (
 	"keyop/x/kodi"
 	"keyop/x/logManager"
 	"keyop/x/macosBluetoothBattery"
-	"keyop/x/macosMessages"
 	"keyop/x/macosNotes"
 	"keyop/x/macosReminders"
 	"keyop/x/memoryMonitor"
@@ -36,6 +35,7 @@ import (
 	"keyop/x/temp"
 	"keyop/x/thermostat"
 	"keyop/x/tidesNoaa"
+	"keyop/x/txtmsg"
 	"keyop/x/versionControlGit"
 	"keyop/x/weatherWs2902c"
 	"keyop/x/webSocketClient"
@@ -104,8 +104,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"notify": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return notify.NewService(deps, cfg)
 	},
-	"macosMessages": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return macosMessages.NewService(deps, cfg)
+	"txtmsg": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return txtmsg.NewService(deps, cfg)
 	},
 	"macosNotes": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return macosNotes.NewService(deps, cfg)

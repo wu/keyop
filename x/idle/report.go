@@ -56,7 +56,7 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		return nil
 	}
 
-	// Parse one JSON envelope/message per line, collect status_update messages per host
+	// Parse one JSON envelope/message per line, collect idle_status messages per host
 	msgsByHost := make(map[string][]core.Message)
 	dayStart := reportDay
 	dayEnd := dayStart.Add(24 * time.Hour)
@@ -78,7 +78,7 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 			}
 		}
 
-		if msg.Event != "status_update" {
+		if msg.Event != "idle_status" {
 			continue
 		}
 		if msg.Timestamp.IsZero() {
@@ -98,7 +98,7 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 	}
 
 	if len(msgsByHost) == 0 {
-		logger.Warn("idle: no status_update messages found in queue", "path", queuePath)
+		logger.Warn("idle: no idle_status messages found in queue", "path", queuePath)
 		return nil
 	}
 

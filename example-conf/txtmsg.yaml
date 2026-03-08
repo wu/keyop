@@ -1,0 +1,31 @@
+x: txtmsg
+
+config:
+
+  address: me@my.messages.address
+  rate_limit_per_minute: 10
+
+  pub_preprocess:
+
+    - when: 'event eq "txtmsg"'
+      updates:
+        channelName: txtmsg
+
+    - when: 'event eq "txtmsg_error"'
+      updates:
+        channelName: errors
+
+    - when: 'event eq "txtmsg_rate_limit"'
+      updates:
+        channelName: alerts
+
+subs:
+
+  alerts:
+    name: alerts
+    description: Send text messages using the Text field from messages from the local alerts channel
+
+  idle:
+    name: status
+    description: Subscribe to idle status, don't send me text messages when I'm active
+

@@ -10,7 +10,7 @@ Package idle monitors macOS user idle/active state and provides utilities for re
 summaries, and generating nightly idle reports.
 
 Overview The idle package uses macOS APIs to determine whether the local user is currently "active" or "idle" \(based on
-a configurable threshold\). On each periodic Check\(\) the service emits a "status\_update" message and associated
+a configurable threshold\). On each periodic Check\(\) the service emits an "idle\_status" message and associated
 metrics; these messages are used to derive per\-host active periods and to generate daily reports.
 
 Configuration The service can be configured via the ServiceConfig.Config map. Supported configuration keys \(all
@@ -53,7 +53,7 @@ the service will:
 - determine the queue file path by replacing the token "yyyymmdd" in the configured queue\_file template with the
   previous day's date
 - read the file and parse one JSON message per line
-- collect all "status\_update" messages for each host that fall within the previous day
+- collect all "idle\_status" messages for each host that fall within the previous day
 - construct per\-host active periods by tracking transitions between status values and aggregating contiguous active
   spans
 - merge active periods across hosts to compute total active time and create coverage intervals to calculate known vs

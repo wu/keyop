@@ -221,7 +221,7 @@ func (svc *Service) Check() error {
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "status_update",
+		Event:       "idle_status",
 		Status:      status,
 		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration)),
 		Data: map[string]interface{}{

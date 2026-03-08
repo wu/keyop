@@ -114,6 +114,13 @@ func (r *RateLimiter) SetLimit(limit int) {
 	r.limit = limit
 }
 
+// Limit returns the currently configured limit for the window.
+func (r *RateLimiter) Limit() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.limit
+}
+
 // Total returns the current total event count in the window.
 func (r *RateLimiter) Total() int {
 	r.mu.Lock()
