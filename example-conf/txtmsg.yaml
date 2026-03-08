@@ -5,6 +5,8 @@ config:
   address: me@my.messages.address
   rate_limit_per_minute: 10
 
+  report_queue_file: ~/.keyop/data/txtmsg_queue_yyyymmdd.log
+
   pub_preprocess:
 
     - when: 'event eq "txtmsg"'
@@ -16,6 +18,10 @@ config:
         channelName: errors
 
     - when: 'event eq "txtmsg_rate_limit"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "txtmsg_report"'
       updates:
         channelName: alerts
 

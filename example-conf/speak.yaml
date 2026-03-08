@@ -4,24 +4,29 @@ config:
 
   rate_limit_per_minute: 5
 
+  report_queue_file: ~/.keyop/data/speak_queue_yyyymmdd.log
+
   pub_preprocess:
 
-    - when: 'event eq "rate_limit"'
+    - when: 'event eq "speak"'
       updates:
-        channelName: alerts
+        channelName: speak
 
-    - when: 'event eq "error"'
+    - when: 'event eq "speak_error"'
       updates:
         channelName: errors
 
-    - when: 'event eq "speech"'
+    - when: 'event eq "speak_rate_limit"'
       updates:
-        channelName: spoken
+        channelName: alerts
 
+    - when: 'event eq "speak_report"'
+      updates:
+        channelName: alerts
 
 subs:
   alerts:
     name: alerts
-    description: Speak "Summary" or "Text" field from messages from the alerts channel
+    description: Speak the "Summary" or "Text" field from messages from the local alerts channel
 
 

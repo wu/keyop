@@ -4,21 +4,24 @@ import (
 	"fmt"
 	"keyop/core"
 	"keyop/util"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// NotificationEvent represents a notification event emitted by the 'notify' service.
-// It intentionally contains a timestamp and a short summary of the notification.
-type NotificationEvent struct {
+// Event represents a notification event emitted by the 'notify' service.
+// It contains a timestamp, a short summary, whether it was sent, and optional details.
+type Event struct {
 	Now     time.Time `json:"now"`
 	Summary string    `json:"summary"`
+	Sent    bool      `json:"sent"`
+	Details string    `json:"details,omitempty"`
 }
 
-// PayloadType returns the canonical payload type for notification events.
-func (e NotificationEvent) PayloadType() string { return "service.notification.v1" }
+// PayloadType returns the canonical payload type for notify events.
+func (e Event) PayloadType() string { return "service.notify.v1" }
 
 // Service converts text payloads into native macOS user notifications.
 // It subscribes to the configured 'alerts' channel and emits notification events on success.
@@ -29,6 +32,10 @@ type Service struct {
 
 	// rate limiter
 	limiter *util.RateLimiter
+
+	// report queue template and last report day
+	queueFileTemplate string
+	lastReportDay     time.Time
 }
 
 // NewService creates a new 'notify' service using the provided dependencies and configuration.
@@ -41,14 +48,14 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 // RegisterPayloads registers the notification payload types with the provided registry.
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
-	if err := reg.Register("notification", func() any { return &NotificationEvent{} }); err != nil {
+	if err := reg.Register("notify", func() any { return &Event{} }); err != nil {
 		if !core.IsDuplicatePayloadRegistration(err) {
-			return fmt.Errorf("failed to register notification alias: %w", err)
+			return fmt.Errorf("failed to register notify alias: %w", err)
 		}
 	}
-	if err := reg.Register("service.notification.v1", func() any { return &NotificationEvent{} }); err != nil {
+	if err := reg.Register("service.notify.v1", func() any { return &Event{} }); err != nil {
 		if !core.IsDuplicatePayloadRegistration(err) {
-			return fmt.Errorf("failed to register service.notification.v1: %w", err)
+			return fmt.Errorf("failed to register service.notify.v1: %w", err)
 		}
 	}
 	return nil
@@ -96,6 +103,35 @@ func (svc *Service) Initialize() error {
 	svc.limiter = util.NewRateLimiter(limit)
 
 	messenger := svc.Deps.MustGetMessenger()
+	// read optional report_queue_file config
+	if qf, ok := svc.Cfg.Config["report_queue_file"].(string); ok && qf != "" {
+		// expand ~ to home directory
+		if strings.HasPrefix(qf, "~") {
+			if home, herr := svc.Deps.MustGetOsProvider().UserHomeDir(); herr == nil {
+				if strings.HasPrefix(qf, "~/") {
+					qf = filepath.Join(home, qf[2:])
+				} else {
+					qf = filepath.Join(home, qf[1:])
+				}
+			}
+		}
+		svc.queueFileTemplate = qf
+	} else {
+		svc.queueFileTemplate = ""
+	}
+
+	// load state
+	var state ServiceState
+	if err := svc.Deps.MustGetStateStore().Load(svc.Cfg.Name, &state); err == nil {
+		svc.lastReportDay = state.LastReportDay
+	}
+	// if lastReportDay not set and queue config provided, send initial report
+	if svc.lastReportDay.IsZero() && svc.queueFileTemplate != "" {
+		if err := svc.maybeSendNotifyReport(messenger, time.Now(), true); err != nil {
+			svc.Deps.MustGetLogger().Warn("notify: initial report failed", "error", err)
+		}
+	}
+
 	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["alerts"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["alerts"].MaxAge, svc.messageHandler)
 }
 
@@ -147,17 +183,36 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			if err := cmd.Run(); err != nil {
 				logger.Error("Failed to execute notify helper for rate-limit summary", "error", err)
 			}
-			// emit rate_limit event for the summary
-			e := NotificationEvent{Now: time.Now(), Summary: summary}
+			// emit notify_rate_limit event for the summary including configured limit
+			limitDetails := fmt.Sprintf("notify_rate_limit: %d", svc.limiter.Limit())
+			e := Event{Now: time.Now(), Summary: summary, Sent: false, Details: limitDetails}
 			if sendErr := messenger.Send(core.Message{
 				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
-				Event:       "rate_limit",
+				Event:       "notify_rate_limit",
 				Text:        summary,
 				Data:        e,
 			}); sendErr != nil {
-				logger.Error("Failed to send rate-limit event", "error", sendErr)
+				logger.Error("Failed to send notify_rate_limit event", "error", sendErr)
+			}
+			// also emit unified notify event indicating suppression
+			correlation := ""
+			if msg.Correlation != "" {
+				correlation = msg.Correlation
+			} else if msg.Uuid != "" {
+				correlation = msg.Uuid
+			}
+			if sendErr := messenger.Send(core.Message{
+				Correlation: correlation,
+				ChannelName: svc.Cfg.Name,
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Event:       "notify",
+				Text:        text,
+				Data:        e,
+			}); sendErr != nil {
+				logger.Error("Failed to send notify event for rate-limited message", "error", sendErr)
 			}
 		}
 		return nil
@@ -227,39 +282,54 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	if err != nil {
 		logger.Error("Failed to execute osascript command", "error", err)
-		// send error event with the error message
+		// send notify_error event with the error message
 		if sendErr := messenger.Send(core.Message{
 			Correlation: correlation,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
-			Event:       "error",
+			Event:       "notify_error",
 			Status:      "error",
 			Text:        err.Error(),
 		}); sendErr != nil {
-			logger.Error("Failed to send error event", "error", sendErr)
+			logger.Error("Failed to send notify_error event", "error", sendErr)
+		}
+		// also emit unified notify event indicating failure
+		e := Event{Now: time.Now(), Summary: text, Sent: false, Details: err.Error()}
+		if sendErr := messenger.Send(core.Message{
+			Correlation: correlation,
+			ChannelName: svc.Cfg.Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Event:       "notify",
+			Text:        text,
+			Data:        e,
+		}); sendErr != nil {
+			logger.Error("Failed to send notify event for errored notification", "error", sendErr)
 		}
 		return err
 	}
 
-	// On success, emit a minimal notification event with the spoken text in the Text.
-	e := NotificationEvent{Now: time.Now(), Summary: text}
+	// On success, emit a minimal notify event with the notification text in Text.
+	e := Event{Now: time.Now(), Summary: text, Sent: true}
 	if sendErr := messenger.Send(core.Message{
 		Correlation: correlation,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "notification",
+		Event:       "notify",
 		Text:        text,
 		Data:        e,
 	}); sendErr != nil {
-		logger.Error("Failed to send notification event", "error", sendErr)
+		logger.Error("Failed to send notify event", "error", sendErr)
 	}
 
 	return nil
 }
 
-// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
+// Check is a no-op for this service, it only reacts to incoming messages from a subscription.
 func (svc *Service) Check() error {
+	messenger := svc.Deps.MustGetMessenger()
+	_ = svc.maybeSendNotifyReport(messenger, time.Now(), false)
 	return nil
 }

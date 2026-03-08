@@ -23,9 +23,9 @@ Rate limiting
 - The limiter uses a rolling 60 second window divided into 10 buckets \(6s each\). Events are counted into the current
   bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
   the window advances.
-- When the rate limit is first exceeded, the service emits a "rate\_limit" event with a short summary indicating that
-  alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
-  state.
+- When the rate limit is first exceeded, the service emits a "speak\_rate\_limit" event with a short summary indicating
+  that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the
+  warning state.
 
 ### MACOS SPECIFIC NOTES
 
@@ -42,19 +42,22 @@ the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 ## Index
 
 - [func NewService\(deps core.Dependencies, cfg core.ServiceConfig\) core.Service](<#NewService>)
+- [type Event](<#Event>)
+  - [func \(e Event\) PayloadType\(\) string](<#Event.PayloadType>)
 - [type Service](<#Service>)
   - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
   - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
   - [func \(svc \*Service\) Name\(\) string](<#Service.Name>)
   - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
   - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
+  - [func \(svc \*Service\) maybeSendSpeakReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendSpeakReport>)
   - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
-- [type SpeechEvent](<#SpeechEvent>)
-  - [func \(e SpeechEvent\) PayloadType\(\) string](<#SpeechEvent.PayloadType>)
+- [type ServiceState](<#ServiceState>)
 
 
 <a name="NewService"></a>
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L32>)
+
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -62,8 +65,35 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 
 NewService creates a new service using the provided dependencies and configuration.
 
+<a name="Event"></a>
+
+## type [Event](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L16-L21>)
+
+Event represents a spoken/text event emitted by the 'speak' service. It contains a timestamp, a short summary, whether
+it was sent, and optional details.
+
+```go
+type Event struct {
+Now     time.Time `json:"now"`
+Summary string    `json:"summary"`
+Sent    bool      `json:"sent"`
+Details string    `json:"details,omitempty"`
+}
+```
+
+<a name="Event.PayloadType"></a>
+
+### func \(Event\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L24>)
+
+```go
+func (e Event) PayloadType() string
+```
+
+PayloadType returns the canonical payload type for speak events.
+
 <a name="Service"></a>
-## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L23-L29>)
+
+## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L27-L37>)
 
 Service converts text payloads into spoken audio using the macOS speech synthesis APIs
 
@@ -74,11 +104,16 @@ type Service struct {
 
     // rate limiter
     limiter *util.RateLimiter
+
+    // report queue template and last report day
+    queueFileTemplate string
+    lastReportDay     time.Time
 }
 ```
 
 <a name="Service.Check"></a>
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L187>)
+
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L250>)
 
 ```go
 func (svc *Service) Check() error
@@ -87,7 +122,8 @@ func (svc *Service) Check() error
 Check is a no\-op for this service, it only reacts to incoming messages from a subscription.
 
 <a name="Service.Initialize"></a>
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L74>)
+
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L82>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -96,7 +132,8 @@ func (svc *Service) Initialize() error
 Initialize subscribes to the configured 'alerts' channel
 
 <a name="Service.Name"></a>
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L55>)
+
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L63>)
 
 ```go
 func (svc *Service) Name() string
@@ -105,7 +142,8 @@ func (svc *Service) Name() string
 Name returns the canonical name of the 'speak' service type.
 
 <a name="Service.RegisterPayloads"></a>
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40>)
+
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L48>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -114,7 +152,8 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the speak service payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58>)
+
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L66>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -122,33 +161,32 @@ func (svc *Service) ValidateConfig() []error
 
 ValidateConfig validates the service configuration and returns any validation errors.
 
+<a name="Service.maybeSendSpeakReport"></a>
+
+### func \(\*Service\) [maybeSendSpeakReport](<https://github.com/wu/keyop/blob/main/x/speak/report.go#L19>)
+
+```go
+func (svc *Service) maybeSendSpeakReport(messenger core.MessengerApi, now time.Time, force bool) error
+```
+
 <a name="Service.messageHandler"></a>
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L99>)
+
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L136>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
 ```
 
-<a name="SpeechEvent"></a>
-## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L14-L17>)
+<a name="ServiceState"></a>
 
-SpeechEvent represents a spoken\-text event emitted by the 'speak' service. It intentionally carries only a timestamp
-and the spoken text in the Text field.
+## type [ServiceState](<https://github.com/wu/keyop/blob/main/x/speak/report.go#L15-L17>)
+
+ServiceState holds persistent runtime state for the speak service \(last report day\).
 
 ```go
-type SpeechEvent struct {
-    Now     time.Time `json:"now"`
-    Summary string    `json:"summary"`
+type ServiceState struct {
+LastReportDay time.Time `json:"last_report_day"`
 }
 ```
-
-<a name="SpeechEvent.PayloadType"></a>
-### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L20>)
-
-```go
-func (e SpeechEvent) PayloadType() string
-```
-
-PayloadType returns the canonical payload type for speech events.
 
 Generated by [gomarkdoc](<https://github.com/princjef/gomarkdoc>)

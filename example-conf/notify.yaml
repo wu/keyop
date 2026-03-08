@@ -4,23 +4,28 @@ config:
 
   rate_limit_per_minute: 20
 
+  report_queue_file: ~/.keyop/data/notify_queue_yyyymmdd.log
+
   pub_preprocess:
 
-    - when: 'event eq "rate_limit"'
-      updates:
-        channelName: alerts
-
-    - when: 'event eq "error"'
-      updates:
-        channelName: errors
-
-    - when: 'event eq "notification"'
+    - when: 'event eq "notify"'
       updates:
         channelName: notify
 
+    - when: 'event eq "notify_error"'
+      updates:
+        channelName: errors
+
+    - when: 'event eq "notify_rate_limit"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "notify_report"'
+      updates:
+        channelName: alerts
 
 subs:
   alerts:
     name: alerts
-    description: Notify Text field from messages from the alerts channel
+    description: Trigger notifications for the Text field from messages from the local alerts channel
 

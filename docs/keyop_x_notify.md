@@ -22,9 +22,9 @@ Rate limiting
 - The limiter uses a rolling 60\-second window divided into 10 buckets \(6s each\). Events are counted into the current
   bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
   the window advances.
-- When the rate limit is first exceeded, the service emits a "rate\_limit" event with a short summary indicating that
-  alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
-  state.
+- When the rate limit is first exceeded, the service emits a "notify\_rate\_limit" event with a short summary indicating
+  that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the
+  warning state.
 
 ### MACOS SPECIFIC NOTES
 
@@ -60,19 +60,22 @@ the notifications will use the 'Script Editor' icon.
 ## Index
 
 - [func NewService\(deps core.Dependencies, cfg core.ServiceConfig\) core.Service](<#NewService>)
-- [type NotificationEvent](<#NotificationEvent>)
-  - [func \(e NotificationEvent\) PayloadType\(\) string](<#NotificationEvent.PayloadType>)
+- [type Event](<#Event>)
+  - [func \(e Event\) PayloadType\(\) string](<#Event.PayloadType>)
 - [type Service](<#Service>)
   - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
   - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
   - [func \(svc \*Service\) Name\(\) string](<#Service.Name>)
   - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
   - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
+  - [func \(svc \*Service\) maybeSendNotifyReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendNotifyReport>)
   - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
+- [type ServiceState](<#ServiceState>)
 
 
 <a name="NewService"></a>
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L35>)
+
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L41>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -80,30 +83,35 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 
 NewService creates a new 'notify' service using the provided dependencies and configuration.
 
-<a name="NotificationEvent"></a>
-## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L15-L18>)
+<a name="Event"></a>
 
-NotificationEvent represents a notification event emitted by the 'notify' service. It intentionally contains a timestamp
-and a short summary of the notification.
+## type [Event](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L15-L20>)
+
+Event represents a notification event emitted by the 'notify' service. It contains a timestamp, a short summary, whether
+it was sent, and optional details.
 
 ```go
-type NotificationEvent struct {
+type Event struct {
     Now     time.Time `json:"now"`
     Summary string    `json:"summary"`
+    Sent    bool      `json:"sent"`
+    Details string    `json:"details,omitempty"`
 }
 ```
 
-<a name="NotificationEvent.PayloadType"></a>
-### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L21>)
+<a name="Event.PayloadType"></a>
+
+### func \(Event\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L23>)
 
 ```go
-func (e NotificationEvent) PayloadType() string
+func (e Event) PayloadType() string
 ```
 
-PayloadType returns the canonical payload type for notification events.
+PayloadType returns the canonical payload type for notify events.
 
 <a name="Service"></a>
-## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L26-L32>)
+
+## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L28-L38>)
 
 Service converts text payloads into native macOS user notifications. It subscribes to the configured 'alerts' channel
 and emits notification events on success. When the rate limit is exceeded, a 'rate\_limit' event is emitted with a short
@@ -116,20 +124,26 @@ type Service struct {
 
     // rate limiter
     limiter *util.RateLimiter
+
+    // report queue template and last report day
+    queueFileTemplate string
+    lastReportDay     time.Time
 }
 ```
 
 <a name="Service.Check"></a>
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L263>)
+
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L330>)
 
 ```go
 func (svc *Service) Check() error
 ```
 
-Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
+Check is a no\-op for this service, it only reacts to incoming messages from a subscription.
 
 <a name="Service.Initialize"></a>
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L77>)
+
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L83>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -138,7 +152,8 @@ func (svc *Service) Initialize() error
 Initialize subscribes to the configured 'alerts' channel and sets up the message handler for incoming messages.
 
 <a name="Service.Name"></a>
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L58>)
+
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L64>)
 
 ```go
 func (svc *Service) Name() string
@@ -147,7 +162,8 @@ func (svc *Service) Name() string
 Name returns the canonical name of the notify service type.
 
 <a name="Service.RegisterPayloads"></a>
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L43>)
+
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L49>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -156,7 +172,8 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the notification payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L61>)
+
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L67>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -164,11 +181,32 @@ func (svc *Service) ValidateConfig() []error
 
 ValidateConfig validates the service configuration and returns any validation errors.
 
+<a name="Service.maybeSendNotifyReport"></a>
+
+### func \(\*Service\) [maybeSendNotifyReport](<https://github.com/wu/keyop/blob/main/x/notify/report.go#L19>)
+
+```go
+func (svc *Service) maybeSendNotifyReport(messenger core.MessengerApi, now time.Time, force bool) error
+```
+
 <a name="Service.messageHandler"></a>
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L102>)
+
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L137>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
+```
+
+<a name="ServiceState"></a>
+
+## type [ServiceState](<https://github.com/wu/keyop/blob/main/x/notify/report.go#L15-L17>)
+
+ServiceState holds persistent runtime state for the notify service \(last report day\).
+
+```go
+type ServiceState struct {
+LastReportDay time.Time `json:"last_report_day"`
+}
 ```
 
 Generated by [gomarkdoc](<https://github.com/princjef/gomarkdoc>)
