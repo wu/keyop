@@ -1,15 +1,45 @@
-// Package idleMonitorMacos monitors macOS user idle/active state and emits events used for presence and automation.
-package idleMonitorMacos
+// Package idle monitors macOS user idle/active state and emits events used for presence and automation.
+package idle
 
 import (
 	"fmt"
 	"keyop/core"
+
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const fileDateFormat = "2006-01-02"
+
+// localMidnight returns the start of the calendar day for t in t's location.
+func localMidnight(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+// ActivePeriod represents a single active period within a day file.
+type ActivePeriod struct {
+	Hostname        string    `yaml:"hostname" json:"hostname"`
+	Start           time.Time `yaml:"start" json:"start"`
+	Stop            time.Time `yaml:"stop" json:"stop"`
+	DurationSeconds float64   `yaml:"durationSeconds" json:"durationSeconds"`
+}
+
+// IdleEvent represents a typed payload for idle events.
+type IdleEvent struct {
+	Now                   time.Time `json:"now"`
+	Hostname              string    `json:"hostname"`
+	Status                string    `json:"status"`
+	IdleDurationSeconds   float64   `json:"idleDurationSeconds"`
+	ActiveDurationSeconds float64   `json:"activeDurationSeconds"`
+}
+
+// PayloadType returns the canonical payload type for idle events.
+func (i IdleEvent) PayloadType() string { return "service.idle.v1" }
 
 // Service monitors the macOS idle APIs to detect user activity and publishes idle/active events.
 type Service struct {
@@ -23,13 +53,17 @@ type Service struct {
 	hostname         string
 	idleMetricName   string
 	activeMetricName string
+
+	queueFileTemplate string
+	lastReportDay     time.Time
 }
 
-// ServiceState holds persistent runtime state for the idleMonitorMacos service (for example, last idle timestamp and alerting state).
+// ServiceState holds persistent runtime state for the idle service (for example, last idle timestamp and alerting state).
 type ServiceState struct {
 	IsIdle         bool      `json:"is_idle"`
 	LastTransition time.Time `json:"last_transition"`
 	LastAlertHours int       `json:"last_alert_hours"`
+	LastReportDay  time.Time `json:"last_report_day"`
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -38,6 +72,21 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		Deps: deps,
 		Cfg:  cfg,
 	}
+}
+
+// RegisterPayloads registers the idle payload types with the provided registry.
+func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
+	if err := reg.Register("idle", func() any { return &IdleEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register idle alias: %w", err)
+		}
+	}
+	if err := reg.Register("service.idle.v1", func() any { return &IdleEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register service.idle.v1: %w", err)
+		}
+	}
+	return nil
 }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
@@ -55,6 +104,7 @@ func (svc *Service) ValidateConfig() []error {
 func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	osProvider := svc.Deps.MustGetOsProvider()
+	stateStore := svc.Deps.MustGetStateStore()
 
 	thresholdStr, _ := svc.Cfg.Config["threshold"].(string)
 	if thresholdStr == "" {
@@ -88,22 +138,44 @@ func (svc *Service) Initialize() error {
 		svc.hostname = host
 	}
 
-	// Attempt to load state
-	stateStore := svc.Deps.MustGetStateStore()
+	// queue file template (optional). May include 'yyyymmdd' as a placeholder for the date.
+	if qf, ok := svc.Cfg.Config["report_queue_file"].(string); ok && qf != "" {
+		// expand ~ to home directory
+		if strings.HasPrefix(qf, "~") {
+			if home, herr := osProvider.UserHomeDir(); herr == nil {
+				if strings.HasPrefix(qf, "~/") {
+					qf = filepath.Join(home, qf[2:])
+				} else {
+					qf = filepath.Join(home, qf[1:])
+				}
+			}
+		}
+		svc.queueFileTemplate = qf
+	} else {
+		// No queue_file configured; do not set a default. Reports will be skipped unless configured.
+		svc.queueFileTemplate = ""
+	}
+
+	// Attempt to load state (including last report day)
 	var state ServiceState
 	if err := stateStore.Load(svc.Cfg.Name, &state); err == nil {
 		svc.isIdle = state.IsIdle
 		svc.lastTransition = state.LastTransition
 		svc.lastAlertHours = state.LastAlertHours
-		logger.Info("loaded state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, "lastAlertHours", svc.lastAlertHours)
+		svc.lastReportDay = state.LastReportDay
+		logger.Info("loaded state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, "lastAlertHours", svc.lastAlertHours, "lastReportDay", svc.lastReportDay)
 	}
 	if svc.lastTransition.IsZero() {
 		svc.lastTransition = time.Now()
-		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
-		if err != nil {
-			logger.Error("failed to save state", "error", err)
-		}
+		_ = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
+	}
 
+	// If lastReportDay not set and a queue_file is configured, generate report for previous day immediately.
+	if svc.lastReportDay.IsZero() && svc.queueFileTemplate != "" {
+		messenger := svc.Deps.MustGetMessenger()
+		if err := svc.maybeSendIdleReport(messenger, time.Now(), true); err != nil {
+			logger.Warn("idle: initial report failed", "error", err)
+		}
 	}
 
 	return nil
@@ -116,7 +188,7 @@ func (svc *Service) Check() error {
 	stateStore := svc.Deps.MustGetStateStore()
 
 	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("idleMonitorMacos only supported on macOS")
+		return fmt.Errorf("idle only supported on macOS")
 	}
 
 	idleDuration, err := svc.getMacosIdleTime()
@@ -194,9 +266,11 @@ func (svc *Service) Check() error {
 	// State transitions and alerts
 	if !wasIdle && svc.isIdle {
 		// Transitioned to IDLE
-		activeTime := now.Sub(svc.lastTransition)
-		svc.lastTransition = now.Add(-idleDuration) // backdate to when it actually became idle
-		svc.lastAlertHours = 0                      // Reset alert counter
+		prevTransition := svc.lastTransition
+		idleStart := now.Add(-idleDuration)
+		activeTime := idleStart.Sub(prevTransition)
+		svc.lastTransition = idleStart // backdate to when it actually became idle
+		svc.lastAlertHours = 0         // Reset alert counter
 
 		err = messenger.Send(core.Message{
 			ChannelName: svc.Cfg.Name,
@@ -212,11 +286,10 @@ func (svc *Service) Check() error {
 		}
 
 		// Save state
-		logger.Error("transitioned to idle, saving state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, svc.Cfg.Name)
-		err = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours})
-		if err != nil {
-			logger.Error("failed to save state", "error", err)
-		}
+		logger.Info("transitioned to idle, saving state", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, "service", svc.Cfg.Name)
+		_ = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
+
+		// No-op: active periods are now derived from events queue files instead of local YAML files.
 	} else if wasIdle && !svc.isIdle {
 		// Transitioned to ACTIVE
 		idleTime := now.Sub(svc.lastTransition)
@@ -266,6 +339,11 @@ func (svc *Service) Check() error {
 				logger.Error("failed to save state", "error", err)
 			}
 		}
+	}
+
+	// Attempt to send nightly report between 00:00 and 01:00 local time
+	if err := svc.maybeSendIdleReport(messenger, time.Now(), false); err != nil {
+		logger.Warn("idle: failed to send nightly report", "error", err)
 	}
 
 	return nil

@@ -1,4 +1,4 @@
-package idleMonitorMacos
+package idle
 
 import (
 	"fmt"
@@ -61,7 +61,7 @@ func TestCheck(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "idle_test",
-		Type: "idleMonitorMacos",
+		Type: "idle",
 		Pubs: map[string]core.ChannelInfo{
 			"metrics": {Name: "metrics_channel"},
 			"alerts":  {Name: "alerts_channel"},
@@ -201,7 +201,7 @@ func TestInitialize_NoState(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "idle_test_no_state",
-		Type: "idleMonitorMacos",
+		Type: "idle",
 		Pubs: map[string]core.ChannelInfo{
 			"metrics": {Name: "metrics_channel"},
 			"alerts":  {Name: "alerts_channel"},
