@@ -54,7 +54,8 @@ the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 
 
 <a name="NewService"></a>
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L67>)
+
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L32>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -63,7 +64,8 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 NewService creates a new service using the provided dependencies and configuration.
 
 <a name="Service"></a>
-## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58-L64>)
+
+## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L23-L29>)
 
 Service converts text payloads into spoken audio using the macOS speech synthesis APIs
 
@@ -78,7 +80,8 @@ type Service struct {
 ```
 
 <a name="Service.Check"></a>
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L222>)
+
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L187>)
 
 ```go
 func (svc *Service) Check() error
@@ -87,7 +90,8 @@ func (svc *Service) Check() error
 Check is a no\-op for this service, it only reacts to incoming messages from a subscription.
 
 <a name="Service.Initialize"></a>
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L109>)
+
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L74>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -96,7 +100,8 @@ func (svc *Service) Initialize() error
 Initialize subscribes to the configured 'alerts' channel
 
 <a name="Service.Name"></a>
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L90>)
+
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L55>)
 
 ```go
 func (svc *Service) Name() string
@@ -105,7 +110,8 @@ func (svc *Service) Name() string
 Name returns the canonical name of the 'speak' service type.
 
 <a name="Service.RegisterPayloads"></a>
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L75>)
+
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -114,7 +120,8 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the speak service payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L93>)
+
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L58>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -123,14 +130,16 @@ func (svc *Service) ValidateConfig() []error
 ValidateConfig validates the service configuration and returns any validation errors.
 
 <a name="Service.messageHandler"></a>
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L134>)
+
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L99>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
 ```
 
 <a name="SpeechEvent"></a>
-## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L49-L52>)
+
+## type [SpeechEvent](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L14-L17>)
 
 SpeechEvent represents a spoken\-text event emitted by the 'speak' service. It intentionally carries only a timestamp
 and the spoken text in the Text field.
@@ -143,7 +152,8 @@ type SpeechEvent struct {
 ```
 
 <a name="SpeechEvent.PayloadType"></a>
-### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L55>)
+
+### func \(SpeechEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L20>)
 
 ```go
 func (e SpeechEvent) PayloadType() string
