@@ -73,6 +73,33 @@ build-reminders-fetcher:
 		echo "Skipping reminders_fetcher build: not macOS"; \
 	fi
 
+# Build the macOS notify helper as a separate app bundle (keyop-notify.app)
+build-notify-sender:
+	@bash ./scripts/build-notify-sender.sh
+
+# Deploy the keyop-notify app into /Applications and sign ad-hoc so macOS recognizes it
+.PHONY: deploy-notify-sender
+deploy-notify-sender:
+	@if [ "$(shell uname -s)" = "Darwin" ]; then \
+		set -e; \
+		$(MAKE) build-notify-sender; \
+		APP_SRC="x/notify/cmd/notify-sender/keyop-notify.app"; \
+		APP_DST="/Applications/keyop-notify.app"; \
+		if [ -d "$$APP_SRC" ]; then \
+			echo "Signing $$APP_SRC (ad-hoc)"; \
+			codesign -s - --force --timestamp=none "$$APP_SRC" || true; \
+			echo "Installing to $$APP_DST"; \
+			rm -rf "$$APP_DST"; \
+			cp -R "$$APP_SRC" "/Applications/"; \
+			echo "Installed $$APP_DST"; \
+		else \
+			echo "App bundle not found at $$APP_SRC"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "deploy-notify-sender is macOS-only"; \
+	fi
+
 # Build release artifacts and package the macOS helper into $(OUTPUT_DIR)
 build-release: build-main build-reminders-fetcher
 	@if [ "$(shell uname -s)" = "Darwin" ]; then \

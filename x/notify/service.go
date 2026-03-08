@@ -3,9 +3,11 @@
 // if it exists.  It will include the timestamp in the notification text and the service/host in the
 // notification title to provide context.
 //
-// Currently, it only works on macOS, as it relies on the 'osascript' command to generate notifications.
-// The service validates that it runs on Darwin (macOS) and will return a configuration error
-// on other platforms.
+// Currently, this service only works on macOS.
+//
+// Configuration
+// - notify_command: optional string, path, or name of the helper executable to run (default: keyop-notify)
+// - notification_icon: optional string, path to an icon file to attach to notifications
 //
 // Rate limiting
 //   - The service supports a per-minute rate limit controlled by the configuration key
@@ -16,6 +18,28 @@
 //   - When the rate limit is first exceeded, the service emits a "rate_limit" event with a short
 //     summary indicating that alerts were skipped. Subsequent dropped events do not re-emit the
 //     summary until an allowed event resets the warning state.
+//
+// # MACOS SPECIFIC NOTES
+//
+// The service uses applescript to display notifications on macOS.  There is a limitation to applescript,
+// though, in that it doesn't support attaching an icon to the notification.  To work around this, the service
+// supports executing an external helper command (default name: `keyop-notify`) which can use the native
+// UserNotifications framework to display notifications with an attached icon.
+//
+// The helper command can be compiled from the included Go source:
+//
+//	 # build the helper command from the included Go source (or provide your own that accepts the same args)
+//	 make build-notify-sender
+//
+//	# sign and copy into /Applications to allow execution from the service without additional permissions
+//	make deploy-notify-sender
+//
+// Once signed and installed, the helper can be exercised directly from the command line to test.
+//
+//	open /Applications/keyop-notify.app --args --title "Test Title" --body "Test Body"
+//
+// If the helper command is not present or fails to execute, the service will fall back to using applescript
+// directly, but the notifications will use the 'Script Editor' icon.
 package notify
 
 import (
@@ -24,6 +48,7 @@ import (
 	"keyop/util"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -129,8 +154,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	// osascript -e 'display notification "message" with the title "KeyOp"'
 	title := fmt.Sprintf("%s - %s", msg.ServiceName, msg.Hostname)
 	text = fmt.Sprintf("[%s] %s", msg.Timestamp.Format("3:04pm"), text)
-	script := fmt.Sprintf("display notification %q with title %q", text, title)
-	logger.Warn("Executing osascript command", "script", script)
+	logger.Warn("Executing notify command", "title", title, "body", text)
 
 	now := time.Now()
 	allowed, firstDrop := svc.limiter.AddEventAt(now)
@@ -138,12 +162,32 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		logger.Warn("Rate limit exceeded", "count", svc.limiter.Total())
 		if firstDrop {
 			summary := "Too many notifications; some alerts have been skipped."
-			script := fmt.Sprintf("display notification %q with title %q", summary, title)
-			// attempt to notify user about dropped messages
+			// attempt to notify the user about dropped messages using the helper binary
 			osProvider := svc.Deps.MustGetOsProvider()
-			cmd := osProvider.Command("osascript", "-e", script)
+			notifyCmd := "keyop-notify"
+			if svc.Cfg.Config != nil {
+				if v, ok := svc.Cfg.Config["notify_command"]; ok {
+					if s, ok := v.(string); ok && s != "" {
+						notifyCmd = s
+					}
+				}
+			}
+			// include configured icon if present
+			icon := ""
+			if svc.Cfg.Config != nil {
+				if v, ok := svc.Cfg.Config["notification_icon"]; ok {
+					if s, ok := v.(string); ok && s != "" {
+						icon = s
+					}
+				}
+			}
+			args := []string{"--title", title, "--body", summary}
+			if icon != "" {
+				args = append(args, "--icon", icon)
+			}
+			cmd := osProvider.Command(notifyCmd, args...)
 			if err := cmd.Run(); err != nil {
-				logger.Error("Failed to execute osascript for rate-limit summary", "error", err)
+				logger.Error("Failed to execute notify helper for rate-limit summary", "error", err)
 			}
 			// emit rate_limit event for the summary
 			e := NotificationEvent{Now: time.Now(), Summary: summary}
@@ -161,10 +205,60 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return nil
 	}
 
-	logger.Warn("Executing osascript command", "script", script)
+	logger.Warn("Executing notify command", "title", title, "body", text)
 	osProvider := svc.Deps.MustGetOsProvider()
-	cmd := osProvider.Command("osascript", "-e", script)
-	err := cmd.Run()
+	// allow overriding the helper command and icon via config
+	notifyCmd := "keyop-notify"
+	if svc.Cfg.Config != nil {
+		if v, ok := svc.Cfg.Config["notify_command"]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				notifyCmd = s
+			}
+		}
+	}
+	icon := ""
+	if svc.Cfg.Config != nil {
+		if v, ok := svc.Cfg.Config["notification_icon"]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				icon = s
+			}
+		}
+	}
+	args := []string{"--title", title, "--body", text}
+	if icon != "" {
+		args = append(args, "--icon", icon)
+	}
+
+	// Prefer the installed app bundle in /Applications if present; otherwise fall back to plain executable or osascript.
+	// Declare cmd and err here so they are available in the branches below.
+	var cmd core.CommandApi
+	var err error
+	appPath := "/Applications/keyop-notify.app"
+	if _, statErr := osProvider.Stat(appPath); statErr == nil {
+		// run the app bundle using open to ensure it's registered with the system
+		cmd = osProvider.Command("open", appPath, "--args")
+		// append can't be used directly on CommandApi; build args slice for open
+		openArgs := []string{appPath, "--args"}
+		openArgs = append(openArgs, args...)
+		cmd = osProvider.Command("open", openArgs...)
+	} else {
+		// try executable name first
+		cmd = osProvider.Command(notifyCmd, args...)
+		if runErr := cmd.Run(); runErr != nil {
+			// final fallback: use osascript to display a basic notification
+			script := fmt.Sprintf("display notification \"%s\" with title \"%s\"", strings.ReplaceAll(text, "\"", "\\\""), strings.ReplaceAll(title, "\"", "\\\""))
+			logger.Warn("Falling back to osascript", "script", script)
+			osaScriptCmd := osProvider.Command("osascript", "-e", script)
+			if osaErr := osaScriptCmd.Run(); osaErr != nil {
+				logger.Error("Failed to execute osascript fallback", "error", osaErr)
+			}
+			// continue; the osascript fallback is best-effort and not considered an error
+		}
+		return nil
+	}
+
+	// If we got here, cmd is the 'open' command for the app bundle
+	err = cmd.Run()
 
 	correlation := ""
 	if msg.Correlation != "" {

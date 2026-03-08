@@ -10,8 +10,10 @@ Package notify implements a service that converts messages arriving on the confi
 system notifications. The service will alert with the content of the 'Text' field if it exists. It will include the
 timestamp in the notification text and the service/host in the notification title to provide context.
 
-Currently, it only works on macOS, as it relies on the 'osascript' command to generate notifications. The service
-validates that it runs on Darwin \(macOS\) and will return a configuration error on other platforms.
+Currently, this service only works on macOS.
+
+Configuration \- notify\_command: optional string, path, or name of the helper executable to run \(default:
+keyop\-notify\) \- notification\_icon: optional string, path to an icon file to attach to notifications
 
 Rate limiting
 
@@ -24,23 +26,49 @@ Rate limiting
   alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
   state.
 
+### MACOS SPECIFIC NOTES
+
+The service uses applescript to display notifications on macOS. There is a limitation to applescript, though, in that it
+doesn't support attaching an icon to the notification. To work around this, the service supports executing an external
+helper command \(default name: \`keyop\-notify\`\) which can use the native UserNotifications framework to display
+notifications with an attached icon.
+
+The helper command can be compiled from the included Go source:
+
+```
+# build the helper command from the included Go source (or provide your own that accepts the same args)
+ make build-notify-sender
+
+# sign and copy into /Applications to allow execution from the service without additional permissions
+make deploy-notify-sender
+```
+
+Once signed and installed, the helper can be exercised directly from the command line to test.
+
+```
+open /Applications/keyop-notify.app --args --title "Test Title" --body "Test Body"
+```
+
+If the helper command is not present or fails to execute, the service will fall back to using applescript directly, but
+the notifications will use the 'Script Editor' icon.
+
 ## Index
 
 - [func NewService\(deps core.Dependencies, cfg core.ServiceConfig\) core.Service](<#NewService>)
 - [type NotificationEvent](<#NotificationEvent>)
-    - [func \(e NotificationEvent\) PayloadType\(\) string](<#NotificationEvent.PayloadType>)
+  - [func \(e NotificationEvent\) PayloadType\(\) string](<#NotificationEvent.PayloadType>)
 - [type Service](<#Service>)
-    - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
-    - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
-    - [func \(svc \*Service\) Name\(\) string](<#Service.Name>)
-    - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
-    - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
-    - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
+  - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
+  - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
+  - [func \(svc \*Service\) Name\(\) string](<#Service.Name>)
+  - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
+  - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
+  - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
 
 
 <a name="NewService"></a>
 
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L49>)
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L77>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -50,7 +78,7 @@ NewService creates a new 'notify' service using the provided dependencies and co
 
 <a name="NotificationEvent"></a>
 
-## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L32-L35>)
+## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L57-L60>)
 
 NotificationEvent represents a notification event emitted by the 'notify' service. It intentionally contains a timestamp
 and a short summary of the notification.
@@ -64,7 +92,7 @@ type NotificationEvent struct {
 
 <a name="NotificationEvent.PayloadType"></a>
 
-### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L38>)
+### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L63>)
 
 ```go
 func (e NotificationEvent) PayloadType() string
@@ -74,9 +102,11 @@ PayloadType returns the canonical payload type for notification events.
 
 <a name="Service"></a>
 
-## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L40-L46>)
+## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L68-L74>)
 
-
+Service converts text payloads into native macOS user notifications. It subscribes to the configured 'alerts' channel
+and emits notification events on success. When the rate limit is exceeded, a 'rate\_limit' event is emitted with a short
+summary.
 
 ```go
 type Service struct {
@@ -90,7 +120,7 @@ type Service struct {
 
 <a name="Service.Check"></a>
 
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L209>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L305>)
 
 ```go
 func (svc *Service) Check() error
@@ -100,7 +130,7 @@ Check performs the service's periodic work: collect data, evaluate state, and pu
 
 <a name="Service.Initialize"></a>
 
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L91>)
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L119>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -110,7 +140,7 @@ Initialize subscribes to the configured 'alerts' channel and sets up the message
 
 <a name="Service.Name"></a>
 
-### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L72>)
+### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L100>)
 
 ```go
 func (svc *Service) Name() string
@@ -120,7 +150,7 @@ Name returns the canonical name of the notify service type.
 
 <a name="Service.RegisterPayloads"></a>
 
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L57>)
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L85>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -130,7 +160,7 @@ RegisterPayloads registers the notification payload types with the provided regi
 
 <a name="Service.ValidateConfig"></a>
 
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L75>)
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L103>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -140,7 +170,7 @@ ValidateConfig validates the service configuration and returns any validation er
 
 <a name="Service.messageHandler"></a>
 
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L116>)
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L144>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
