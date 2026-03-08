@@ -82,15 +82,16 @@ Package idle monitors macOS user idle/active state and emits events used for pre
 - [func localMidnight\(t time.Time\) time.Time](<#localMidnight>)
 - [type ActivePeriod](<#ActivePeriod>)
 - [type IdleEvent](<#IdleEvent>)
-    - [func \(i IdleEvent\) PayloadType\(\) string](<#IdleEvent.PayloadType>)
+  - [func \(i IdleEvent\) PayloadType\(\) string](<#IdleEvent.PayloadType>)
 - [type Service](<#Service>)
-    - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
-    - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
-    - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
-    - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
-    - [func \(svc \*Service\) getMacosIdleTime\(\) \(time.Duration, error\)](<#Service.getMacosIdleTime>)
-    - [func \(svc \*Service\) maybeSendIdleReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendIdleReport>)
+  - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
+  - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
+  - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
+  - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
+  - [func \(svc \*Service\) getMacosIdleTime\(\) \(time.Duration, error\)](<#Service.getMacosIdleTime>)
+  - [func \(svc \*Service\) maybeSendIdleReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendIdleReport>)
 - [type ServiceState](<#ServiceState>)
+
 
 ## Constants
 
@@ -101,7 +102,6 @@ const fileDateFormat = "2006-01-02"
 ```
 
 <a name="NewService"></a>
-
 ## func [NewService](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L70>)
 
 ```go
@@ -111,7 +111,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 NewService creates a new service using the provided dependencies and configuration.
 
 <a name="formatHumanDuration"></a>
-
 ## func [formatHumanDuration](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L352>)
 
 ```go
@@ -119,7 +118,6 @@ func formatHumanDuration(d time.Duration) string
 ```
 
 <a name="localMidnight"></a>
-
 ## func [localMidnight](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L19>)
 
 ```go
@@ -129,7 +127,6 @@ func localMidnight(t time.Time) time.Time
 localMidnight returns the start of the calendar day for t in t's location.
 
 <a name="ActivePeriod"></a>
-
 ## type [ActivePeriod](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L25-L30>)
 
 ActivePeriod represents a single active period within a day file.
@@ -144,7 +141,6 @@ type ActivePeriod struct {
 ```
 
 <a name="IdleEvent"></a>
-
 ## type [IdleEvent](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L33-L39>)
 
 IdleEvent represents a typed payload for idle events.
@@ -160,7 +156,6 @@ type IdleEvent struct {
 ```
 
 <a name="IdleEvent.PayloadType"></a>
-
 ### func \(IdleEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L42>)
 
 ```go
@@ -170,7 +165,6 @@ func (i IdleEvent) PayloadType() string
 PayloadType returns the canonical payload type for idle events.
 
 <a name="Service"></a>
-
 ## type [Service](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L45-L59>)
 
 Service monitors the macOS idle APIs to detect user activity and publishes idle/active events.
@@ -194,7 +188,6 @@ type Service struct {
 ```
 
 <a name="Service.Check"></a>
-
 ### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L185>)
 
 ```go
@@ -204,7 +197,6 @@ func (svc *Service) Check() error
 Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 
 <a name="Service.Initialize"></a>
-
 ### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L104>)
 
 ```go
@@ -214,7 +206,6 @@ func (svc *Service) Initialize() error
 Initialize performs one\-time startup required by the service \(resource loading or connectivity checks\).
 
 <a name="Service.RegisterPayloads"></a>
-
 ### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L78>)
 
 ```go
@@ -224,7 +215,6 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the idle payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-
 ### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L93>)
 
 ```go
@@ -234,7 +224,6 @@ func (svc *Service) ValidateConfig() []error
 ValidateConfig validates the service configuration and returns any validation errors.
 
 <a name="Service.getMacosIdleTime"></a>
-
 ### func \(\*Service\) [getMacosIdleTime](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L394>)
 
 ```go
@@ -242,7 +231,6 @@ func (svc *Service) getMacosIdleTime() (time.Duration, error)
 ```
 
 <a name="Service.maybeSendIdleReport"></a>
-
 ### func \(\*Service\) [maybeSendIdleReport](<https://github.com/wu/keyop/blob/main/x/idle/report.go#L18>)
 
 ```go
@@ -253,7 +241,6 @@ maybeSendIdleReport sends a daily report for the previous day between 00:00 and 
 report will be generated regardless of the current hour \(used for reportOnStartup\).
 
 <a name="ServiceState"></a>
-
 ## type [ServiceState](<https://github.com/wu/keyop/blob/main/x/idle/service.go#L62-L67>)
 
 ServiceState holds persistent runtime state for the idle service \(for example, last idle timestamp and alerting

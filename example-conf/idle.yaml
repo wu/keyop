@@ -1,0 +1,41 @@
+x: idleMacos
+freq: 15s
+
+config:
+
+  threshold: 5m
+  idle_metric_name: idle.navi-idle
+  active_metric_name: idle.navi-active
+
+  report_queue_file: ~/.keyop/data/status_queue_yyyymmdd.log
+
+  pub_preprocess:
+    - when: 'event eq "status_update"'
+      updates:
+        channelName: status
+
+    - when: 'event eq "idle_duration_metric"'
+      updates:
+        channelName: metrics
+
+    - when: 'event eq "active_duration_metric"'
+      updates:
+        channelName: metrics
+
+    - when: 'event eq "idle_alert"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "active_alert"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "active_reminder"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "idle_report"'
+      updates:
+        channelName: alerts
+
+

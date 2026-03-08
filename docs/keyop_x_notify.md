@@ -6,29 +6,56 @@
 import "keyop/x/notify"
 ```
 
-Package notify converts incoming 'alerts' channel messages into native desktop notifications. It supports optional
-helper binaries for macOS that leverage the UserNotifications framework and can display icons.
+Package notify implements a service that converts messages arriving on the configured 'alerts' channel into pop\-up
+system notifications. The service will alert with the content of the 'Text' field if it exists. It will include the
+timestamp in the notification text and the service/host in the notification title to provide context.
 
-Overview The notify service subscribes to the configured 'alerts' channel and transforms incoming core.Message objects
-into system notifications. The body of the notification contains the message text and a short timestamp; the title
-includes the originating service and host.
+Currently, this service only works on macOS.
 
-Configuration \- notify\_command: optional string, path or executable name for the notification helper \(default:
-keyop\-notify\) \- notification\_icon: optional string, path to an icon to attach to notifications \-
-rate\_limit\_per\_minute: optional integer controlling per\-minute notification rate \(default: 5\)
+Configuration \- notify\_command: optional string, path, or name of the helper executable to run \(default:
+keyop\-notify\) \- rate\_limit\_per\_minute: optional integer controlling per\-minute notification rate \(default: 5\)
 
-Behavior
+Rate limiting
 
-- If a helper binary \(e.g., /Applications/keyop\-notify.app or a configured notify\_command\) is available it is
-  preferred; otherwise the service falls back to applescript.
-- Rate limiting uses a rolling 60s window split into 10 buckets; on first drop a "rate\_limit" event is emitted.
+- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\`
+  \(integer\). If not specified, the default is 5 events per minute.
+- The limiter uses a rolling 60\-second window divided into 10 buckets \(6s each\). Events are counted into the current
+  bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
+  the window advances.
+- When the rate limit is first exceeded, the service emits a "rate\_limit" event with a short summary indicating that
+  alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning
+  state.
 
-macOS Notes
+### MACOS SPECIFIC NOTES
 
-- To have permission to post notifications via UserNotifications, helper apps must be signed and installed in
-  /Applications so macOS can present the permission prompt.
-- The included helper builder \(make build\-notify\-sender and make deploy\-notify\-sender\) can produce such a helper;
-  see project docs.
+The service uses applescript to display notifications on macOS. There is a limitation to applescript, though, in that it
+doesn't support attaching an icon to the notification. To work around this, the service supports executing an external
+helper command \(default name: \`keyop\-notify\`\) which can use the native UserNotifications framework to display
+notifications with an attached icon.
+
+The helper command can be compiled from the included Go source:
+
+```
+# build the helper command from the included Go source (or provide your own that accepts the same args)
+ make build-notify-sender
+
+# sign and copy into /Applications to allow execution from the service without additional permissions
+make deploy-notify-sender
+```
+
+Once signed and installed, the helper can be exercised directly from the command line to test.
+
+```
+open /Applications/keyop-notify.app --args --title "Test Title" --body "Test Body"
+```
+
+Note that if you make some changes to the helper \(icon\) and rebuild it, you may stop seeing notifications. If that
+happens, you will need to go into Preferences =\> Notifications, find "keyop\-notify" in the list of apps, right click,
+and choose "reset notifications" to remove it. Then run the "open" command above to send a notification, and it will
+re\-register the helper with the system and allow it to display notifications.
+
+If the helper command is not present or fails to execute, the service will fall back to using applescript directly, but
+the notifications will use the 'Script Editor' icon.
 
 ## Index
 
@@ -45,7 +72,6 @@ macOS Notes
 
 
 <a name="NewService"></a>
-
 ## func [NewService](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L35>)
 
 ```go
@@ -55,7 +81,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 NewService creates a new 'notify' service using the provided dependencies and configuration.
 
 <a name="NotificationEvent"></a>
-
 ## type [NotificationEvent](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L15-L18>)
 
 NotificationEvent represents a notification event emitted by the 'notify' service. It intentionally contains a timestamp
@@ -69,7 +94,6 @@ type NotificationEvent struct {
 ```
 
 <a name="NotificationEvent.PayloadType"></a>
-
 ### func \(NotificationEvent\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L21>)
 
 ```go
@@ -79,7 +103,6 @@ func (e NotificationEvent) PayloadType() string
 PayloadType returns the canonical payload type for notification events.
 
 <a name="Service"></a>
-
 ## type [Service](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L26-L32>)
 
 Service converts text payloads into native macOS user notifications. It subscribes to the configured 'alerts' channel
@@ -97,7 +120,6 @@ type Service struct {
 ```
 
 <a name="Service.Check"></a>
-
 ### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L263>)
 
 ```go
@@ -107,7 +129,6 @@ func (svc *Service) Check() error
 Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 
 <a name="Service.Initialize"></a>
-
 ### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L77>)
 
 ```go
@@ -117,7 +138,6 @@ func (svc *Service) Initialize() error
 Initialize subscribes to the configured 'alerts' channel and sets up the message handler for incoming messages.
 
 <a name="Service.Name"></a>
-
 ### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L58>)
 
 ```go
@@ -127,7 +147,6 @@ func (svc *Service) Name() string
 Name returns the canonical name of the notify service type.
 
 <a name="Service.RegisterPayloads"></a>
-
 ### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L43>)
 
 ```go
@@ -137,7 +156,6 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the notification payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-
 ### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L61>)
 
 ```go
@@ -147,7 +165,6 @@ func (svc *Service) ValidateConfig() []error
 ValidateConfig validates the service configuration and returns any validation errors.
 
 <a name="Service.messageHandler"></a>
-
 ### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/notify/service.go#L102>)
 
 ```go
