@@ -94,6 +94,9 @@ func (e Envelope) ToMessage() Message {
 			if val, ok := p["text"].(string); ok {
 				m.Text = val
 			}
+			if val, ok := p["body"].(string); ok {
+				m.Body = val
+			}
 			if val, ok := p["summary"].(string); ok {
 				m.Summary = val
 			}

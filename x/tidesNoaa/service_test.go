@@ -1601,7 +1601,7 @@ func TestMaybeSendTideReport(t *testing.T) {
 		msgs := filterByEvent(messenger.SentMessages, "tide_report")
 		messenger.Mu.Unlock()
 		require.Len(t, msgs, 1)
-		assert.Contains(t, msgs[0].Text, "9414290")
+		assert.Contains(t, msgs[0].Body, "9414290")
 
 		// Second call same day — should not send again.
 		require.NoError(t, svc.maybeSendTideReport(messenger, now.Add(time.Hour)))

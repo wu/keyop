@@ -122,8 +122,9 @@ func (svc *Service) maybeSendSpeakReport(messenger core.MessengerApi, now time.T
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "speak_report",
-		Summary:     "speak report for " + reportDay.Format("2006-01-02"),
-		Text:        md,
+		Summary:     "speak report available",
+		Text:        "speak report for " + reportDay.Format("2006-01-02"),
+		Body:        md,
 		Data: map[string]interface{}{
 			"date":             reportDay.Format("2006-01-02"),
 			"processed":        processed,

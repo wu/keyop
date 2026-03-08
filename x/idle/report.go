@@ -284,8 +284,9 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "idle_report",
-		Summary:     "idle report for " + reportDay.Format("2006-01-02"),
-		Text:        md,
+		Summary:     "idle report available",
+		Text:        "idle report for " + reportDay.Format("2006-01-02"),
+		Body:        md,
 		Data: map[string]interface{}{
 			"date":               reportDay.Format(fileDateFormat),
 			"active_seconds":     activeTotalSecs,

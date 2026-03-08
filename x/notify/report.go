@@ -122,8 +122,9 @@ func (svc *Service) maybeSendNotifyReport(messenger core.MessengerApi, now time.
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "notify_report",
-		Summary:     "notify report for " + reportDay.Format("2006-01-02"),
-		Text:        md,
+		Summary:     "notify report available",
+		Text:        "notify report for " + reportDay.Format("2006-01-02"),
+		Body:        md,
 		Data: map[string]interface{}{
 			"date":             reportDay.Format("2006-01-02"),
 			"processed":        processed,

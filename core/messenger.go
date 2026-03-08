@@ -26,6 +26,7 @@ type Message struct {
 	Event       string      `json:"event,omitempty"`
 	Status      string      `json:"status,omitempty"`
 	Text        string      `json:"text,omitempty"`
+	Body        string      `json:"body,omitempty"`
 	Summary     string      `json:"summary,omitempty"`
 	Metric      float64     `json:"metric,omitempty"`
 	MetricName  string      `json:"metricName,omitempty"`

@@ -515,8 +515,9 @@ func (svc *Service) maybeSendTideReport(messenger core.MessengerApi, now time.Ti
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "tide_report",
-		Text:        text,
-		Summary:     summary,
+		Text:        summary,
+		Body:        text,
+		Summary:     "tide report available",
 		Data: map[string]interface{}{
 			"stationId": svc.stationID,
 			"threshold": threshold,

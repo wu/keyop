@@ -132,15 +132,17 @@ func (svc *Service) Initialize() error {
 		svc.queueFileTemplate = ""
 	}
 
-	// load state
-	var state ServiceState
-	if err := svc.Deps.MustGetStateStore().Load(svc.Cfg.Name, &state); err == nil {
-		svc.lastReportDay = state.LastReportDay
-	}
-	// if lastReportDay not set and queue config provided, send initial report
-	if svc.lastReportDay.IsZero() && svc.queueFileTemplate != "" {
-		if err := svc.maybeSendTxtmsgReport(messenger, time.Now(), true); err != nil {
-			svc.Deps.MustGetLogger().Warn("txtmsg: initial report failed", "error", err)
+	if svc.queueFileTemplate != "" {
+		// load state
+		var state ServiceState
+		if err := svc.Deps.MustGetStateStore().Load(svc.Cfg.Name, &state); err == nil {
+			svc.lastReportDay = state.LastReportDay
+		}
+		// if lastReportDay not set and queue config provided, send initial report
+		if svc.lastReportDay.IsZero() {
+			if err := svc.maybeSendTxtmsgReport(messenger, time.Now(), true); err != nil {
+				svc.Deps.MustGetLogger().Warn("txtmsg: initial report failed", "error", err)
+			}
 		}
 	}
 
