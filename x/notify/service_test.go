@@ -141,13 +141,12 @@ func TestService_MessageHandler(t *testing.T) {
 		err = svc.messageHandler(msg)
 		assert.NoError(t, err)
 
-		assert.Equal(t, "keyop-notify", capturedName)
-		// args: --title <title> --body <body>
-		assert.GreaterOrEqual(t, len(capturedArgs), 4)
-		assert.Equal(t, "--title", capturedArgs[0])
+		assert.Equal(t, "osascript", capturedName)
+		assert.Len(t, capturedArgs, 2)
+		assert.Equal(t, "-e", capturedArgs[0])
+
+		assert.Contains(t, capturedArgs[1], "hello world")
 		assert.Contains(t, capturedArgs[1], "notify-test")
-		assert.Equal(t, "--body", capturedArgs[2])
-		assert.Contains(t, capturedArgs[3], "hello world")
 	})
 
 	// rate limiting behavior
@@ -156,12 +155,7 @@ func TestService_MessageHandler(t *testing.T) {
 
 		fakeOs := core.FakeOsProvider{
 			CommandFunc: func(_ string, arg ...string) core.CommandApi {
-				// args: --title <title> --body <body>
-				if len(arg) > 3 {
-					captured = append(captured, arg[3])
-				} else if len(arg) > 0 {
-					captured = append(captured, arg[len(arg)-1])
-				}
+				captured = append(captured, arg[1])
 				return &core.FakeCommand{}
 			},
 		}

@@ -3,15 +3,9 @@
 // if it exists.  It will include the timestamp in the notification text and the service/host in the
 // notification title to provide context.
 //
-// Currently, it only works on macOS. The service executes an external helper (default
-// name: `keyop-notify`) which uses the native UserNotifications framework to deliver
-// notifications. The helper supports attaching an icon file and additional configuration.
+// Currently, it only works on macOS, as it relies on the 'osascript' command to generate notifications.
 // The service validates that it runs on Darwin (macOS) and will return a configuration error
 // on other platforms.
-//
-// Configuration
-// - notify_command: optional string, path or name of the helper executable to run (default: keyop-notify)
-// - notification_icon: optional string, path to an icon file to attach to notifications
 //
 // Rate limiting
 //   - The service supports a per-minute rate limit controlled by the configuration key
@@ -135,7 +129,8 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	// osascript -e 'display notification "message" with the title "KeyOp"'
 	title := fmt.Sprintf("%s - %s", msg.ServiceName, msg.Hostname)
 	text = fmt.Sprintf("[%s] %s", msg.Timestamp.Format("3:04pm"), text)
-	logger.Warn("Executing notify command", "title", title, "body", text)
+	script := fmt.Sprintf("display notification %q with title %q", text, title)
+	logger.Warn("Executing osascript command", "script", script)
 
 	now := time.Now()
 	allowed, firstDrop := svc.limiter.AddEventAt(now)
@@ -143,32 +138,12 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		logger.Warn("Rate limit exceeded", "count", svc.limiter.Total())
 		if firstDrop {
 			summary := "Too many notifications; some alerts have been skipped."
-			// attempt to notify user about dropped messages using the helper binary
+			script := fmt.Sprintf("display notification %q with title %q", summary, title)
+			// attempt to notify user about dropped messages
 			osProvider := svc.Deps.MustGetOsProvider()
-			notifyCmd := "keyop-notify"
-			if svc.Cfg.Config != nil {
-				if v, ok := svc.Cfg.Config["notify_command"]; ok {
-					if s, ok := v.(string); ok && s != "" {
-						notifyCmd = s
-					}
-				}
-			}
-			// include configured icon if present
-			icon := ""
-			if svc.Cfg.Config != nil {
-				if v, ok := svc.Cfg.Config["notification_icon"]; ok {
-					if s, ok := v.(string); ok && s != "" {
-						icon = s
-					}
-				}
-			}
-			args := []string{"--title", title, "--body", summary}
-			if icon != "" {
-				args = append(args, "--icon", icon)
-			}
-			cmd := osProvider.Command(notifyCmd, args...)
+			cmd := osProvider.Command("osascript", "-e", script)
 			if err := cmd.Run(); err != nil {
-				logger.Error("Failed to execute notify helper for rate-limit summary", "error", err)
+				logger.Error("Failed to execute osascript for rate-limit summary", "error", err)
 			}
 			// emit rate_limit event for the summary
 			e := NotificationEvent{Now: time.Now(), Summary: summary}
@@ -186,30 +161,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		return nil
 	}
 
-	logger.Warn("Executing notify command", "title", title, "body", text)
+	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
-	// allow overriding the helper command and icon via config
-	notifyCmd := "keyop-notify"
-	if svc.Cfg.Config != nil {
-		if v, ok := svc.Cfg.Config["notify_command"]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				notifyCmd = s
-			}
-		}
-	}
-	icon := ""
-	if svc.Cfg.Config != nil {
-		if v, ok := svc.Cfg.Config["notification_icon"]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				icon = s
-			}
-		}
-	}
-	args := []string{"--title", title, "--body", text}
-	if icon != "" {
-		args = append(args, "--icon", icon)
-	}
-	cmd := osProvider.Command(notifyCmd, args...)
+	cmd := osProvider.Command("osascript", "-e", script)
 	err := cmd.Run()
 
 	correlation := ""

@@ -73,15 +73,6 @@ build-reminders-fetcher:
 		echo "Skipping reminders_fetcher build: not macOS"; \
 	fi
 
-# Build the macOS notify helper as a separate binary
-build-notify-sender:
-	@if [ "$(shell uname -s)" = "Darwin" ]; then \
-		echo "Building keyop notify-sender (macOS only)"; \
-		go build -o x/notify/cmd/notify-sender/keyop-notify ./x/notify/cmd/notify-sender; \
-	else \
-		echo "Skipping keyop-notify build: not macOS"; \
-	fi
-
 # Build release artifacts and package the macOS helper into $(OUTPUT_DIR)
 build-release: build-main build-reminders-fetcher
 	@if [ "$(shell uname -s)" = "Darwin" ]; then \
