@@ -4,8 +4,8 @@ freq: 15s
 config:
 
   threshold: 5m
-  idle_metric_name: idle.navi-idle
-  active_metric_name: idle.navi-active
+  idle_metric_name: idle.idle
+  active_metric_name: idle.active
 
   report_queue_file: ~/.keyop/data/status_queue_yyyymmdd.log
 
