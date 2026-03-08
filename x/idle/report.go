@@ -224,10 +224,54 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		return fmt.Sprintf("%dh %dm", h, mm)
 	}
 
+	// Build hourly activity: minutes active per hour (0-23)
+	hourly := make([]int, 24)
+	for _, p := range mergedActive {
+		for h := 0; h < 24; h++ {
+			hourStart := dayStart.Add(time.Duration(h) * time.Hour)
+			hourEnd := hourStart.Add(time.Hour)
+			if p.Stop.Before(hourStart) || p.Start.After(hourEnd) {
+				continue
+			}
+			start := p.Start
+			if start.Before(hourStart) {
+				start = hourStart
+			}
+			end := p.Stop
+			if end.After(hourEnd) {
+				end = hourEnd
+			}
+			overlap := end.Sub(start).Minutes()
+			if overlap < 0 {
+				overlap = 0
+			}
+			// round to nearest minute
+			mins := int(overlap + 0.5)
+			if mins > 60 {
+				mins = 60
+			}
+			hourly[h] += mins
+		}
+	}
+
 	md := fmt.Sprintf("# Idle report for %s\n", reportDay.Format(fileDateFormat))
 	md += fmt.Sprintf("**Total active:** %s\n", formatHM(activeTotalSecs))
 	md += fmt.Sprintf("**Total idle:** %s\n", formatHM(idleTotalSecs))
 	md += fmt.Sprintf("**Total unknown:** %s\n\n", formatHM(unknownTotalSecs))
+
+	// Hourly bar chart (one bar per hour; bar length = minutes active)
+	md += "## Hourly activity\n\n"
+	md += "```\n"
+	for h := 0; h < 24; h++ {
+		label := fmt.Sprintf("%02d:00", h)
+		bars := hourly[h]
+		if bars > 60 {
+			bars = 60
+		}
+		md += fmt.Sprintf("%s | %s %2dm\n", label, strings.Repeat("█", bars), hourly[h])
+	}
+	md += "```\n\n"
+
 	md += "## Active periods\n\n"
 	md += "| Hostname | Start | Stop | Duration |\n"
 	md += "|---|---:|---:|---:|\n"
@@ -243,11 +287,12 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		Summary:     "idle report for " + reportDay.Format("2006-01-02"),
 		Text:        md,
 		Data: map[string]interface{}{
-			"date":            reportDay.Format(fileDateFormat),
-			"active_seconds":  activeTotalSecs,
-			"idle_seconds":    idleTotalSecs,
-			"unknown_seconds": unknownTotalSecs,
-			"active_periods":  allActivePeriods,
+			"date":               reportDay.Format(fileDateFormat),
+			"active_seconds":     activeTotalSecs,
+			"idle_seconds":       idleTotalSecs,
+			"unknown_seconds":    unknownTotalSecs,
+			"active_periods":     allActivePeriods,
+			"hourly_active_mins": hourly,
 		},
 	})
 	if err != nil {
