@@ -107,7 +107,7 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binary
+      - name: Build binary and plugin
         env:
           GOOS:   ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -138,6 +138,21 @@ jobs:
           echo "Building output/${BINARY}"
           go build -ldflags "${LDFLAGS}" -o "output/${BINARY}"
           gzip -n "output/${BINARY}"
+
+          # Build the homekit plugin for the same target and attach it to the release.
+          # The plugin build produces plugins/homekitPlugin/homekitPlugin.so
+          PLUGIN_DIR="plugins/homekitPlugin"
+          if [ -d "$PLUGIN_DIR" ]; then
+            echo "Building plugin in $PLUGIN_DIR for ${GOOS}/${GOARCH}"
+            (cd "$PLUGIN_DIR" && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} go mod tidy && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} go build -buildmode=plugin -o homekitPlugin.so main.go) || echo "Plugin build failed for ${GOOS}/${GOARCH}, continuing"
+            if [ -f "$PLUGIN_DIR/homekitPlugin.so" ]; then
+              PLUGIN_NAME="homekitPlugin-${VERSION}-${GOOS}-${ARCH_NAME}.so"
+              cp "$PLUGIN_DIR/homekitPlugin.so" "output/${PLUGIN_NAME}"
+              gzip -n "output/${PLUGIN_NAME}"
+            fi
+          else
+            echo "Plugin directory $PLUGIN_DIR not found, skipping plugin build"
+          fi
 
       - name: Upload asset to GitHub Release
         uses: softprops/action-gh-release@v2
