@@ -1,3 +1,9 @@
+## [0.2.0](https://github.com/wu/keyop/compare/0.1.0...0.2.0) (2026-03-09)
+
+### Features
+
+* test plugin builds ([bf87e4d](https://github.com/wu/keyop/commit/bf87e4dd5b7fc69600b693482391827a631d22f2))
+
 ## [0.1.0](https://github.com/wu/keyop/compare/v0.0.1...0.1.0) (2026-03-09)
 
 ### Features
