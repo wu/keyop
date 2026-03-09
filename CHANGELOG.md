@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/wu/keyop/compare/1.5.6...1.6.0) (2026-03-09)
+
+### Features
+
+* test release build ([d4f9fe2](https://github.com/wu/keyop/commit/d4f9fe210562ea2a8a54dbcd11249c5b5348de1f))
+
 ## [1.5.6](https://github.com/wu/keyop/compare/1.5.5...1.5.6) (2026-03-09)
 
 ### Bug Fixes
