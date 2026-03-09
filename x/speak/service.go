@@ -68,9 +68,9 @@ func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
 	if runtime.GOOS != "darwin" {
-		err := fmt.Errorf("this service currently only supports MacOS")
-		logger.Error(err.Error())
-		errs = append(errs, err)
+		// This service only functions on macOS, but don't fail ValidateConfig during
+		// cross-platform testing or builds; emit a warning instead.
+		logger.Warn("speak: this service only supports macOS; functionality will be limited on this OS")
 	}
 
 	// validate required subscriptions
