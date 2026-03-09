@@ -67,7 +67,9 @@ jobs:
       - name: Run semantic-release
         id: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a personal access token so the created Release triggers workflows.
+          # If RELEASE_TOKEN is not set, fallback to GITHUB_TOKEN (less reliable).
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           GIT_AUTHOR_NAME:  github-actions[bot]
           GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME:  github-actions[bot]
@@ -79,8 +81,9 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   build-release:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    # Only run on release events (builds triggered after a release is published)
-    if: github.event_name == 'release'
+    # Run when triggered by a release event OR when semantic-release published a release
+    # during a push-run (needs.semantic-release.outputs.released is set to 'true').
+    if: github.event_name == 'release' || needs.semantic-release.outputs.released == 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -134,7 +137,7 @@ jobs:
       - name: Upload asset to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.semantic-release.outputs.version }}
+          tag_name: ${{ needs.semantic-release.outputs.version || github.event.release.tag_name }}
           files: output/*.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
