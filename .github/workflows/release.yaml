@@ -17,6 +17,8 @@ name: Release
 on:
   push:
     branches: ["main"]
+  release:
+    types: [ published ]
 
 permissions:
   contents: write   # push tag + release, commit CHANGELOG
@@ -77,9 +79,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   build-release:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    needs: semantic-release
-    # Only run when a new release was actually published.
-    if: needs.semantic-release.outputs.released == 'true'
+    # Only run on release events (builds triggered after a release is published)
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
 
     strategy:
@@ -97,7 +98,7 @@ jobs:
       - name: Checkout at the new tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.semantic-release.outputs.version }}
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
       - name: Set up Go
@@ -111,7 +112,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           GOARM:  ${{ matrix.goarm }}
         run: |
-          VERSION="${{ needs.semantic-release.outputs.version }}"
+          VERSION="${{ github.event.release.tag_name }}"
           COMMIT="$(git rev-parse --short HEAD)"
           BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           LDFLAGS="-X keyop/cmd.Version=${VERSION} \
