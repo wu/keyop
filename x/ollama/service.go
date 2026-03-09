@@ -28,16 +28,16 @@ type Service struct {
 	Mu            sync.Mutex
 }
 
-// OllamaRequest is the payload format sent to the Ollama API (prompt, model, and streaming options).
-type OllamaRequest struct {
+// Request is the payload format sent to the Ollama API (prompt, model, and streaming options).
+type Request struct {
 	Model   string `json:"model"`
 	Prompt  string `json:"prompt"`
 	Stream  bool   `json:"stream"`
 	Context []int  `json:"context,omitempty"`
 }
 
-// OllamaResponse models the response returned by Ollama, containing generated text and any associated metadata.
-type OllamaResponse struct {
+// Response models the response returned by Ollama, containing generated text and any associated metadata.
+type Response struct {
 	Model     string    `json:"model"`
 	CreatedAt time.Time `json:"created_at"`
 	Response  string    `json:"response"`

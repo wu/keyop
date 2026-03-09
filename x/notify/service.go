@@ -251,7 +251,6 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	appPath := "/Applications/keyop-notify.app"
 	if _, statErr := osProvider.Stat(appPath); statErr == nil {
 		// run the app bundle using open to ensure it's registered with the system
-		cmd = osProvider.Command("open", appPath, "--args")
 		// append can't be used directly on CommandApi; build args slice for open
 		openArgs := []string{appPath, "--args"}
 		openArgs = append(openArgs, args...)

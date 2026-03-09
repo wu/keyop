@@ -108,17 +108,17 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	assert.Equal(t, "OFF", data["heaterTargetState"])
 
 	require.NotEmpty(t, coolerMsgs)
-	m_cool := coolerMsgs[0]
-	assert.Equal(t, "thermo", m_cool.ServiceName)
-	assert.Equal(t, "thermostat", m_cool.ServiceType)
-	assert.Equal(t, "ON", m_cool.State) // cooler should be ON at 80
+	mCool := coolerMsgs[0]
+	assert.Equal(t, "thermo", mCool.ServiceName)
+	assert.Equal(t, "thermostat", mCool.ServiceType)
+	assert.Equal(t, "ON", mCool.State) // cooler should be ON at 80
 
-	data_cool, ok := m_cool.Data.(map[string]interface{})
+	dataCool, ok := mCool.Data.(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected type not matched in data, got %T", m_cool.Data)
+		t.Fatalf("expected type not matched in data, got %T", mCool.Data)
 	}
-	assert.Equal(t, 80.0, data_cool["temp"])
-	assert.Equal(t, "ON", data_cool["coolerTargetState"])
+	assert.Equal(t, 80.0, dataCool["temp"])
+	assert.Equal(t, "ON", dataCool["coolerTargetState"])
 }
 
 func Test_tempHandler_with_missing_pub_channels(t *testing.T) {

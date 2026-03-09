@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Service implements the txtmsg service for sending text messages via macOS Messages.
 type Service struct {
 	Deps    core.Dependencies
 	Cfg     core.ServiceConfig

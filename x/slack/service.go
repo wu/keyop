@@ -302,7 +302,7 @@ type slackMessage struct {
 	Text    string `json:"text"`
 	TS      string `json:"ts"`
 	BotID   string `json:"bot_id"`
-	AppId   string `json:"app_id"`
+	AppID   string `json:"app_id"`
 	Channel string `json:"channel"`
 }
 
@@ -423,7 +423,7 @@ func (svc *Service) Check() error {
 			}
 
 			m := eventsPayload.Event
-			if m.Type == "message" && m.AppId != svc.appID && m.Text != "" {
+			if m.Type == "message" && m.AppID != svc.appID && m.Text != "" {
 				logger.Warn("New Slack message received via Socket Mode", "user", m.User, "text", m.Text, "channel", m.Channel)
 
 				channelName := svc.getChannelName(m.Channel)

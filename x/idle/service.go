@@ -29,8 +29,8 @@ type ActivePeriod struct {
 	DurationSeconds float64   `yaml:"durationSeconds" json:"durationSeconds"`
 }
 
-// IdleEvent represents a typed payload for idle events.
-type IdleEvent struct {
+// Event represents a typed payload for idle events.
+type Event struct {
 	Now                   time.Time `json:"now"`
 	Hostname              string    `json:"hostname"`
 	Status                string    `json:"status"`
@@ -39,7 +39,7 @@ type IdleEvent struct {
 }
 
 // PayloadType returns the canonical payload type for idle events.
-func (i IdleEvent) PayloadType() string { return "service.idle.v1" }
+func (e Event) PayloadType() string { return "service.idle.v1" }
 
 // Service monitors the macOS idle APIs to detect user activity and publishes idle/active events.
 type Service struct {
@@ -76,12 +76,12 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 // RegisterPayloads registers the idle payload types with the provided registry.
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
-	if err := reg.Register("idle", func() any { return &IdleEvent{} }); err != nil {
+	if err := reg.Register("idle", func() any { return &Event{} }); err != nil {
 		if !core.IsDuplicatePayloadRegistration(err) {
 			return fmt.Errorf("failed to register idle alias: %w", err)
 		}
 	}
-	if err := reg.Register("service.idle.v1", func() any { return &IdleEvent{} }); err != nil {
+	if err := reg.Register("service.idle.v1", func() any { return &Event{} }); err != nil {
 		if !core.IsDuplicatePayloadRegistration(err) {
 			return fmt.Errorf("failed to register service.idle.v1: %w", err)
 		}

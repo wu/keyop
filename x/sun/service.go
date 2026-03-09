@@ -106,8 +106,10 @@ func (svc *Service) gpsHandler(msg core.Message) error {
 	return nil
 }
 
-// SunEvents contains computed solar times (dawn, sunrise, sunset, dusk) for a given date and location.
-type SunEvents struct {
+// Events contains computed solar times (dawn, sunrise, sunset, dusk) for a given date and location.
+//
+//nolint:revive
+type Events struct {
 	Sunrise     time.Time `json:"sunrise"`
 	Sunset      time.Time `json:"sunset"`
 	CivilDawn   time.Time `json:"civil_dawn"`
@@ -253,7 +255,7 @@ func (svc *Service) getObserverDataLocked() (float64, float64, float64) {
 }
 
 // calculateSunEvents uses astral library to calculate sun events.
-func (svc *Service) calculateSunEvents(lat, lon, alt float64, t time.Time) SunEvents {
+func (svc *Service) calculateSunEvents(lat, lon, alt float64, t time.Time) Events {
 	observer := astral.Observer{
 		Latitude:  lat,
 		Longitude: lon,
@@ -271,7 +273,7 @@ func (svc *Service) calculateSunEvents(lat, lon, alt float64, t time.Time) SunEv
 	nextDawn, _ := astral.Dawn(observer, t.AddDate(0, 0, 1), astral.DepressionCivil)
 	nightLength := nextDawn.Sub(dusk)
 
-	return SunEvents{
+	return Events{
 		Sunrise:     sunrise,
 		Sunset:      sunset,
 		CivilDawn:   dawn,

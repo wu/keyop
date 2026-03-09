@@ -64,7 +64,7 @@ func TestSunService(t *testing.T) {
 		}
 		assert.NotNil(t, eventMsg)
 		assert.Contains(t, eventMsg.Text, "Next sun event:")
-		events := eventMsg.Data.(SunEvents)
+		events := eventMsg.Data.(Events)
 		assert.NotEmpty(t, events.Sunrise)
 		assert.NotEmpty(t, events.Sunset)
 	})

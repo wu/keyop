@@ -1,4 +1,6 @@
 // Package pingMonitor periodically pings configured hosts and reports latency and availability metrics.
+//
+//nolint:revive
 package pingMonitor
 
 import (
@@ -64,7 +66,7 @@ func (svc *Service) Check() error {
 	output, err := cmd.CombinedOutput()
 
 	// generate correlation id for this check to tie together the events and metrics in the backend
-	correlationId := uuid.New().String()
+	correlationId := uuid.New().String() //nolint:revive
 	if err != nil {
 		logger.Warn("Network outage detected", "host", host, "error", err, "output", string(output))
 

@@ -1,6 +1,7 @@
 //go:build darwin
 // +build darwin
 
+// Package main provides the macOS notify-sender helper used by the notify service.
 package main
 
 import (

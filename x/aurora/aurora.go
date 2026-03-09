@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// DefaultApiURL is the NOAA OVATION latest forecast URL.
-const DefaultApiURL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+// DefaultAPIURL is the NOAA OVATION latest forecast URL.
+const DefaultAPIURL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
 // OvationData represents the NOAA OVATION forecast data.
 type OvationData struct {

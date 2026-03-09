@@ -1,4 +1,6 @@
 // Package webSocketClient provides a reusable websocket client implementation for streaming integrations.
+//
+//nolint:revive
 package webSocketClient
 
 import (

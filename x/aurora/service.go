@@ -24,7 +24,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
 		Deps:   deps,
 		Cfg:    cfg,
-		apiURL: DefaultApiURL,
+		apiURL: DefaultAPIURL,
 	}
 
 	if lat, ok := cfg.Config["lat"].(float64); ok {

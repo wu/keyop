@@ -1,4 +1,6 @@
 // Package anomalyDetector implements anomaly detection over metric streams and emits anomaly events when thresholds are crossed.
+//
+//nolint:revive
 package anomalyDetector
 
 import (

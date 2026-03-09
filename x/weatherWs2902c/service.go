@@ -1,4 +1,6 @@
 // Package weatherWs2902c integrates with WS2902C weather stations and publishes sensor readings as metrics and events.
+//
+//nolint:revive
 package weatherWs2902c
 
 import (

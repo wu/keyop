@@ -21,8 +21,8 @@ type Service struct {
 	Password string //nolint:gosec // configuration-provided credential
 }
 
-// KodiState represents the observed state of a Kodi instance (e.g., playing, paused, idle) and related metadata.
-type KodiState struct {
+// State represents the observed state of a Kodi instance (e.g., playing, paused, idle) and related metadata.
+type State struct {
 	CurrentTitle string `json:"current_title"`
 }
 
@@ -150,7 +150,7 @@ func (svc *Service) Check() error {
 	currentTitle = title
 
 	// 2. Load previous state
-	var prevState KodiState
+	var prevState State
 	err = stateStore.Load(svc.Cfg.Name, &prevState)
 	if err != nil {
 		logger.Warn("Failed to load state", "error", err)

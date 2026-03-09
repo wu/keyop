@@ -1,4 +1,6 @@
 // Package sslMonitor checks TLS/SSL certificate health for configured endpoints and emits expiration warnings.
+//
+//nolint:revive
 package sslMonitor
 
 import (

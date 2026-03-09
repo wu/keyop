@@ -1,5 +1,7 @@
 // Package tidesNoaa provides NOAA tide-data fetching, local storage, reports,
 // and extreme-tide detection for the keyop project.
+//
+//nolint:revive
 package tidesNoaa
 
 import (

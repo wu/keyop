@@ -1,4 +1,6 @@
 // Package webSocketServer implements a websocket server
+//
+//nolint:revive
 package webSocketServer
 
 import (

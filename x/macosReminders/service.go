@@ -32,7 +32,7 @@ type Service struct {
 // Task is the structured payload sent in core.Message.Data for each reminder
 type Task struct {
 	ID             int64     `json:"id"`
-	Uuid           string    `json:"uuid"`
+	UUID           string    `json:"uuid"`
 	Title          string    `json:"title"`
 	Done           bool      `json:"done"`
 	CreatedAt      time.Time `json:"createdAt"`
@@ -254,7 +254,7 @@ func parseSwiftJSONLines(r io.Reader, onlyUncompleted bool, inboxName string) (m
 			}
 		}
 		// generate a stable UUID for this message
-		task.Uuid = uuid.New().String()
+		task.UUID = uuid.New().String()
 		task.Title = title
 		task.Note = note
 		task.Done = completed

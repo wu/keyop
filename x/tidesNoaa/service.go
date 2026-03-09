@@ -1,4 +1,6 @@
 // Package tidesNoaa retrieves tide predictions from NOAA and publishes tide events for automation and alerts.
+//
+//nolint:revive
 package tidesNoaa
 
 import (

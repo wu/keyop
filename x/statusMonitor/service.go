@@ -1,4 +1,6 @@
 // Package statusMonitor aggregates status information from multiple services and publishes an overall health summary.
+//
+//nolint:revive
 package statusMonitor
 
 import (

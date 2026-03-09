@@ -1,3 +1,4 @@
+//nolint:revive
 package weatherWs2902c
 
 import (

@@ -7,14 +7,14 @@ import (
 	"keyop/util"
 )
 
-// ConditionConfig is an alias for core.ConditionConfig kept for backwards compatibility.
-type ConditionConfig = core.ConditionConfig
+// Config is an alias for core.ConditionConfig kept for backwards compatibility.
+type Config = core.ConditionConfig
 
 // Service provides the condition evaluation engine that runs configured expressions and emits results for other services.
 type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig
-	Conditions []ConditionConfig
+	Conditions []Config
 }
 
 // NewService creates a new service using the provided dependencies and configuration.

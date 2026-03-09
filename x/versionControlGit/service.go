@@ -1,4 +1,6 @@
 // Package versionControlGit integrates with Git repositories to detect changes and emit related events.
+//
+//nolint:revive
 package versionControlGit
 
 import (

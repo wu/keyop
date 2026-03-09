@@ -1,6 +1,8 @@
 // Package webSocketProtocol defines the shared constants and wire types for the
 // keyop WebSocket protocol v1.  Both webSocketClient and webSocketServer import
 // this package so that constants never drift between implementations.
+//
+//nolint:revive
 package webSocketProtocol
 
 import "time"
