@@ -84,16 +84,16 @@ jobs:
     # Run when triggered by a release event OR when semantic-release published a release
     # during a push-run (needs.semantic-release.outputs.released is set to 'true').
     if: github.event_name == 'release' || needs.semantic-release.outputs.released == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       matrix:
         include:
-          - { goos: linux,   goarch: amd64             }
-          - { goos: linux,   goarch: arm64             }
-          - { goos: linux,   goarch: arm,   goarm: "6" }
-          - { goos: darwin,  goarch: amd64             }
-          - { goos: darwin,  goarch: arm64             }
+          - { goos: linux,   goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-latest }
+          - { goos: linux,   goarch: arm,   goarm: "6", runner: ubuntu-latest }
+          - { goos: darwin,  goarch: amd64, runner: macos-latest }
+          - { goos: darwin,  goarch: arm64, runner: macos-latest }
 
     steps:
       - name: Checkout at the new tag
@@ -144,7 +144,14 @@ jobs:
           PLUGIN_DIR="plugins/homekitPlugin"
           if [ -d "$PLUGIN_DIR" ]; then
             echo "Building plugin in $PLUGIN_DIR for ${GOOS}/${GOARCH}"
-            (cd "$PLUGIN_DIR" && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} go mod tidy && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} go build -buildmode=plugin -o homekitPlugin.so main.go) || echo "Plugin build failed for ${GOOS}/${GOARCH}, continuing"
+            # Enable cgo for plugin builds and set a C compiler appropriate for the runner.
+            export CGO_ENABLED=1
+            if [[ "${GOOS}" == "darwin" ]]; then
+              export CC=clang
+            else
+              export CC=gcc
+            fi
+            (cd "$PLUGIN_DIR" && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} CGO_ENABLED=1 CC=${CC} go mod tidy && env GOOS=${GOOS} GOARCH=${GOARCH} GOARM=${GOARM} CGO_ENABLED=1 CC=${CC} go build -buildmode=plugin -o homekitPlugin.so main.go) || echo "Plugin build failed for ${GOOS}/${GOARCH}, continuing"
             if [ -f "$PLUGIN_DIR/homekitPlugin.so" ]; then
               PLUGIN_NAME="homekitPlugin-${VERSION}-${GOOS}-${ARCH_NAME}.so"
               cp "$PLUGIN_DIR/homekitPlugin.so" "output/${PLUGIN_NAME}"
