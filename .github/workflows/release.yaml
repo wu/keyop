@@ -126,13 +126,20 @@ jobs:
           EXT=""
           [[ "${GOOS}" == "windows" ]] && EXT=".exe"
 
-          GOARM_SUFFIX=""
-          [[ -n "${GOARM}" ]] && GOARM_SUFFIX="-arm${GOARM}"
+          # Normalize architecture name for ARM builds so the resulting filename
+          # doesn't contain 'arm' twice (e.g. linux-arm-arm6). For ARM we produce
+          # 'arm6' or 'arm7' (appended to 'arm' in a single token).
+          if [[ "${GOARCH}" == "arm" && -n "${GOARM}" ]]; then
+            ARCH_NAME="arm${GOARM}"
+          else
+            ARCH_NAME="${GOARCH}"
+          fi
 
-          BINARY="keyop-${GOOS}-${GOARCH}${GOARM_SUFFIX}${EXT}"
+          BINARY="keyop-${VERSION}-${GOOS}-${ARCH_NAME}${EXT}"
           mkdir -p output
+          echo "Building output/${BINARY}"
           go build -ldflags "${LDFLAGS}" -o "output/${BINARY}"
-          gzip "output/${BINARY}"
+          gzip -n "output/${BINARY}"
 
       - name: Upload asset to GitHub Release
         uses: softprops/action-gh-release@v2
