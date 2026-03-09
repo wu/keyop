@@ -1,3 +1,9 @@
+## [1.5.4](https://github.com/wu/keyop/compare/1.5.3...1.5.4) (2026-03-09)
+
+### Bug Fixes
+
+* suppress lint checks for camelCase package name ([039f96c](https://github.com/wu/keyop/commit/039f96c36ec3e085fd5bb0168186e70ae769dc12))
+
 ## [1.5.3](https://github.com/wu/keyop/compare/1.5.2...1.5.3) (2026-03-09)
 
 ### Bug Fixes
