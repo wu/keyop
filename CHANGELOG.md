@@ -1,3 +1,9 @@
+## [1.5.6](https://github.com/wu/keyop/compare/1.5.5...1.5.6) (2026-03-09)
+
+### Bug Fixes
+
+* suppress lint warnings ([87c5416](https://github.com/wu/keyop/commit/87c54167cfa61f5d07535fb3ae8566df7d94dc56))
+
 ## [1.5.5](https://github.com/wu/keyop/compare/1.5.4...1.5.5) (2026-03-09)
 
 ### Bug Fixes
