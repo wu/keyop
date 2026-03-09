@@ -1,4 +1,6 @@
 // Package util contains small helper utilities used across keyop.
+//
+//nolint:revive
 package util
 
 import (
