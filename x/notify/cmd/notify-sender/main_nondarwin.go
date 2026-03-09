@@ -1,6 +1,7 @@
 //go:build !darwin
 // +build !darwin
 
+// nolint: typecheck
 package main
 
 import (
