@@ -1,3 +1,9 @@
+## [1.5.3](https://github.com/wu/keyop/compare/1.5.2...1.5.3) (2026-03-09)
+
+### Bug Fixes
+
+* resolve issue with failing lint job ([2358fb4](https://github.com/wu/keyop/commit/2358fb4bba442cb4497af9416927f920d53cf6b1))
+
 ## [1.5.2](https://github.com/wu/keyop/compare/1.5.1...1.5.2) (2026-03-09)
 
 ### Bug Fixes
