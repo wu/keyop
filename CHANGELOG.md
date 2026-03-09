@@ -1,3 +1,22 @@
+## [1.5.0](https://github.com/wu/keyop/compare/1.4.0...1.5.0) (2026-03-09)
+
+### Features
+
+* add 'body' field for reports ([3fceb47](https://github.com/wu/keyop/commit/3fceb4728c7ae0d81a4e61f6584aedfbf2413509))
+* add idle report bar chart ([396c272](https://github.com/wu/keyop/commit/396c27202d707eeb8ce70ebc52d8059de41e67f5))
+* add macOS notify helper and update notification handling ([ceae1b2](https://github.com/wu/keyop/commit/ceae1b21f5b900f8c34c552312b0a1307f43fbba))
+* add rate limit to speak service ([4416eac](https://github.com/wu/keyop/commit/4416eacfa92e0f007905430362d4e78189dd0cde))
+* improvements for text messaging ([7c172c0](https://github.com/wu/keyop/commit/7c172c0baba896cbb3d30917b9d328b579c3b925))
+* improvements to idle monitor ([d866181](https://github.com/wu/keyop/commit/d8661811616a1ce0f97d86ccf3266bd7cc871730))
+* improvements to speak and notify services ([a072c9e](https://github.com/wu/keyop/commit/a072c9e9e2ae9af1d5086cde9a0d5f0df9cd9ae9))
+* updates to system notifier ([6fcd864](https://github.com/wu/keyop/commit/6fcd86412d8c6151af66a46aa9593124f6c96097))
+
+### Bug Fixes
+
+* clean up lint warnings ([752e014](https://github.com/wu/keyop/commit/752e014a1a976b1ffdc186f214500228bd412297))
+* resolve or suppress remaining lint errors ([0e9546b](https://github.com/wu/keyop/commit/0e9546b6a6075b6e79cc4f4f54cb3415165820d4))
+* update docs, remove old notifyMacos package ([132c157](https://github.com/wu/keyop/commit/132c15787f79efcca00de0591ef8c0ec7066da58))
+
 ## [1.4.0](https://github.com/wu/keyop/compare/1.3.0...1.4.0) (2026-03-07)
 
 ### Features
