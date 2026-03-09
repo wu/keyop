@@ -1,3 +1,9 @@
+## [1.5.5](https://github.com/wu/keyop/compare/1.5.4...1.5.5) (2026-03-09)
+
+### Bug Fixes
+
+* resolve issues with failing tests on linux ([b7f4694](https://github.com/wu/keyop/commit/b7f4694e642af1c71fd6b8f3f107accb79210be2))
+
 ## [1.5.4](https://github.com/wu/keyop/compare/1.5.3...1.5.4) (2026-03-09)
 
 ### Bug Fixes
