@@ -1,3 +1,9 @@
+## [0.4.0](https://github.com/wu/keyop/compare/0.3.0...0.4.0) (2026-03-09)
+
+### Features
+
+* simplify build, remove plugins ([8c1f577](https://github.com/wu/keyop/commit/8c1f577637c4e7718cb41b9a90a95c80909c2a10))
+
 ## [0.3.0](https://github.com/wu/keyop/compare/0.2.0...0.3.0) (2026-03-09)
 
 ### Features
