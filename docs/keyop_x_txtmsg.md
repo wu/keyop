@@ -8,9 +8,7 @@ import "keyop/x/txtmsg"
 
 Package txtmsg converts configured text alerts into macOS Messages app text messages.
 
-Overview The messages package subscribes to a configured channel \(usually 'alerts'\) and sends text messages to a
-configured macOS Messages buddy using osascript. On successful sends the service emits a 'txtmsg' event; on failure it
-emits a 'txtmsg\_error' event.
+Overview The messages package subscribes to a configured channel \(usually 'alerts'\) and sends text messages to a configured macOS Messages buddy using osascript. On successful sends the service emits a 'txtmsg' event; on failure it emits a 'txtmsg\_error' event.
 
 Configuration The service supports the following config keys:
 
@@ -22,39 +20,33 @@ Payloads The package registers a small typed payload for text events:
 
 Events
 
-- txtmsg: Emitted after a successful delivery; includes the text in the Text field and a service.txtmsg.v1 payload in
-  Data.
+- txtmsg: Emitted after a successful delivery; includes the text in the Text field and a service.txtmsg.v1 payload in Data.
 - txtmsg\_error: Emitted when sending fails; includes error information in Text and Status.
 
 Rate limiting
 
-- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\`
-  \(integer\). If not specified, the default is 5 events per minute.
-- The limiter uses a rolling 60\-second window divided into 10 buckets \(6s each\). Events are counted into the current
-  bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
-  the window advances.
-- When the rate limit is first exceeded, the service emits a "txtmsg\_rate\_limit" event with a short summary indicating
-  that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the
-  warning state.
+- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\` \(integer\). If not specified, the default is 5 events per minute.
+- The limiter uses a rolling 60\-second window divided into 10 buckets \(6s each\). Events are counted into the current bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until the window advances.
+- When the rate limit is first exceeded, the service emits a "txtmsg\_rate\_limit" event with a short summary indicating that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning state.
 
 ## Index
 
 - [func NewService\(deps core.Dependencies, cfg core.ServiceConfig\) core.Service](<#NewService>)
 - [type Event](<#Event>)
-    - [func \(e Event\) PayloadType\(\) string](<#Event.PayloadType>)
+  - [func \(e Event\) PayloadType\(\) string](<#Event.PayloadType>)
 - [type Service](<#Service>)
-    - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
-    - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
-    - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
-    - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
-    - [func \(svc \*Service\) idleStatusHandler\(msg core.Message\) error](<#Service.idleStatusHandler>)
-    - [func \(svc \*Service\) maybeSendTxtmsgReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendTxtmsgReport>)
-    - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
+  - [func \(svc \*Service\) Check\(\) error](<#Service.Check>)
+  - [func \(svc \*Service\) Initialize\(\) error](<#Service.Initialize>)
+  - [func \(svc \*Service\) RegisterPayloads\(reg core.PayloadRegistry\) error](<#Service.RegisterPayloads>)
+  - [func \(svc \*Service\) ValidateConfig\(\) \[\]error](<#Service.ValidateConfig>)
+  - [func \(svc \*Service\) idleStatusHandler\(msg core.Message\) error](<#Service.idleStatusHandler>)
+  - [func \(svc \*Service\) maybeSendTxtmsgReport\(messenger core.MessengerApi, now time.Time, force bool\) error](<#Service.maybeSendTxtmsgReport>)
+  - [func \(svc \*Service\) messageHandler\(msg core.Message\) error](<#Service.messageHandler>)
 - [type ServiceState](<#ServiceState>)
 
-<a name="NewService"></a>
 
-## func [NewService](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L43>)
+<a name="NewService"></a>
+## func [NewService](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L46>)
 
 ```go
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
@@ -63,24 +55,21 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 NewService creates a new service using the provided dependencies and configuration.
 
 <a name="Event"></a>
+## type [Event](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L35-L40>)
 
-## type [Event](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L32-L37>)
-
-Event represents a text event emitted by the 'messages' service. It includes whether the text was sent and additional
-details when available.
+Event represents a text event emitted by the 'messages' service. It includes whether the text was sent and additional details when available.
 
 ```go
 type Event struct {
-Now     time.Time `json:"now"`
-Summary string    `json:"summary"`
-Sent    bool      `json:"sent"`
-Details string    `json:"details,omitempty"`
+    Now     time.Time `json:"now"`
+    Summary string    `json:"summary"`
+    Sent    bool      `json:"sent"`
+    Details string    `json:"details,omitempty"`
 }
 ```
 
 <a name="Event.PayloadType"></a>
-
-### func \(Event\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L40>)
+### func \(Event\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L43>)
 
 ```go
 func (e Event) PayloadType() string
@@ -89,32 +78,32 @@ func (e Event) PayloadType() string
 PayloadType returns the canonical payload type for text events.
 
 <a name="Service"></a>
+## type [Service](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L15-L31>)
 
-## type [Service](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L12-L28>)
+Service implements the txtmsg service for sending text messages via macOS Messages.
 
 ```go
 type Service struct {
-Deps    core.Dependencies
-Cfg     core.ServiceConfig
-Address string
+    Deps    core.Dependencies
+    Cfg     core.ServiceConfig
+    Address string
 
-// rate limiter
-limiter *util.RateLimiter
+    // rate limiter
+    limiter *util.RateLimiter
 
-// latest idle status
-mu               sync.Mutex
-latestIdleStatus string
-latestIdleAt     time.Time
+    // latest idle status
+    mu               sync.Mutex
+    latestIdleStatus string
+    latestIdleAt     time.Time
 
-// report queue template and last report day
-queueFileTemplate string
-lastReportDay     time.Time
+    // report queue template and last report day
+    queueFileTemplate string
+    lastReportDay     time.Time
 }
 ```
 
 <a name="Service.Check"></a>
-
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L299>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L304>)
 
 ```go
 func (svc *Service) Check() error
@@ -123,8 +112,7 @@ func (svc *Service) Check() error
 Check is a no\-op for this service, it only reacts to incoming messages from a subscription.
 
 <a name="Service.Initialize"></a>
-
-### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L82>)
+### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L85>)
 
 ```go
 func (svc *Service) Initialize() error
@@ -133,8 +121,7 @@ func (svc *Service) Initialize() error
 Initialize performs the one\-time startup required by the service \(resource loading or connectivity checks\).
 
 <a name="Service.RegisterPayloads"></a>
-
-### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L51>)
+### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L54>)
 
 ```go
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
@@ -143,8 +130,7 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the messages payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-
-### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L66>)
+### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L69>)
 
 ```go
 func (svc *Service) ValidateConfig() []error
@@ -153,8 +139,7 @@ func (svc *Service) ValidateConfig() []error
 ValidateConfig validates the service configuration and returns any validation errors.
 
 <a name="Service.idleStatusHandler"></a>
-
-### func \(\*Service\) [idleStatusHandler](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L279>)
+### func \(\*Service\) [idleStatusHandler](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L284>)
 
 ```go
 func (svc *Service) idleStatusHandler(msg core.Message) error
@@ -163,7 +148,6 @@ func (svc *Service) idleStatusHandler(msg core.Message) error
 idleStatusHandler consumes idle\_status messages from the idle channel to maintain the latest status.
 
 <a name="Service.maybeSendTxtmsgReport"></a>
-
 ### func \(\*Service\) [maybeSendTxtmsgReport](<https://github.com/wu/keyop/blob/main/x/txtmsg/report.go#L20>)
 
 ```go
@@ -173,22 +157,22 @@ func (svc *Service) maybeSendTxtmsgReport(messenger core.MessengerApi, now time.
 maybeSendTxtmsgReport reads the configured queue file for the previous day and sends a report.
 
 <a name="Service.messageHandler"></a>
-
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L148>)
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/txtmsg/service.go#L153>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
 ```
 
-<a name="ServiceState"></a>
 
+
+<a name="ServiceState"></a>
 ## type [ServiceState](<https://github.com/wu/keyop/blob/main/x/txtmsg/report.go#L15-L17>)
 
 ServiceState holds persistent runtime state for the txtmsg service \(last report day\).
 
 ```go
 type ServiceState struct {
-LastReportDay time.Time `json:"last_report_day"`
+    LastReportDay time.Time `json:"last_report_day"`
 }
 ```
 

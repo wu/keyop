@@ -6,38 +6,26 @@
 import "keyop/x/speak"
 ```
 
-Package speak implements a service that converts incoming messages into spoken audio. The service will speak the '
-Summary' field if it exists, or the 'Text' field if the 'Summary' field is empty.
+Package speak implements a service that converts incoming messages into spoken audio. The service will speak the 'Summary' field if it exists, or the 'Text' field if the 'Summary' field is empty.
 
-Currently, it only works on macOS, as it relies on the 'say' command to speak text. The service validates that it runs
-on Darwin \(macOS\) and will return a configuration error on other platforms.
+Currently, it only works on macOS, as it relies on the 'say' command to speak text. The service validates that it runs on Darwin \(macOS\) and will return a configuration error on other platforms.
 
-When 'say' exits with success, a "speech" event \(payload type service.speech.v1\) will be emitted with the spoken text
-in the Message text. If there is an error returned from the say command, an error event will be emitted with the error
-details.
+When 'say' exits with success, a "speech" event \(payload type service.speech.v1\) will be emitted with the spoken text in the Message text. If there is an error returned from the say command, an error event will be emitted with the error details.
 
 Rate limiting
 
-- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\`
-  \(integer\). If not specified, the default is 5 events per minute.
-- The limiter uses a rolling 60 second window divided into 10 buckets \(6s each\). Events are counted into the current
-  bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until
-  the window advances.
-- When the rate limit is first exceeded, the service emits a "speak\_rate\_limit" event with a short summary indicating
-  that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the
-  warning state.
+- The service supports a per\-minute rate limit controlled by the configuration key \`rate\_limit\_per\_minute\` \(integer\). If not specified, the default is 5 events per minute.
+- The limiter uses a rolling 60 second window divided into 10 buckets \(6s each\). Events are counted into the current bucket; when the total across all buckets exceeds the configured limit, further incoming messages are dropped until the window advances.
+- When the rate limit is first exceeded, the service emits a "speak\_rate\_limit" event with a short summary indicating that alerts were skipped. Subsequent dropped events do not re\-emit the summary until an allowed event resets the warning state.
 
 ### MACOS SPECIFIC NOTES
 
-To use the higher quality siri voices on macOS, it uses the default "system voice" setting. While it is possible to
-specify a voice to the 'say' command, the choices are limited and don't include the highest quality voices.
+To use the higher quality siri voices on macOS, it uses the default "system voice" setting. While it is possible to specify a voice to the 'say' command, the choices are limited and don't include the highest quality voices.
 
 - First, in "Apple Intelligence and Siri", select your preferred Siri voice.
 - Second, in System Preferences \> Accessibility =\> "Read and Speak", set the system voice.
 
-Unfortunately, the exact steps to configure this vary by macOS version. These instructions are for Tahoe. Try to search
-in Preferences for 'voice', look for something like "Voice \(spoken content\)". In the system voice drop\-down, choose
-the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
+Unfortunately, the exact steps to configure this vary by macOS version. These instructions are for Tahoe. Try to search in Preferences for 'voice', look for something like "Voice \(spoken content\)". In the system voice drop\-down, choose the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 
 ## Index
 
@@ -56,7 +44,6 @@ the siri voice option, mine was near the top and was named "Siri \(Voice 2\)".
 
 
 <a name="NewService"></a>
-
 ## func [NewService](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L40>)
 
 ```go
@@ -66,23 +53,20 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service
 NewService creates a new service using the provided dependencies and configuration.
 
 <a name="Event"></a>
-
 ## type [Event](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L16-L21>)
 
-Event represents a spoken/text event emitted by the 'speak' service. It contains a timestamp, a short summary, whether
-it was sent, and optional details.
+Event represents a spoken/text event emitted by the 'speak' service. It contains a timestamp, a short summary, whether it was sent, and optional details.
 
 ```go
 type Event struct {
-Now     time.Time `json:"now"`
-Summary string    `json:"summary"`
-Sent    bool      `json:"sent"`
-Details string    `json:"details,omitempty"`
+    Now     time.Time `json:"now"`
+    Summary string    `json:"summary"`
+    Sent    bool      `json:"sent"`
+    Details string    `json:"details,omitempty"`
 }
 ```
 
 <a name="Event.PayloadType"></a>
-
 ### func \(Event\) [PayloadType](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L24>)
 
 ```go
@@ -92,7 +76,6 @@ func (e Event) PayloadType() string
 PayloadType returns the canonical payload type for speak events.
 
 <a name="Service"></a>
-
 ## type [Service](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L27-L37>)
 
 Service converts text payloads into spoken audio using the macOS speech synthesis APIs
@@ -112,8 +95,7 @@ type Service struct {
 ```
 
 <a name="Service.Check"></a>
-
-### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L250>)
+### func \(\*Service\) [Check](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L252>)
 
 ```go
 func (svc *Service) Check() error
@@ -122,7 +104,6 @@ func (svc *Service) Check() error
 Check is a no\-op for this service, it only reacts to incoming messages from a subscription.
 
 <a name="Service.Initialize"></a>
-
 ### func \(\*Service\) [Initialize](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L82>)
 
 ```go
@@ -132,7 +113,6 @@ func (svc *Service) Initialize() error
 Initialize subscribes to the configured 'alerts' channel
 
 <a name="Service.Name"></a>
-
 ### func \(\*Service\) [Name](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L63>)
 
 ```go
@@ -142,7 +122,6 @@ func (svc *Service) Name() string
 Name returns the canonical name of the 'speak' service type.
 
 <a name="Service.RegisterPayloads"></a>
-
 ### func \(\*Service\) [RegisterPayloads](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L48>)
 
 ```go
@@ -152,7 +131,6 @@ func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error
 RegisterPayloads registers the speak service payload types with the provided registry.
 
 <a name="Service.ValidateConfig"></a>
-
 ### func \(\*Service\) [ValidateConfig](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L66>)
 
 ```go
@@ -162,30 +140,31 @@ func (svc *Service) ValidateConfig() []error
 ValidateConfig validates the service configuration and returns any validation errors.
 
 <a name="Service.maybeSendSpeakReport"></a>
-
 ### func \(\*Service\) [maybeSendSpeakReport](<https://github.com/wu/keyop/blob/main/x/speak/report.go#L19>)
 
 ```go
 func (svc *Service) maybeSendSpeakReport(messenger core.MessengerApi, now time.Time, force bool) error
 ```
 
-<a name="Service.messageHandler"></a>
 
-### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L136>)
+
+<a name="Service.messageHandler"></a>
+### func \(\*Service\) [messageHandler](<https://github.com/wu/keyop/blob/main/x/speak/service.go#L138>)
 
 ```go
 func (svc *Service) messageHandler(msg core.Message) error
 ```
 
-<a name="ServiceState"></a>
 
+
+<a name="ServiceState"></a>
 ## type [ServiceState](<https://github.com/wu/keyop/blob/main/x/speak/report.go#L15-L17>)
 
 ServiceState holds persistent runtime state for the speak service \(last report day\).
 
 ```go
 type ServiceState struct {
-LastReportDay time.Time `json:"last_report_day"`
+    LastReportDay time.Time `json:"last_report_day"`
 }
 ```
 
