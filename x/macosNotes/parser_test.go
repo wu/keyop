@@ -1,4 +1,6 @@
 // Package macosNotes contains tests and helpers for the macOS Notes parser used in integration tests.
+//
+//nolint:revive
 package macosNotes
 
 import (
