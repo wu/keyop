@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/wu/keyop/compare/1.7.0...1.8.0) (2026-03-09)
+
+### Features
+
+* test release build ([6e2b3f5](https://github.com/wu/keyop/commit/6e2b3f5bbaa93574eb8351dd5370137d8774eef8))
+
 ## [1.7.0](https://github.com/wu/keyop/compare/1.6.0...1.7.0) (2026-03-09)
 
 ### Features
