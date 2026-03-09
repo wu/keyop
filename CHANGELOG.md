@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/wu/keyop/compare/1.8.0...1.9.0) (2026-03-09)
+
+### Features
+
+* add homekit plugin to build ([ae0bf52](https://github.com/wu/keyop/commit/ae0bf524fe428b94daaa52d4fcd52e7e0a11d6f7))
+
 ## [1.8.0](https://github.com/wu/keyop/compare/1.7.0...1.8.0) (2026-03-09)
 
 ### Features
