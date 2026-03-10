@@ -4,6 +4,7 @@ package tidesNoaa
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	_ "modernc.org/sqlite"
 )
 
 // ---------------------------------------------------------------------------
@@ -1527,114 +1530,69 @@ func TestFormatTideReport(t *testing.T) {
 	})
 }
 
-func TestMaybeSendTideReport(t *testing.T) {
-	// Seattle coordinates — reliable sunrise/sunset year-round.
-	const lat, lon = 47.6062, -122.3321
-
-	makeReportSvc := func(t *testing.T, extraCfg map[string]interface{}) (*Service, *testutil.FakeMessenger) {
-		t.Helper()
-		messenger := &testutil.FakeMessenger{}
-		osP := newMockOsProvider(t)
-		cfg := makeCfg("9414290", extraCfg)
-		deps := makeDeps(t, messenger, osP)
-		svc := NewService(deps, cfg).(*Service)
-		initSvc(t, svc)
-		return svc, messenger
-	}
-
-	t.Run("no report when lat/lon not configured", func(t *testing.T) {
-		svc, messenger := makeReportSvc(t, nil)
-		now := time.Date(2026, 3, 1, 5, 0, 0, 0, time.Local)
-		require.NoError(t, svc.maybeSendTideReport(messenger, now))
-		messenger.Mu.Lock()
-		msgs := filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		assert.Empty(t, msgs)
-	})
-
-	t.Run("report sent immediately on first run even before 04:00", func(t *testing.T) {
-		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
-		// Confirm no prior state — lastReportDay should be zero.
-		require.True(t, svc.lastReportDay.IsZero())
-
-		now := time.Date(2026, 3, 1, 1, 30, 0, 0, time.Local) // 01:30 — before 04:00
-		require.NoError(t, svc.maybeSendTideReport(messenger, now))
-
-		messenger.Mu.Lock()
-		msgs := filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		require.Len(t, msgs, 1, "first-run report should fire immediately regardless of time")
-	})
-
-	t.Run("no report before 04:00", func(t *testing.T) {
-		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
-		now := time.Date(2026, 3, 1, 3, 59, 0, 0, time.Local)
-		// Simulate a service that has already sent a report yesterday.
-		svc.lastReportDay = localMidnight(now).AddDate(0, 0, -1)
-		require.NoError(t, svc.maybeSendTideReport(messenger, now))
-		messenger.Mu.Lock()
-		msgs := filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		assert.Empty(t, msgs)
-	})
-
-	t.Run("report sent once at or after 04:00", func(t *testing.T) {
-		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
-		now := time.Date(2026, 3, 1, 4, 0, 0, 0, time.Local)
-
-		// Seed 7 days of data so the report has something to work with.
-		for i := 0; i < 7; i++ {
-			day := localMidnight(now).AddDate(0, 0, i)
-			// Tide low at 08:00–10:00 (below 5 ft) each day.
-			records := []TideRecord{
-				{Time: day.Add(7 * time.Hour).Format(noaaTimeFormat), Value: 6.0},
-				{Time: day.Add(8 * time.Hour).Format(noaaTimeFormat), Value: 3.0},
-				{Time: day.Add(9 * time.Hour).Format(noaaTimeFormat), Value: 2.5},
-				{Time: day.Add(10 * time.Hour).Format(noaaTimeFormat), Value: 3.0},
-				{Time: day.Add(11 * time.Hour).Format(noaaTimeFormat), Value: 6.0},
-			}
-			seedDayFile(t, svc, day, records, now)
+func TestSQLiteIntegration(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	require.NoError(t, err)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("db close error: %v", err)
 		}
+	}()
 
-		require.NoError(t, svc.maybeSendTideReport(messenger, now))
+	osP := &core.FakeOsProvider{}
+	messenger := &testutil.FakeMessenger{}
+	deps := core.Dependencies{}
+	deps.SetLogger(&core.FakeLogger{})
+	deps.SetOsProvider(osP)
+	deps.SetMessenger(messenger)
 
-		messenger.Mu.Lock()
-		msgs := filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		require.Len(t, msgs, 1)
-		assert.Contains(t, msgs[0].Body, "9414290")
+	svc := NewService(deps, makeCfg("9414290", nil)).(*Service)
+	svc.db = &db
 
-		// Second call same day — should not send again.
-		require.NoError(t, svc.maybeSendTideReport(messenger, now.Add(time.Hour)))
-		messenger.Mu.Lock()
-		msgs = filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		assert.Len(t, msgs, 1, "report must not be sent twice in one day")
+	// Initialize schema
+	_, err = db.Exec(svc.SQLiteSchema())
+	require.NoError(t, err)
+
+	t.Run("store and load records", func(t *testing.T) {
+		day := time.Date(2026, 3, 9, 0, 0, 0, 0, time.Local)
+		records := []TideRecord{
+			{Time: "2026-03-09 10:00", Value: 1.2},
+			{Time: "2026-03-09 10:06", Value: 1.3},
+		}
+		err := svc.storeDayFile(day, records, time.Now())
+		require.NoError(t, err)
+
+		loaded, err := svc.loadDayFile(day)
+		require.NoError(t, err)
+		assert.Equal(t, records, loaded.Records)
 	})
 
-	t.Run("report re-sent next day", func(t *testing.T) {
-		svc, messenger := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
-		day1 := time.Date(2026, 3, 1, 4, 0, 0, 0, time.Local)
-		day2 := time.Date(2026, 3, 2, 4, 0, 0, 0, time.Local)
+	t.Run("SQLiteInsert", func(t *testing.T) {
+		msg := core.Message{
+			Timestamp:   time.Now(),
+			ChannelName: "tides",
+			Event:       "tide",
+			Data: map[string]any{
+				"stationId": "9414290",
+				"current":   map[string]any{"v": 2.5},
+				"state":     "rising",
+				"nextPeak": map[string]any{
+					"time":  "2026-03-09 12:00",
+					"value": 5.5,
+					"type":  "high",
+				},
+			},
+		}
+		query, args := svc.SQLiteInsert(msg)
+		assert.NotEmpty(t, query)
+		assert.Equal(t, 7, len(args))
+		assert.Equal(t, 2.5, args[2])
+		assert.Equal(t, "rising", args[3])
+		assert.Equal(t, "2026-03-09 12:00", args[4])
+		assert.Equal(t, 5.5, args[5])
+		assert.Equal(t, "high", args[6])
 
-		require.NoError(t, svc.maybeSendTideReport(messenger, day1))
-		require.NoError(t, svc.maybeSendTideReport(messenger, day2))
-
-		messenger.Mu.Lock()
-		msgs := filterByEvent(messenger.SentMessages, "tide_report")
-		messenger.Mu.Unlock()
-		assert.Len(t, msgs, 2, "report should fire once per calendar day")
-	})
-
-	t.Run("default threshold is 5.0 ft", func(t *testing.T) {
-		svc, _ := makeReportSvc(t, map[string]interface{}{"lat": lat, "lon": lon})
-		assert.InDelta(t, 5.0, svc.lowTideThreshold, 0.001)
-	})
-
-	t.Run("custom threshold is respected", func(t *testing.T) {
-		svc, _ := makeReportSvc(t, map[string]interface{}{
-			"lat": lat, "lon": lon, "lowTideThreshold": 3.5,
-		})
-		assert.InDelta(t, 3.5, svc.lowTideThreshold, 0.001)
+		_, err := db.Exec(query, args...)
+		assert.NoError(t, err)
 	})
 }

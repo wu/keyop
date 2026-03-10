@@ -1,0 +1,16 @@
+:root {
+    --bg: #1a1a1a;
+    --text: #e0e0e0;
+    --header-bg: #242424;
+    --tab-content-bg: #242424;
+    --border: #333;
+    --accent: #bb86fc;
+    --accent-text: #1a1a1a;
+    --pre-text: #03dac6;
+    --shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark theme flag (in case we add toggling later) */
+.theme-dark {
+    color-scheme: dark;
+}

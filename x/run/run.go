@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/x/sqlite"
+	"keyop/x/webui"
 	"os"
 	"os/signal"
 	"syscall"
@@ -43,6 +45,26 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 		service := serviceFunc(serviceDeps, serviceConfig)
 
+		// Check if service implements sqlite.SchemaProvider
+		if provider, ok := service.(sqlite.SchemaProvider); ok {
+			// Find the sqlite service if it exists
+			for _, other := range services {
+				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
+					sqliteSvc.RegisterProvider(serviceConfig.Type, provider)
+				}
+			}
+		}
+
+		// Check if service implements sqlite.SQLiteConsumer
+		if consumer, ok := service.(sqlite.SQLiteConsumer); ok {
+			// Find the sqlite service if it exists
+			for _, other := range services {
+				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
+					consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+				}
+			}
+		}
+
 		// Check if service implements RuntimePlugin for payload registration
 		if rtPlugin, ok := service.(core.RuntimePlugin); ok {
 			reg := serviceDeps.MustGetMessenger().GetPayloadRegistry()
@@ -64,7 +86,38 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
+		// Check if service implements webui.TabProvider
+		if provider, ok := service.(webui.TabProvider); ok {
+			// Find the webui service if it exists
+			for _, other := range services {
+				if webuiSvc, ok := other.Service.(*webui.Service); ok {
+					webuiSvc.RegisterProvider(serviceConfig.Type, provider)
+				}
+			}
+		}
+
 		services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
+
+		// If this is the sqlite service, check previously created services for SchemaProvider or SQLiteConsumer
+		if sqliteSvc, ok := service.(*sqlite.Service); ok {
+			for _, other := range services[:len(services)-1] {
+				if provider, ok := other.Service.(sqlite.SchemaProvider); ok {
+					sqliteSvc.RegisterProvider(other.Config.Type, provider)
+				}
+				if consumer, ok := other.Service.(sqlite.SQLiteConsumer); ok {
+					consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+				}
+			}
+		}
+
+		// If this is the webui service, check previously created services for TabProvider
+		if webuiSvc, ok := service.(*webui.Service); ok {
+			for _, other := range services[:len(services)-1] {
+				if provider, ok := other.Service.(webui.TabProvider); ok {
+					webuiSvc.RegisterProvider(other.Config.Type, provider)
+				}
+			}
+		}
 	}
 
 	// validate all service configs before initializing any services

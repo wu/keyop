@@ -33,9 +33,3 @@ config:
     - when: 'event eq "active_reminder"'
       updates:
         channelName: alerts
-
-    - when: 'event eq "idle_report"'
-      updates:
-        channelName: alerts
-
-

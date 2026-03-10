@@ -31,7 +31,4 @@ config:
       updates:
         channelName: alerts
 
-    - when: 'event eq "tide_report"'
-      updates:
-        channelName: tides
 

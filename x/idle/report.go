@@ -2,109 +2,94 @@
 package idle
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"keyop/core"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
 
-// maybeSendIdleReport sends a daily report for the previous day between 00:00 and 01:00 local time.
-// If force is true the report will be generated regardless of the current hour (used for reportOnStartup).
-func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Time, force bool) error {
+// maybeSendIdleReport generates an idle report between the specified start and end times.
+// If start is zero, it defaults to the beginning of the day (midnight) for the report day (yesterday if now is given).
+// If end is zero, it defaults to the end of that same day.
+// If both are zero, it defaults to the last 24 hours from 'now'.
+func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Time, start, end time.Time, force bool) (string, error) {
 	logger := svc.Deps.MustGetLogger()
 
-	logger.Warn("Checking if idle report should be sent", "force", force, "hour", now.Hour())
+	if svc.db == nil || *svc.db == nil {
+		logger.Warn("idle: database not available; skipping report")
+		return "", nil
+	}
+
 	if !force {
 		if now.Hour() < 0 || now.Hour() >= 1 {
-			logger.Warn("Not sending idle report: outside of 00:00-01:00 local time")
-			return nil
+			return "", nil
 		}
 	}
 
 	reportDay := localMidnight(now).AddDate(0, 0, -1)
-	if !svc.lastReportDay.IsZero() && svc.lastReportDay.Equal(reportDay) {
-		logger.Warn("Not sending idle report: already sent report for this day", "reportDay", reportDay.Format(fileDateFormat))
-		return nil
+	if !force && !svc.lastReportDay.IsZero() && svc.lastReportDay.Equal(reportDay) {
+		return "", nil
 	}
 
-	// Determine queue file path by replacing yyyymmdd token in the template
-	template := svc.queueFileTemplate
-	if template == "" {
-		logger.Info("idle: report_queue_file not configured; skipping report")
-		return nil
+	// Default time range logic
+	if start.IsZero() && end.IsZero() {
+		// Last 24 hours
+		end = now
+		start = end.Add(-24 * time.Hour)
+	} else if end.IsZero() {
+		// From start to now
+		end = now
+	} else if start.IsZero() {
+		// 24 hours before end
+		start = end.Add(-24 * time.Hour)
 	}
-	queuePath := strings.ReplaceAll(template, "yyyymmdd", reportDay.Format("20060102"))
-	if strings.HasPrefix(queuePath, "~") {
-		if home, herr := svc.Deps.MustGetOsProvider().UserHomeDir(); herr == nil {
-			if strings.HasPrefix(queuePath, "~/") {
-				queuePath = filepath.Join(home, queuePath[2:])
-			} else {
-				queuePath = filepath.Join(home, queuePath[1:])
-			}
-		}
-	}
-	logger.Warn("Idle report: determined queue file path", "path", queuePath)
 
-	data, err := svc.Deps.MustGetOsProvider().ReadFile(queuePath)
+	logger.Info("Generating idle report", "start", start, "end", end)
+
+	db := *svc.db
+	// Query messages from SQLite
+	rows, err := db.Query(`
+		SELECT timestamp, hostname, status, idle_seconds, active_seconds 
+		FROM idle_events 
+		WHERE timestamp >= ? AND timestamp < ? 
+		ORDER BY timestamp ASC`,
+		start, end)
 	if err != nil {
-		logger.Warn("idle: no queue file for previous day", "path", queuePath, "error", err)
-		return nil
+		return "", fmt.Errorf("failed to query idle events: %w", err)
 	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logger.Warn("idle: failed to close rows", "error", err)
+		}
+	}()
 
-	// Parse one JSON envelope/message per line, collect idle_status messages per host
 	msgsByHost := make(map[string][]core.Message)
-	dayStart := reportDay
-	dayEnd := dayStart.Add(24 * time.Hour)
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		var env core.Envelope
+	for rows.Next() {
 		var msg core.Message
-		if err := json.Unmarshal([]byte(line), &env); err == nil && (env.Version != "" || env.ID != "") {
-			msg = env.ToMessage()
-		} else {
-			// Try legacy Message
-			if err := json.Unmarshal([]byte(line), &msg); err != nil {
-				logger.Warn("idle: failed to unmarshal queue line", "path", queuePath, "error", err)
-				continue
-			}
-		}
-
-		if msg.Event != "idle_status" {
+		var idleSecs, activeSecs float64
+		if err := rows.Scan(&msg.Timestamp, &msg.Hostname, &msg.Status, &idleSecs, &activeSecs); err != nil {
+			logger.Error("failed to scan idle event row", "error", err)
 			continue
 		}
-		if msg.Timestamp.IsZero() {
-			continue
-		}
-		if msg.Timestamp.Before(dayStart) || !msg.Timestamp.Before(dayEnd) {
-			continue
+		msg.Event = "idle_status"
+		msg.Data = &Event{
+			Now:                   msg.Timestamp,
+			Hostname:              msg.Hostname,
+			Status:                msg.Status,
+			IdleDurationSeconds:   idleSecs,
+			ActiveDurationSeconds: activeSecs,
 		}
 		host := msg.Hostname
 		if host == "" {
-			host = svc.hostname
+			host = "unknown"
 		}
 		msgsByHost[host] = append(msgsByHost[host], msg)
 	}
-	if err := scanner.Err(); err != nil {
-		logger.Warn("idle: error scanning queue file", "path", queuePath, "error", err)
-	}
 
 	if len(msgsByHost) == 0 {
-		logger.Warn("idle: no idle_status messages found in queue", "path", queuePath)
-		return nil
-	}
-
-	// Sort messages for each host
-	for h := range msgsByHost {
-		sort.Slice(msgsByHost[h], func(i, j int) bool { return msgsByHost[h][i].Timestamp.Before(msgsByHost[h][j].Timestamp) })
+		logger.Warn("idle: no idle_status messages found in database for range", "start", start, "end", end)
+		return "", nil
 	}
 
 	// Build per-host active periods and coverage intervals
@@ -116,13 +101,7 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 			continue
 		}
 		first := msgs[0].Timestamp
-		if first.Before(dayStart) {
-			first = dayStart
-		}
 		last := msgs[len(msgs)-1].Timestamp
-		if last.After(dayEnd) {
-			last = dayEnd
-		}
 		if last.After(first) {
 			coverageIntervals = append(coverageIntervals, interval{Start: first, Stop: last})
 		}
@@ -133,17 +112,11 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 			if m.Status == "active" {
 				if !inActive {
 					activeStart = m.Timestamp
-					if activeStart.Before(dayStart) {
-						activeStart = dayStart
-					}
 					inActive = true
 				}
 			} else {
 				if inActive {
 					stop := m.Timestamp
-					if stop.After(dayEnd) {
-						stop = dayEnd
-					}
 					if stop.After(activeStart) {
 						allActivePeriods = append(allActivePeriods, ActivePeriod{Hostname: host, Start: activeStart, Stop: stop, DurationSeconds: stop.Sub(activeStart).Seconds()})
 					}
@@ -151,9 +124,9 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 				}
 			}
 
-			// If last message and still active, extend to day end
+			// If last message and still active, extend to end of range
 			if i == len(msgs)-1 && inActive {
-				stop := dayEnd
+				stop := end
 				if stop.After(activeStart) {
 					allActivePeriods = append(allActivePeriods, ActivePeriod{Hostname: host, Start: activeStart, Stop: stop, DurationSeconds: stop.Sub(activeStart).Seconds()})
 				}
@@ -207,8 +180,8 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		knownTotalSecs += c.Stop.Sub(c.Start).Seconds()
 	}
 
-	totalDaySecs := 24 * 60 * 60
-	unknownTotalSecs := float64(totalDaySecs) - knownTotalSecs
+	totalRangeSecs := end.Sub(start).Seconds()
+	unknownTotalSecs := totalRangeSecs - knownTotalSecs
 	if unknownTotalSecs < 0 {
 		unknownTotalSecs = 0
 	}
@@ -224,46 +197,50 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		return fmt.Sprintf("%dh %dm", h, mm)
 	}
 
-	// Build hourly activity: minutes active per hour (0-23)
-	hourly := make([]int, 24)
+	// Build hourly activity
+	// We determine how many hours are in the range [start, end)
+	numHours := int(end.Sub(start).Hours()) + 1
+	hourly := make([]int, numHours)
 	for _, p := range mergedActive {
-		for h := 0; h < 24; h++ {
-			hourStart := dayStart.Add(time.Duration(h) * time.Hour)
+		for h := 0; h < numHours; h++ {
+			hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+			if hourStart.After(end) {
+				continue
+			}
+
 			hourEnd := hourStart.Add(time.Hour)
 			if p.Stop.Before(hourStart) || p.Start.After(hourEnd) {
 				continue
 			}
-			start := p.Start
-			if start.Before(hourStart) {
-				start = hourStart
+			s := p.Start
+			if s.Before(hourStart) {
+				s = hourStart
 			}
-			end := p.Stop
-			if end.After(hourEnd) {
-				end = hourEnd
+			e := p.Stop
+			if e.After(hourEnd) {
+				e = hourEnd
 			}
-			overlap := end.Sub(start).Minutes()
-			if overlap < 0 {
-				overlap = 0
+			overlap := e.Sub(s).Minutes()
+			if overlap > 0 {
+				mins := int(overlap + 0.5)
+				if mins > 60 {
+					mins = 60
+				}
+				hourly[h] += mins
 			}
-			// round to nearest minute
-			mins := int(overlap + 0.5)
-			if mins > 60 {
-				mins = 60
-			}
-			hourly[h] += mins
 		}
 	}
 
-	md := fmt.Sprintf("# Idle report for %s\n", reportDay.Format(fileDateFormat))
-	md += fmt.Sprintf("**Total active:** %s\n", formatHM(activeTotalSecs))
-	md += fmt.Sprintf("**Total idle:** %s\n", formatHM(idleTotalSecs))
-	md += fmt.Sprintf("**Total unknown:** %s\n\n", formatHM(unknownTotalSecs))
+	md := fmt.Sprintf("# Idle report: %s to %s\n", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
+	md += fmt.Sprintf("* **Total active:** %s\n", formatHM(activeTotalSecs))
+	md += fmt.Sprintf("* **Total idle:** %s\n", formatHM(idleTotalSecs))
+	md += fmt.Sprintf("* **Total unknown:** %s\n\n", formatHM(unknownTotalSecs))
 
-	// Hourly bar chart (one bar per hour; bar length = minutes active)
 	md += "## Hourly activity\n\n"
 	md += "```\n"
-	for h := 0; h < 24; h++ {
-		label := fmt.Sprintf("%02d:00", h)
+	for h := numHours - 1; h >= 0; h-- {
+		hourTime := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+		label := hourTime.Format("01-02 15:00")
 		bars := hourly[h]
 		if bars > 60 {
 			bars = 60
@@ -279,29 +256,14 @@ func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Ti
 		md += fmt.Sprintf("| %s | %s | %s | %s |\n", p.Hostname, p.Start.Format("3:04pm"), p.Stop.Format("3:04pm"), formatHM(p.DurationSeconds))
 	}
 
-	err = messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Name,
-		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
-		Event:       "idle_report",
-		Summary:     "idle report available",
-		Text:        "idle report for " + reportDay.Format("2006-01-02"),
-		Body:        md,
-		Data: map[string]interface{}{
-			"date":               reportDay.Format(fileDateFormat),
-			"active_seconds":     activeTotalSecs,
-			"idle_seconds":       idleTotalSecs,
-			"unknown_seconds":    unknownTotalSecs,
-			"active_periods":     allActivePeriods,
-			"hourly_active_mins": hourly,
-		},
-	})
-	if err != nil {
-		return err
-	}
+	// Do not emit an "idle_report" event; reports are for the Web UI only.
+	// Keep returning the markdown so callers (web UI action) can render it.
 
-	svc.lastReportDay = reportDay
-	_ = svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
-	logger.Info("idle: sent nightly idle report", "date", reportDay.Format(fileDateFormat))
-	return nil
+	if force && start.IsZero() && end.IsZero() {
+		// Only update lastReportDay if it was a standard "last 24h" report
+		svc.lastReportDay = reportDay
+		_ = svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
+	}
+	logger.Info("idle: generated report from database (web-only)")
+	return md, nil
 }

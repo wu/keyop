@@ -112,6 +112,10 @@ Sent on every `Check()` with the current water level and direction.
 }
 ```
 
+The `tide` message may also include optional fields used by the Web UI: `periods` (an array of daylight low-tide periods
+for the next several days) and `threshold` (the low-tide threshold in feet). These are intended for display only and are
+not emitted as separate `tide_report` events.
+
 ### `high_tide_alert` / `low_tide_alert`
 
 Sent once per tidal peak (high or low). The service scans a small lookback
@@ -181,37 +185,6 @@ i.e. the next peak is no longer extreme for that window.
 A separate `extreme_tide` message is sent for each window whose status changes,
 so up to three messages may be sent in a single `Check()` call.
 
-### `tide_report`
-
-Sent once daily with a summary of the day's tidal extremes and daylight
-information (sunrise, sunset, and day length) if observer coordinates are
-configured.
-
-```json
-{
-   "event": "tide_report",
-   "summary": "Tide report for 2026-03-01",
-   "data": {
-      "stationId": "9414290",
-      "date": "2026-03-01",
-      "extremes": {
-         "high": {
-            "time": "2026-03-01 16:24",
-            "value": 5.80
-         },
-         "low": {
-            "time": "2026-03-01 22:12",
-            "value": 1.20
-         }
-      },
-      "sun": {
-         "rise": "2026-03-01 06:12",
-         "set": "2026-03-01 18:12",
-         "duration": "12:00"
-      }
-   }
-}
-```
 
 ## Historical extremes
 
@@ -254,7 +227,6 @@ The following are persisted to the keyop state store across restarts:
 | `<name>.extremes`          | High/low leaderboards for all three windows    |
 | `<name>.alertedPeaks`      | Recently alerted peaks (pruned after 24 hours) |
 | `<name>.extremeTideStatus` | Current warning/ok status per window           |
-| `<name>.lastReportDay`     | Last day for which a tide_report was sent      |
 
 ## NOAA CO-OPS API
 

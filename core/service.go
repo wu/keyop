@@ -36,3 +36,9 @@ type ChannelInfo struct {
 	Description string
 	MaxAge      time.Duration
 }
+
+// AsType returns the error as a specific type, or false if it is not that type.
+func AsType[T any](err any) (T, bool) {
+	val, ok := err.(T)
+	return val, ok
+}

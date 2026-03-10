@@ -29,6 +29,7 @@ import (
 	"keyop/x/process"
 	"keyop/x/slack"
 	"keyop/x/speak"
+	"keyop/x/sqlite"
 	"keyop/x/sslMonitor"
 	"keyop/x/statusMonitor"
 	"keyop/x/sun"
@@ -40,6 +41,7 @@ import (
 	"keyop/x/weatherWs2902c"
 	"keyop/x/webSocketClient"
 	"keyop/x/webSocketServer"
+	"keyop/x/webui"
 )
 
 // ServiceRegistry maps service type names to constructors used by the run command and plugin loader.
@@ -122,6 +124,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"slack": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return slack.NewService(deps, cfg)
 	},
+	"sqlite": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return sqlite.NewService(deps, cfg)
+	},
 	"process": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return process.NewService(deps, cfg)
 	},
@@ -156,5 +161,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"weatherWs2902c": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return weatherWs2902c.NewService(deps, cfg)
+	},
+	"webui": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return webui.NewService(deps, cfg)
 	},
 }

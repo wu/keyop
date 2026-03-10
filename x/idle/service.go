@@ -2,18 +2,15 @@
 package idle
 
 import (
+	"database/sql"
 	"fmt"
 	"keyop/core"
-
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
-
-const fileDateFormat = "2006-01-02"
 
 // localMidnight returns the start of the calendar day for t in t's location.
 func localMidnight(t time.Time) time.Time {
@@ -31,11 +28,13 @@ type ActivePeriod struct {
 
 // Event represents a typed payload for idle events.
 type Event struct {
-	Now                   time.Time `json:"now"`
-	Hostname              string    `json:"hostname"`
-	Status                string    `json:"status"`
-	IdleDurationSeconds   float64   `json:"idleDurationSeconds"`
-	ActiveDurationSeconds float64   `json:"activeDurationSeconds"`
+	Now                          time.Time `json:"now"`
+	Hostname                     string    `json:"hostname"`
+	Status                       string    `json:"status"`
+	IdleDurationSeconds          float64   `json:"idleDurationSeconds"`
+	ActiveDurationSeconds        float64   `json:"activeDurationSeconds"`
+	IsIdle                       bool      `json:"isIdle"`
+	TimeSinceStatusChangeSeconds float64   `json:"timeSinceStatusChangeSeconds"`
 }
 
 // PayloadType returns the canonical payload type for idle events.
@@ -54,8 +53,8 @@ type Service struct {
 	idleMetricName   string
 	activeMetricName string
 
-	queueFileTemplate string
-	lastReportDay     time.Time
+	db            **sql.DB
+	lastReportDay time.Time
 }
 
 // ServiceState holds persistent runtime state for the idle service (for example, last idle timestamp and alerting state).
@@ -103,7 +102,6 @@ func (svc *Service) ValidateConfig() []error {
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
-	osProvider := svc.Deps.MustGetOsProvider()
 	stateStore := svc.Deps.MustGetStateStore()
 
 	thresholdStr, _ := svc.Cfg.Config["threshold"].(string)
@@ -127,35 +125,6 @@ func (svc *Service) Initialize() error {
 		svc.activeMetricName = fmt.Sprintf("%s.active_duration", svc.Cfg.Name)
 	}
 
-	host, err := osProvider.Hostname()
-	if err != nil {
-		logger.Error("failed to get hostname", "error", err)
-		svc.hostname = "unknown"
-	} else {
-		if idx := strings.Index(host, "."); idx != -1 {
-			host = host[:idx]
-		}
-		svc.hostname = host
-	}
-
-	// queue file template (optional). May include 'yyyymmdd' as a placeholder for the date.
-	if qf, ok := svc.Cfg.Config["report_queue_file"].(string); ok && qf != "" {
-		// expand ~ to home directory
-		if strings.HasPrefix(qf, "~") {
-			if home, herr := osProvider.UserHomeDir(); herr == nil {
-				if strings.HasPrefix(qf, "~/") {
-					qf = filepath.Join(home, qf[2:])
-				} else {
-					qf = filepath.Join(home, qf[1:])
-				}
-			}
-		}
-		svc.queueFileTemplate = qf
-	} else {
-		// No queue_file configured; do not set a default. Reports will be skipped unless configured.
-		svc.queueFileTemplate = ""
-	}
-
 	// Attempt to load state (including last report day)
 	var state ServiceState
 	if err := stateStore.Load(svc.Cfg.Name, &state); err == nil {
@@ -170,10 +139,10 @@ func (svc *Service) Initialize() error {
 		_ = stateStore.Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
 	}
 
-	// If lastReportDay not set and a queue_file is configured, generate report for previous day immediately.
-	if svc.lastReportDay.IsZero() && svc.queueFileTemplate != "" {
+	// If lastReportDay not set, generate report for previous day immediately.
+	if svc.lastReportDay.IsZero() {
 		messenger := svc.Deps.MustGetMessenger()
-		if err := svc.maybeSendIdleReport(messenger, time.Now(), true); err != nil {
+		if _, err := svc.maybeSendIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, true); err != nil {
 			logger.Warn("idle: initial report failed", "error", err)
 		}
 	}
@@ -181,7 +150,7 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
-// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
+// Check performs the periodic work for the idle service: sample idle state and emit events.
 func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
@@ -210,6 +179,13 @@ func (svc *Service) Check() error {
 
 	// Metrics
 	var activeDuration time.Duration
+	if wasIdle && !svc.isIdle {
+		// Transitioned to ACTIVE - update lastTransition BEFORE calculation
+		svc.lastTransition = now
+		timeSinceLastStatusChange = 0
+		logger.Info("transitioned to active", "isIdle", svc.isIdle, "lastTransition", svc.lastTransition, "service", svc.Cfg.Name)
+	}
+
 	if svc.isIdle {
 		activeDuration = 0
 	} else {
@@ -224,11 +200,14 @@ func (svc *Service) Check() error {
 		Event:       "idle_status",
 		Status:      status,
 		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration)),
-		Data: map[string]interface{}{
-			"idle_duration_seconds":            idleDuration.Seconds(),
-			"active_duration_seconds":          activeDuration.Seconds(),
-			"is_idle":                          svc.isIdle,
-			"time_since_status_change_seconds": timeSinceLastStatusChange.Seconds(),
+		Data: &Event{
+			Now:                          now,
+			Hostname:                     svc.hostname,
+			Status:                       status,
+			IdleDurationSeconds:          idleDuration.Seconds(),
+			ActiveDurationSeconds:        activeDuration.Seconds(),
+			IsIdle:                       svc.isIdle,
+			TimeSinceStatusChangeSeconds: timeSinceLastStatusChange.Seconds(),
 		},
 	})
 	if err != nil {
@@ -291,11 +270,8 @@ func (svc *Service) Check() error {
 
 		// No-op: active periods are now derived from events queue files instead of local YAML files.
 	} else if wasIdle && !svc.isIdle {
-		// Transitioned to ACTIVE
-		idleTime := now.Sub(svc.lastTransition)
-		svc.lastTransition = now
+		// Transitioned to ACTIVE (lastTransition already updated above)
 		svc.lastAlertHours = 0
-		timeSinceLastStatusChange = 0
 
 		err = messenger.Send(core.Message{
 			ChannelName: svc.Cfg.Name,
@@ -304,7 +280,7 @@ func (svc *Service) Check() error {
 			Event:       "active_alert",
 			Status:      "active",
 			Summary:     fmt.Sprintf("Active on %s", svc.hostname),
-			Text:        fmt.Sprintf("Host %s is active again. Was idle for: %s.", svc.hostname, formatHumanDuration(idleTime)),
+			Text:        fmt.Sprintf("Host %s is active again.", svc.hostname),
 		})
 		if err != nil {
 			logger.Error("failed to send active alert", "error", err)
@@ -342,7 +318,7 @@ func (svc *Service) Check() error {
 	}
 
 	// Attempt to send nightly report between 00:00 and 01:00 local time
-	if err := svc.maybeSendIdleReport(messenger, time.Now(), false); err != nil {
+	if _, err := svc.maybeSendIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, false); err != nil {
 		logger.Warn("idle: failed to send nightly report", "error", err)
 	}
 

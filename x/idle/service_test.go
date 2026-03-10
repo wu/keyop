@@ -5,8 +5,14 @@ import (
 	"keyop/core"
 	"keyop/core/testutil"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
+
+	"database/sql"
+
+	"github.com/stretchr/testify/assert"
+	_ "modernc.org/sqlite"
 )
 
 type mockStateStore struct {
@@ -286,13 +292,29 @@ func assertEventData(t *testing.T, messages []core.Message, idleSeconds float64,
 	found := false
 	for _, msg := range messages {
 		if msg.Event == "idle_status" {
-			data, ok := msg.Data.(map[string]interface{})
-			if !ok {
-				continue
+			var idleDur float64
+			var activeDur float64
+
+			if event, ok := core.AsType[*Event](msg.Data); ok {
+				idleDur = event.IdleDurationSeconds
+				activeDur = event.ActiveDurationSeconds
+			} else if data, ok := msg.Data.(map[string]any); ok {
+				if v, ok := data["idleDurationSeconds"].(float64); ok {
+					idleDur = v
+				} else if v, ok := data["idle_duration_seconds"].(float64); ok {
+					idleDur = v
+				}
+
+				if v, ok := data["activeDurationSeconds"].(float64); ok {
+					activeDur = v
+				} else if v, ok := data["active_duration_seconds"].(float64); ok {
+					activeDur = v
+				}
 			}
-			if data["idle_duration_seconds"] == idleSeconds {
+
+			if idleDur == idleSeconds {
 				if checkActive {
-					if _, ok := data["active_duration_seconds"].(float64); ok {
+					if activeDur >= 0 {
 						found = true
 						break
 					}
@@ -306,4 +328,141 @@ func assertEventData(t *testing.T, messages []core.Message, idleSeconds float64,
 	if !found {
 		t.Errorf("Event data with idle_duration_seconds %v (checkActive: %v) not found", idleSeconds, checkActive)
 	}
+}
+
+func TestSQLiteInsert(t *testing.T) {
+	svc := &Service{hostname: "test-host"}
+
+	t.Run("TypedPayload", func(t *testing.T) {
+		msg := core.Message{
+			Event:    "idle_status",
+			Hostname: "test-host",
+			Status:   "active",
+			Data: &Event{
+				IdleDurationSeconds:   1.2,
+				ActiveDurationSeconds: 3.4,
+			},
+		}
+		query, args := svc.SQLiteInsert(msg)
+		assert.Contains(t, query, "INSERT INTO idle_events")
+		assert.Equal(t, 5, len(args))
+		assert.Equal(t, 1.2, args[3])
+		assert.Equal(t, 3.4, args[4])
+	})
+
+	t.Run("MapPayload_CamelCase", func(t *testing.T) {
+		msg := core.Message{
+			Event:    "idle_status",
+			Hostname: "test-host",
+			Status:   "active",
+			Data: map[string]any{
+				"idleDurationSeconds":   5.6,
+				"activeDurationSeconds": 7.8,
+			},
+		}
+		query, args := svc.SQLiteInsert(msg)
+		assert.Contains(t, query, "INSERT INTO idle_events")
+		assert.Equal(t, 5.6, args[3])
+		assert.Equal(t, 7.8, args[4])
+	})
+
+	t.Run("MapPayload_SnakeCase", func(t *testing.T) {
+		msg := core.Message{
+			Event:    "idle_status",
+			Hostname: "test-host",
+			Status:   "active",
+			Data: map[string]any{
+				"idle_duration_seconds":   9.1,
+				"active_duration_seconds": 2.3,
+			},
+		}
+		query, args := svc.SQLiteInsert(msg)
+		assert.Contains(t, query, "INSERT INTO idle_events")
+		assert.Equal(t, 9.1, args[3])
+		assert.Equal(t, 2.3, args[4])
+	})
+}
+
+func TestMaybeSendIdleReport(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open in-memory sqlite: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("failed to close in-memory db: %v", err)
+		}
+	}()
+
+	svc := &Service{
+		db:       &db,
+		hostname: "test-host",
+		Deps:     core.Dependencies{
+			// Set minimal deps if needed by logger/stateStore
+		},
+	}
+	svc.Deps.SetLogger(&core.FakeLogger{})
+	svc.Deps.SetStateStore(&mockStateStore{data: make(map[string]any)})
+
+	schema := svc.SQLiteSchema()
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to create schema: %v", err)
+	}
+
+	now := time.Now()
+	// Insert some data
+	_, err = db.Exec(`INSERT INTO idle_events (timestamp, hostname, status, idle_seconds, active_seconds) VALUES (?, ?, ?, ?, ?)`,
+		now.Add(-10*time.Minute), "test-host", "active", 0.0, 600.0)
+	assert.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO idle_events (timestamp, hostname, status, idle_seconds, active_seconds) VALUES (?, ?, ?, ?, ?)`,
+		now.Add(-5*time.Minute), "test-host", "idle", 300.0, 0.0)
+	assert.NoError(t, err)
+
+	messenger := testutil.NewFakeMessenger()
+
+	t.Run("Last24Hours", func(t *testing.T) {
+		md, err := svc.maybeSendIdleReport(messenger, now, time.Time{}, time.Time{}, true)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, md)
+		assert.Contains(t, md, "test-host")
+		assert.Contains(t, md, "Active periods")
+
+		// Reports are now web-only; messenger should not receive an idle_report
+		assert.Empty(t, messenger.SentMessages)
+	})
+
+	t.Run("CustomRange", func(t *testing.T) {
+		messenger.Reset()
+
+		// Insert data for the custom range
+		start := time.Date(2026, 3, 9, 10, 0, 0, 0, time.Local)
+		end := time.Date(2026, 3, 9, 12, 0, 0, 0, time.Local)
+		_, err = db.Exec(`INSERT INTO idle_events (timestamp, hostname, status, idle_seconds, active_seconds) VALUES (?, ?, ?, ?, ?)`,
+			start.Add(30*time.Minute), "test-host", "active", 0.0, 1800.0)
+		assert.NoError(t, err)
+
+		md, err := svc.maybeSendIdleReport(messenger, now, start, end, true)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, md)
+
+		// Verify hourly activity labels and order
+		label11 := "03-09 11:00"
+		label12 := "03-09 12:00"
+		assert.Contains(t, md, label11)
+		assert.Contains(t, md, label12)
+
+		// Most recent hour (12:00) should be before older hour (11:00)
+		idx11 := strings.Index(md, label11)
+		idx12 := strings.Index(md, label12)
+		assert.True(t, idx12 < idx11, "12:00 label should appear before 11:00 label")
+	})
+
+	t.Run("NoDataInRange", func(t *testing.T) {
+		messenger.Reset()
+		start := now.Add(-100 * time.Hour)
+		end := now.Add(-50 * time.Hour)
+		md, err := svc.maybeSendIdleReport(messenger, now, start, end, true)
+		assert.NoError(t, err)
+		assert.Empty(t, md) // Should return empty if no data found
+	})
 }
