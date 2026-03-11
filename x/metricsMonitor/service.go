@@ -80,9 +80,13 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"metrics"}, logger)
+	var errs []error
+	if len(svc.Cfg.Subs) == 0 {
+		errs = append(errs, fmt.Errorf("metricsMonitor service requires at least one subscription in 'subs'"))
+		return errs
+	}
 
+	logger := svc.Deps.MustGetLogger()
 	// thresholds is optional but recommended
 	if thresholdsRaw, ok := svc.Cfg.Config["thresholds"].([]interface{}); !ok {
 		logger.Warn("metricsMonitor: 'thresholds' not found or not an array in config")
@@ -122,8 +126,17 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
-	messenger := svc.Deps.MustGetMessenger()
-	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["metrics"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["metrics"].MaxAge, svc.messageHandler)
+	m := svc.Deps.MustGetMessenger()
+	ctx := svc.Deps.MustGetContext()
+	for _, subInfo := range svc.Cfg.Subs {
+		if subInfo.Name == "" {
+			return fmt.Errorf("metricsMonitor: subscription entry missing 'Name'")
+		}
+		if err := m.Subscribe(ctx, svc.Cfg.Name, subInfo.Name, svc.Cfg.Type, svc.Cfg.Name, subInfo.MaxAge, svc.messageHandler); err != nil {
+			return fmt.Errorf("metricsMonitor: failed to subscribe to %s: %w", subInfo.Name, err)
+		}
+	}
+	return nil
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {

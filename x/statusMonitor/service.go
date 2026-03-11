@@ -6,7 +6,6 @@ package statusMonitor
 import (
 	"fmt"
 	"keyop/core"
-	"keyop/util"
 	"sync"
 	"time"
 )
@@ -72,8 +71,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
-	logger := svc.Deps.MustGetLogger()
-	return util.ValidateConfig("subs", svc.Cfg.Subs, []string{"status"}, logger)
+	var errs []error
+	if len(svc.Cfg.Subs) == 0 {
+		errs = append(errs, fmt.Errorf("statusMonitor service requires at least one subscription in 'subs'"))
+	}
+	return errs
 }
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
@@ -121,12 +123,17 @@ func (svc *Service) Initialize() error {
 		}
 	}
 
-	// Subscribe to status channel
-	statusChan, ok := svc.Cfg.Subs["status"]
-	if !ok {
-		return fmt.Errorf("status subscription not configured")
+	// Subscribe to all channels listed in the 'subs' section
+	ctx := svc.Deps.MustGetContext()
+	for _, subInfo := range svc.Cfg.Subs {
+		if subInfo.Name == "" {
+			return fmt.Errorf("statusMonitor: subscription entry missing 'Name'")
+		}
+		if err := messenger.Subscribe(ctx, svc.Cfg.Name, subInfo.Name, svc.Cfg.Type, svc.Cfg.Name, subInfo.MaxAge, svc.messageHandler); err != nil {
+			return fmt.Errorf("failed to subscribe to %s: %w", subInfo.Name, err)
+		}
 	}
-	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, statusChan.Name, svc.Cfg.Type, svc.Cfg.Name, statusChan.MaxAge, svc.messageHandler)
+	return nil
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {

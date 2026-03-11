@@ -41,6 +41,14 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, subErrs...)
 	}
 
+	// require at least one subscription
+	if len(svc.Cfg.Subs) == 0 {
+		err := fmt.Errorf("graphite service requires at least one subscription in 'subs'")
+		logger.Error(err.Error())
+		errs = append(errs, err)
+		return errs
+	}
+
 	// check port
 	port, portExists := svc.Cfg.Config["port"].(int)
 	if !portExists {
@@ -72,8 +80,17 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
-	messenger := svc.Deps.MustGetMessenger()
-	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["graphite"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["graphite"].MaxAge, svc.messageHandler)
+	m := svc.Deps.MustGetMessenger()
+	ctx := svc.Deps.MustGetContext()
+	for _, subInfo := range svc.Cfg.Subs {
+		if subInfo.Name == "" {
+			return fmt.Errorf("graphite: subscription entry missing 'Name'")
+		}
+		if err := m.Subscribe(ctx, svc.Cfg.Name, subInfo.Name, svc.Cfg.Type, svc.Cfg.Name, subInfo.MaxAge, svc.messageHandler); err != nil {
+			return fmt.Errorf("graphite: failed to subscribe to %s: %w", subInfo.Name, err)
+		}
+	}
+	return nil
 }
 
 func (svc *Service) messageHandler(msg core.Message) error {
