@@ -15,7 +15,6 @@ import (
 	"keyop/x/kodi"
 	"keyop/x/logManager"
 	"keyop/x/macosBluetoothBattery"
-	"keyop/x/macosNotes"
 	"keyop/x/macosReminders"
 	"keyop/x/memoryMonitor"
 	"keyop/x/messengerStats"
@@ -108,9 +107,6 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"txtmsg": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return txtmsg.NewService(deps, cfg)
-	},
-	"macosNotes": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return macosNotes.NewService(deps, cfg)
 	},
 	"macosReminders": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return macosReminders.NewService(deps, cfg)
