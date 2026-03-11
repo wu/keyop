@@ -2,25 +2,24 @@ let container = null;
 
 export function init(el) {
     container = el;
-    // Wire up date inputs and refresh button, defaulting to today -> today+7
+    // Wire up date inputs and refresh button, defaulting to yesterday -> today
     const startInput = container.querySelector('#idle-start-date');
     const endInput = container.querySelector('#idle-end-date');
     const refreshBtn = container.querySelector('#idle-refresh-btn');
 
     const today = new Date();
     const toISODate = d => d.toISOString().slice(0, 10);
-    const startDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 7);
+    const endDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 1); // yesterday
 
     if (startInput) startInput.value = toISODate(startDate);
     if (endInput) endInput.value = toISODate(endDate);
 
     function triggerRefresh(startIso, endIso) {
-        const body = {
-            start: new Date(startIso + 'T00:00:00').toISOString(),
-            end: new Date(endIso + 'T00:00:00').toISOString(),
-        };
+        const body = {};
+        if (startIso) body.start = new Date(startIso + 'T00:00:00').toISOString();
+        if (endIso) body.end = new Date(endIso + 'T00:00:00').toISOString();
         fetch('/api/tabs/idle/action/refresh-report', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -79,18 +78,11 @@ export function onMessage(msg) {
             }
         }
 
-        // When an idle_status message arrives, refresh the report for the selected range
-        const startInput = container.querySelector('#idle-start-date');
-        const endInput = container.querySelector('#idle-end-date');
-        const s = startInput ? startInput.value : null;
-        const e = endInput ? endInput.value : null;
-        const body = {};
-        if (s) body.start = new Date(s + 'T00:00:00').toISOString();
-        if (e) body.end = new Date(e + 'T00:00:00').toISOString();
+        // When an idle_status message arrives, refresh the report using server defaults
         fetch('/api/tabs/idle/action/refresh-report', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body)
+            body: JSON.stringify({})
         })
             .then(response => response.json())
             .then(data => {

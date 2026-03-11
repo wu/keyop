@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-// maybeSendIdleReport generates an idle report between the specified start and end times.
+// generateIdleReport generates an idle report between the specified start and end times.
 // If start is zero, it defaults to the beginning of the day (midnight) for the report day (yesterday if now is given).
 // If end is zero, it defaults to the end of that same day.
 // If both are zero, it defaults to the last 24 hours from 'now'.
-func (svc *Service) maybeSendIdleReport(messenger core.MessengerApi, now time.Time, start, end time.Time, force bool) (string, error) {
+func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start, end time.Time, force bool) (string, error) {
 	logger := svc.Deps.MustGetLogger()
 
 	if svc.db == nil || *svc.db == nil {

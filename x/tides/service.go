@@ -1,7 +1,5 @@
-// Package tidesNoaa retrieves tide predictions from NOAA and publishes tide events for automation and alerts.
-//
-//nolint:revive
-package tidesNoaa
+// Package tides retrieves tide predictions from NOAA and publishes tide events for automation and alerts.
+package tides
 
 import (
 	"database/sql"
@@ -45,7 +43,7 @@ type Service struct {
 	db **sql.DB
 }
 
-// NewService creates a new tidesNoaa Service with default NOAA API endpoints.
+// NewService creates a new tides Service with default NOAA API endpoints.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{
 		Deps:         deps,
@@ -55,24 +53,25 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// ValidateConfig checks the tides service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
 	stationID, ok := svc.Cfg.Config["stationId"].(string)
 	if !ok || stationID == "" {
-		errs = append(errs, fmt.Errorf("tidesNoaa: required config parameter 'stationId' is missing or empty"))
+		errs = append(errs, fmt.Errorf("tides: required config parameter 'stationId' is missing or empty"))
 	}
 
 	// lat and lon are required when a tide report is configured.
 	// They are not required for basic tide level monitoring.
 	if _, hasLat := svc.Cfg.Config["lat"]; hasLat {
 		if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
-			errs = append(errs, fmt.Errorf("tidesNoaa: 'lat' must be a float64"))
+			errs = append(errs, fmt.Errorf("tides: 'lat' must be a float64"))
 		}
 	}
 	if _, hasLon := svc.Cfg.Config["lon"]; hasLon {
 		if _, ok := svc.Cfg.Config["lon"].(float64); !ok {
-			errs = append(errs, fmt.Errorf("tidesNoaa: 'lon' must be a float64"))
+			errs = append(errs, fmt.Errorf("tides: 'lon' must be a float64"))
 		}
 	}
 
@@ -88,7 +87,7 @@ func (svc *Service) Initialize() error {
 	} else {
 		home, err := svc.Deps.MustGetOsProvider().UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("tidesNoaa: failed to determine home directory: %w", err)
+			return fmt.Errorf("tides: failed to determine home directory: %w", err)
 		}
 		svc.dataDir = filepath.Join(home, ".keyop", "tides")
 	}
@@ -102,13 +101,13 @@ func (svc *Service) Initialize() error {
 	if svc.lat == 0 && svc.lon == 0 {
 		lat, lon, name, err := fetchStationInfo(svc.Deps.MustGetLogger(), svc.metadataBase, svc.stationID)
 		if err != nil {
-			svc.Deps.MustGetLogger().Warn("tidesNoaa: could not fetch station coordinates; tide report disabled",
+			svc.Deps.MustGetLogger().Warn("tides: could not fetch station coordinates; tide report disabled",
 				"station", svc.stationID, "error", err)
 		} else {
 			svc.lat = lat
 			svc.lon = lon
 			svc.stationName = name
-			svc.Deps.MustGetLogger().Info("tidesNoaa: using station coordinates from NOAA metadata API",
+			svc.Deps.MustGetLogger().Info("tides: using station coordinates from NOAA metadata API",
 				"station", svc.stationID, "lat", lat, "lon", lon)
 		}
 	}
@@ -123,22 +122,22 @@ func (svc *Service) Initialize() error {
 	// Per-station sub-directory keeps each station's daily files together.
 	stationDir := svc.stationDir()
 	if err := svc.Deps.MustGetOsProvider().MkdirAll(stationDir, 0o750); err != nil {
-		return fmt.Errorf("tidesNoaa: failed to create data directory %s: %w", stationDir, err)
+		return fmt.Errorf("tides: failed to create data directory %s: %w", stationDir, err)
 	}
 
 	// Load any previously persisted extremes from the state store.
 	if err := svc.Deps.MustGetStateStore().Load(svc.stateKey(), &svc.extremes); err != nil {
-		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to load extremes from state store", "error", err)
+		svc.Deps.MustGetLogger().Warn("tides: failed to load extremes from state store", "error", err)
 	}
 
 	// Load previously alerted peaks so we don't re-send on restart.
 	if err := svc.Deps.MustGetStateStore().Load(svc.alertedPeaksKey(), &svc.alertedPeaks); err != nil {
-		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to load alerted peaks from state store", "error", err)
+		svc.Deps.MustGetLogger().Warn("tides: failed to load alerted peaks from state store", "error", err)
 	}
 
 	// Load extreme tide status for alert windows
 	if err := svc.Deps.MustGetStateStore().Load(svc.extremeTideStatusKey(), &svc.extremeTideStatus); err != nil {
-		svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to load extreme tide status from state store", "error", err)
+		svc.Deps.MustGetLogger().Warn("tides: failed to load extreme tide status from state store", "error", err)
 	}
 
 	// Backfill extremes from existing day files so a fresh or deleted state
@@ -159,7 +158,7 @@ func (svc *Service) Check() error {
 
 	// ensureDayFiles does network and disk I/O — call it without holding svc.mu.
 	if err := svc.ensureDayFiles(now); err != nil {
-		return fmt.Errorf("tidesNoaa: failed to refresh tide data: %w", err)
+		return fmt.Errorf("tides: failed to refresh tide data: %w", err)
 	}
 
 	// Re-backfill whenever the calendar date has rolled over since the last
@@ -181,15 +180,15 @@ func (svc *Service) Check() error {
 	records, err := svc.collectRecordsAroundNow(now)
 	svc.mu.RUnlock()
 	if err != nil {
-		return fmt.Errorf("tidesNoaa: %w", err)
+		return fmt.Errorf("tides: %w", err)
 	}
 
 	current, next, err := findCurrentTide(records, now)
 	if err != nil {
-		return fmt.Errorf("tidesNoaa: %w", err)
+		return fmt.Errorf("tides: %w", err)
 	}
 
-	logger.Debug("tidesNoaa: current tide", "station", svc.stationID, "value", current.Value, "time", current.Time)
+	logger.Debug("tides: current tide", "station", svc.stationID, "value", current.Value, "time", current.Time)
 
 	state := tideState(records, current)
 	peak := nextPeak(records, current)
@@ -256,7 +255,7 @@ func (svc *Service) Check() error {
 
 	if len(newPeaksToSend) > 0 {
 		if saveErr := svc.Deps.MustGetStateStore().Save(svc.alertedPeaksKey(), alertedPeaksCopy); saveErr != nil {
-			logger.Warn("tidesNoaa: failed to save alerted peaks", "error", saveErr)
+			logger.Warn("tides: failed to save alerted peaks", "error", saveErr)
 		}
 		for _, ap := range newPeaksToSend {
 			event := "high_tide_alert"
@@ -340,12 +339,12 @@ func (svc *Service) ensureDayFiles(now time.Time) error {
 			continue
 		}
 
-		logger.Info("tidesNoaa: fetching day data", "station", svc.stationID, "date", day.Format(fileDateFormat))
+		logger.Info("tides: fetching day data", "station", svc.stationID, "date", day.Format(fileDateFormat))
 		records, err := fetchDayRecords(logger, svc.apiBase, svc.stationID, day)
 		if err != nil {
 			// Future days may not yet have data; log and skip rather than abort.
 			if i > 0 {
-				logger.Warn("tidesNoaa: could not fetch future day", "date", day.Format(fileDateFormat), "error", err)
+				logger.Warn("tides: could not fetch future day", "date", day.Format(fileDateFormat), "error", err)
 				continue
 			}
 			return err
@@ -363,7 +362,7 @@ func (svc *Service) ensureDayFiles(now time.Time) error {
 			ex := svc.extremes
 			svc.mu.Unlock()
 			if saveErr := svc.Deps.MustGetStateStore().Save(svc.stateKey(), ex); saveErr != nil {
-				logger.Warn("tidesNoaa: failed to save extremes", "error", saveErr)
+				logger.Warn("tides: failed to save extremes", "error", saveErr)
 			}
 		}
 	}
@@ -452,7 +451,7 @@ func (svc *Service) backfillExtremes(now time.Time) {
 
 	entries, err := svc.Deps.MustGetOsProvider().ReadDir(svc.stationDir())
 	if err != nil {
-		logger.Warn("tidesNoaa: backfill could not read station dir", "error", err)
+		logger.Warn("tides: backfill could not read station dir", "error", err)
 		return
 	}
 
@@ -498,9 +497,9 @@ func (svc *Service) backfillExtremes(now time.Time) {
 	svc.mu.Unlock()
 
 	if saveErr := svc.Deps.MustGetStateStore().Save(svc.stateKey(), ex); saveErr != nil {
-		logger.Warn("tidesNoaa: failed to save backfilled extremes", "error", saveErr)
+		logger.Warn("tides: failed to save backfilled extremes", "error", saveErr)
 	}
-	logger.Info("tidesNoaa: extremes backfilled", "station", svc.stationID, "days", len(names))
+	logger.Info("tides: extremes backfilled", "station", svc.stationID, "days", len(names))
 }
 
 // sendExtremeTideStatus sends an extreme_tide event for each window whenever
@@ -596,7 +595,7 @@ func (svc *Service) sendExtremeTideStatus(messenger core.MessengerApi, peak *Tid
 		}
 		svc.mu.Unlock()
 		if saveErr := svc.Deps.MustGetStateStore().Save(svc.extremeTideStatusKey(), statusCopy); saveErr != nil {
-			logger.Warn("tidesNoaa: failed to save extreme tide status", "error", saveErr)
+			logger.Warn("tides: failed to save extreme tide status", "error", saveErr)
 		}
 	} else {
 		svc.mu.Unlock()

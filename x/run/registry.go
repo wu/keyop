@@ -35,7 +35,7 @@ import (
 	"keyop/x/sun"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
-	"keyop/x/tidesNoaa"
+	"keyop/x/tides"
 	"keyop/x/txtmsg"
 	"keyop/x/versionControlGit"
 	"keyop/x/weatherWs2902c"
@@ -97,8 +97,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"moon": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return moon.NewService(deps, cfg)
 	},
-	"tidesNoaa": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return tidesNoaa.NewService(deps, cfg)
+	"tides": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return tides.NewService(deps, cfg)
 	},
 	"pingMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return pingMonitor.NewService(deps, cfg)

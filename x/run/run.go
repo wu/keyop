@@ -55,8 +55,8 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
-		// Check if service implements sqlite.SQLiteConsumer
-		if consumer, ok := service.(sqlite.SQLiteConsumer); ok {
+		// Check if service implements sqlite.Consumer
+		if consumer, ok := service.(sqlite.Consumer); ok {
 			// Find the sqlite service if it exists
 			for _, other := range services {
 				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
@@ -104,7 +104,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 				if provider, ok := other.Service.(sqlite.SchemaProvider); ok {
 					sqliteSvc.RegisterProvider(other.Config.Type, provider)
 				}
-				if consumer, ok := other.Service.(sqlite.SQLiteConsumer); ok {
+				if consumer, ok := other.Service.(sqlite.Consumer); ok {
 					consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
 				}
 			}

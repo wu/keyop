@@ -142,7 +142,7 @@ func (svc *Service) Initialize() error {
 	// If lastReportDay not set, generate report for previous day immediately.
 	if svc.lastReportDay.IsZero() {
 		messenger := svc.Deps.MustGetMessenger()
-		if _, err := svc.maybeSendIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, true); err != nil {
+		if _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, true); err != nil {
 			logger.Warn("idle: initial report failed", "error", err)
 		}
 	}
@@ -317,9 +317,9 @@ func (svc *Service) Check() error {
 		}
 	}
 
-	// Attempt to send nightly report between 00:00 and 01:00 local time
-	if _, err := svc.maybeSendIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, false); err != nil {
-		logger.Warn("idle: failed to send nightly report", "error", err)
+	// Attempt to generate nightly report between 00:00 and 01:00 local time
+	if _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, false); err != nil {
+		logger.Warn("idle: failed to generate nightly report", "error", err)
 	}
 
 	return nil

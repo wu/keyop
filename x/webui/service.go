@@ -291,12 +291,15 @@ func (svc *Service) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	ctx := r.Context()
+	logger := svc.Deps.MustGetLogger()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg := <-messageChan:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", msg); err != nil {
+				logger.Warn("webui: failed to write SSE message", "error", err)
+			}
 			flusher.Flush()
 		}
 	}

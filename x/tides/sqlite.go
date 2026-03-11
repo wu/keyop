@@ -1,4 +1,4 @@
-package tidesNoaa
+package tides
 
 import (
 	"database/sql"
@@ -11,7 +11,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// SQLiteSchema returns the SQL DDL for the tables needed by the tidesNoaa service.
+// SQLiteSchema returns the SQL DDL for the tables needed by the tides service.
 func (svc *Service) SQLiteSchema() string {
 	return `CREATE TABLE IF NOT EXISTS tide_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +91,7 @@ func (svc *Service) loadDayFile(day time.Time) (*TideDayFile, error) {
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to close rows", "error", err)
+			svc.Deps.MustGetLogger().Warn("tides: failed to close rows", "error", err)
 		}
 	}()
 
@@ -132,7 +132,7 @@ func (svc *Service) storeDayFile(day time.Time, records []TideRecord, now time.T
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to rollback tx", "error", err)
+			svc.Deps.MustGetLogger().Warn("tides: failed to rollback tx", "error", err)
 		}
 	}()
 
@@ -142,7 +142,7 @@ func (svc *Service) storeDayFile(day time.Time, records []TideRecord, now time.T
 	}
 	defer func() {
 		if err := stmt.Close(); err != nil {
-			svc.Deps.MustGetLogger().Warn("tidesNoaa: failed to close stmt", "error", err)
+			svc.Deps.MustGetLogger().Warn("tides: failed to close stmt", "error", err)
 		}
 	}()
 
@@ -180,7 +180,7 @@ func (svc *Service) storeDayFileLegacy(day time.Time, records []TideRecord, now 
 
 	out, err := yaml.Marshal(f)
 	if err != nil {
-		return fmt.Errorf("tidesNoaa: failed to marshal day file: %w", err)
+		return fmt.Errorf("tides: failed to marshal day file: %w", err)
 	}
 
 	path := svc.dayFilePath(day)
@@ -191,16 +191,16 @@ func (svc *Service) storeDayFileLegacy(day time.Time, records []TideRecord, now 
 
 	file, err := svc.Deps.MustGetOsProvider().OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
-		return fmt.Errorf("tidesNoaa: failed to open %s for writing: %w", path, err)
+		return fmt.Errorf("tides: failed to open %s for writing: %w", path, err)
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			logger.Warn("tidesNoaa: failed to close day file", "path", path, "error", closeErr)
+			logger.Warn("tides: failed to close day file", "path", path, "error", closeErr)
 		}
 	}()
 
 	if _, err := file.Write(out); err != nil {
-		return fmt.Errorf("tidesNoaa: failed to write %s: %w", path, err)
+		return fmt.Errorf("tides: failed to write %s: %w", path, err)
 	}
 
 	return nil

@@ -73,7 +73,7 @@ export function onMessage(msg) {
     if (!container) return;
 
     // Check if it's a tide status event
-    if (msg.event === 'tide' || msg.serviceType === 'tidesNoaa') {
+    if (msg.event === 'tide' || msg.serviceType === 'tides') {
         const statusEl = container.querySelector('#tide-status');
         if (statusEl) {
             statusEl.textContent = msg.text || `Tide: ${msg.metric} ft`;

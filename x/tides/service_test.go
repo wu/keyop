@@ -1,5 +1,4 @@
-//nolint:revive
-package tidesNoaa
+package tides
 
 import (
 	"bytes"
@@ -135,7 +134,7 @@ func makeDeps(t *testing.T, messenger core.MessengerApi, osProvider core.OsProvi
 func makeCfg(stationID string, extraConfig map[string]interface{}) core.ServiceConfig {
 	cfg := core.ServiceConfig{
 		Name: "tide-test",
-		Type: "tidesNoaa",
+		Type: "tides",
 		Pubs: map[string]core.ChannelInfo{},
 		Config: map[string]interface{}{
 			"stationId": stationID,
@@ -811,7 +810,7 @@ func TestValidateConfig(t *testing.T) {
 		deps := makeDeps(t, &testutil.FakeMessenger{}, osP)
 		cfg := core.ServiceConfig{
 			Name:   "tide-test",
-			Type:   "tidesNoaa",
+			Type:   "tides",
 			Config: map[string]interface{}{},
 		}
 		svc := NewService(deps, cfg).(*Service)
@@ -935,7 +934,7 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 	msg := msgs[0]
 	assert.Equal(t, "tide-test", msg.ChannelName)
 	assert.Equal(t, "tide-test", msg.ServiceName)
-	assert.Equal(t, "tidesNoaa", msg.ServiceType)
+	assert.Equal(t, "tides", msg.ServiceType)
 	assert.Equal(t, "tide", msg.Event)
 	assert.Contains(t, msg.Text, "9414290")
 	assert.NotEmpty(t, msg.Summary)

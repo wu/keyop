@@ -20,20 +20,20 @@ func (svc *Service) WebUITab() webui.TabInfo {
 		ID:    "idle",
 		Title: "Idle Report",
 		Content: `<div id="idle-container">
-			<h3>Idle Status</h3>
-			<div id="idle-status">Loading status...</div>
-			<div id="idle-report-section">
-				<h3>Recent Daily Report</h3>
-				<div id="idle-report-controls">
-						<label>Start: <input type="date" id="idle-start-date"></label>
-						<label>End: <input type="date" id="idle-end-date"></label>
-						<button id="idle-refresh-btn">Refresh</button>
-					</div>
-					<div id="idle-report-content">Loading report...</div>
-			</div>
-			<h3>Activity Log</h3>
-			<div id="idle-history"></div>
-		</div>`,
+<h3>Idle Status</h3>
+<div id="idle-status">Loading status...</div>
+<div id="idle-report-section">
+<h3>Recent Daily Report</h3>
+<div id="idle-report-controls">
+<label>Start: <input type="date" id="idle-start-date"></label>
+<label>End: <input type="date" id="idle-end-date"></label>
+<button id="idle-refresh-btn">Refresh</button>
+</div>
+<div id="idle-report-content">Loading report...</div>
+</div>
+<h3>Activity Log</h3>
+<div id="idle-history"></div>
+</div>`,
 		JSPath:         "/api/assets/idleMacos/idle.js",
 		RenderMarkdown: true,
 	}
@@ -52,7 +52,7 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			end, _ = time.Parse(time.RFC3339, e)
 		}
 
-		report, err := svc.maybeSendIdleReport(messenger, time.Now(), start, end, true)
+		report, err := svc.generateIdleReport(messenger, time.Now(), start, end, true)
 		if err != nil {
 			return nil, err
 		}

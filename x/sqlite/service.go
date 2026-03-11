@@ -11,11 +11,9 @@ import (
 	_ "modernc.org/sqlite" // sqlite driver used for embedded builds
 )
 
-// SQLiteConsumer is an optional interface that services can implement to receive
+// Consumer is an optional interface that services can implement to receive
 // a reference to the SQLite database.
-//
-// SQLiteConsumer is intentionally named for clarity across the codebase.
-type SQLiteConsumer interface {
+type Consumer interface {
 	SetSQLiteDB(db **sql.DB)
 }
 
@@ -152,12 +150,7 @@ func (svc *Service) Check() error {
 
 // DB returns the underlying sql.DB instance.
 func (svc *Service) DB() *sql.DB {
-	if svc.db == nil {
-		// If not initialized yet, we still return a pointer to the field
-		// but wait, svc.db IS the pointer.
-		// If we want to allow services to get it before Initialize(),
-		// we can't really do much if it's nil, unless we open it early.
-	}
+
 	return svc.db
 }
 

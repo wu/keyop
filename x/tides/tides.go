@@ -1,5 +1,4 @@
-//nolint:revive
-package tidesNoaa
+package tides
 
 import (
 	"encoding/json"
@@ -93,7 +92,7 @@ func fetchDayRecords(logger core.Logger, apiBase, stationID string, day time.Tim
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
 			if logger != nil {
-				logger.Warn("tidesNoaa: failed to close response body", "error", cerr)
+				logger.Warn("tides: failed to close response body", "error", cerr)
 			}
 		}
 	}()

@@ -1,5 +1,4 @@
-//nolint:revive // package name uses MixedCaps for historical reasons
-package tidesNoaa
+package tides
 
 import (
 	"fmt"
@@ -8,12 +7,12 @@ import (
 	"time"
 )
 
-// WebUIAssets returns the static assets for the tidesNoaa service.
+// WebUIAssets returns the static assets for the tides service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/tidesNoaa/resources")
+	return http.Dir("x/tides/resources")
 }
 
-// WebUITab returns the tab configuration for the tidesNoaa service.
+// WebUITab returns the tab configuration for the tides service.
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "tides",
@@ -33,7 +32,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 			<h3>Tide History</h3>
 			<div id="tide-history"></div>
 		</div>`,
-		JSPath:         "/api/assets/tidesNoaa/tides.js",
+		JSPath:         "/api/assets/tides/tides.js",
 		RenderMarkdown: true,
 	}
 }

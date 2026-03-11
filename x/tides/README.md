@@ -1,4 +1,4 @@
-# tidesNoaa
+# tides
 
 Fetches NOAA tidal predictions, detects high and low tides, and sends alerts
 when tides are at their peaks or approaching extreme levels relative to recent
@@ -7,7 +7,7 @@ history.
 ## Configuration
 
 ```yaml
-x: tidesNoaa
+x: tides
 freq: 15m
 
 config:

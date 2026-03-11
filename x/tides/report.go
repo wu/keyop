@@ -1,8 +1,6 @@
-// Package tidesNoaa provides NOAA tide-data fetching, local storage, reports,
+// Package tides provides NOAA tide-data fetching, local storage, reports,
 // and extreme-tide detection for the keyop project.
-//
-//nolint:revive
-package tidesNoaa
+package tides
 
 import (
 	"encoding/json"
@@ -39,7 +37,7 @@ func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, 
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
 			if logger != nil {
-				logger.Warn("tidesNoaa: failed to close metadata response body", "error", cerr)
+				logger.Warn("tides: failed to close metadata response body", "error", cerr)
 			}
 		}
 	}()

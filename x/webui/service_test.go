@@ -125,7 +125,9 @@ func TestWebUI_GetAsset(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = f.Write([]byte(assetContent))
 	assert.NoError(t, err)
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatalf("failed to close file: %v", err)
+	}
 
 	provider := &mockTabProvider{
 		tab:    TabInfo{ID: "test"},

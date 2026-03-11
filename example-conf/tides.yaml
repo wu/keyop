@@ -1,4 +1,4 @@
-x: tidesNoaa
+x: tides
 freq: 15m
 
 config:

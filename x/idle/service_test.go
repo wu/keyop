@@ -421,7 +421,7 @@ func TestMaybeSendIdleReport(t *testing.T) {
 	messenger := testutil.NewFakeMessenger()
 
 	t.Run("Last24Hours", func(t *testing.T) {
-		md, err := svc.maybeSendIdleReport(messenger, now, time.Time{}, time.Time{}, true)
+		md, err := svc.generateIdleReport(messenger, now, time.Time{}, time.Time{}, true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, md)
 		assert.Contains(t, md, "test-host")
@@ -441,7 +441,7 @@ func TestMaybeSendIdleReport(t *testing.T) {
 			start.Add(30*time.Minute), "test-host", "active", 0.0, 1800.0)
 		assert.NoError(t, err)
 
-		md, err := svc.maybeSendIdleReport(messenger, now, start, end, true)
+		md, err := svc.generateIdleReport(messenger, now, start, end, true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, md)
 
@@ -461,7 +461,7 @@ func TestMaybeSendIdleReport(t *testing.T) {
 		messenger.Reset()
 		start := now.Add(-100 * time.Hour)
 		end := now.Add(-50 * time.Hour)
-		md, err := svc.maybeSendIdleReport(messenger, now, start, end, true)
+		md, err := svc.generateIdleReport(messenger, now, start, end, true)
 		assert.NoError(t, err)
 		assert.Empty(t, md) // Should return empty if no data found
 	})

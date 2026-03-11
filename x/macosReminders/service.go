@@ -1,4 +1,6 @@
 // Package macosReminders integrates with the macOS Reminders app to fetch and emit reminder events and changes.
+//
+//nolint:revive // package name uses MixedCaps for historical reasons
 package macosReminders
 
 import (
