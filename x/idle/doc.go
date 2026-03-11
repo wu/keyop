@@ -35,14 +35,9 @@
 // Queue file format (events)
 // For nightly reporting the package can read a queue file that contains one
 // JSON message per line. Each line may be either a legacy core.Message JSON
-// object or a core.Envelope (the code will attempt to unmarshal an Envelope
-// first and fall back to a Message). Lines that cannot be parsed are
+// object. Lines that cannot be parsed are
 // ignored. Only messages with Event == "status_update" and timestamps that
 // fall within the target day are considered when constructing reports.
-//
-// Example queue line (envelope style):
-//
-//	{"version":"1","id":"...","payload":{...}}
 //
 // Example legacy message line (simplified):
 //

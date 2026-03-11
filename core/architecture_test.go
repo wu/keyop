@@ -136,28 +136,24 @@ func TestMessenger_BackwardCompatibility(t *testing.T) {
 	}
 }
 
-func TestEnvelope_ToMessage_Mapping(t *testing.T) {
-	now := time.Now()
-	env := Envelope{
-		Version:   EnvelopeV1,
-		ID:        "env-id",
-		Timestamp: now,
-		Topic:     "test-topic",
-		Source:    "test-source",
-		Payload: Message{
-			Text:   "inner-text",
-			Status: "inner-status",
-		},
-	}
+func TestUnmarshalMessage_LegacyEnvelopeMapping(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	legacyJSON := fmt.Sprintf(
+		`{"v":"v1","id":"env-id","timestamp":%q,"topic":"test-topic","source":"test-source","payload":{"text":"inner-text","status":"inner-status"}}`,
+		now.Format(time.RFC3339),
+	)
 
-	msg := env.ToMessage()
+	msg, err := UnmarshalMessage([]byte(legacyJSON))
+	if err != nil {
+		t.Fatalf("UnmarshalMessage failed: %v", err)
+	}
 	if msg.Uuid != "env-id" {
 		t.Errorf("Expected UUID 'env-id', got '%s'", msg.Uuid)
 	}
 	if msg.Text != "inner-text" {
 		t.Errorf("Expected text 'inner-text', got '%s'", msg.Text)
 	}
-	if msg.Timestamp != now {
+	if !msg.Timestamp.Equal(now) {
 		t.Errorf("Expected timestamp %v, got %v", now, msg.Timestamp)
 	}
 }

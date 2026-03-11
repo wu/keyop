@@ -490,7 +490,7 @@ func TestMessenger_Subscribe_GoroutineErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
-		return fl.LastErrMsg() == "Failed to unmarshal dequeued message as Envelope or Message"
+		return fl.LastErrMsg() == "Failed to unmarshal message"
 	}, 2*time.Second, 100*time.Millisecond)
 
 	// 3. Handler error
@@ -569,7 +569,7 @@ func TestMessenger_Subscribe_UnmarshalError_AdvancesPastCorruptMessage(t *testin
 	}, 3*time.Second, 50*time.Millisecond, "Expected valid message after corrupt entry to be received")
 
 	// And an error should have been logged for the corrupt message.
-	assert.Equal(t, "Failed to unmarshal dequeued message as Envelope or Message", fl.LastErrMsg())
+	assert.Equal(t, "Failed to unmarshal message", fl.LastErrMsg())
 }
 
 func TestMessenger_Subscribe_RetryOnHandlerError(t *testing.T) {

@@ -3,7 +3,6 @@ package notify
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"keyop/core"
 	"path/filepath"
@@ -62,14 +61,9 @@ func (svc *Service) maybeSendNotifyReport(messenger core.MessengerApi, now time.
 		if line == "" {
 			continue
 		}
-		var env core.Envelope
-		var msg core.Message
-		if err := json.Unmarshal([]byte(line), &env); err == nil && (env.Version != "" || env.ID != "") {
-			msg = env.ToMessage()
-		} else {
-			if err := json.Unmarshal([]byte(line), &msg); err != nil {
-				continue
-			}
+		msg, parseErr := core.UnmarshalMessage([]byte(line))
+		if parseErr != nil {
+			continue
 		}
 		if msg.Event != "notify" {
 			continue

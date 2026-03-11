@@ -20,7 +20,7 @@ func isolateRegistry(t *testing.T) core.PayloadRegistry {
 	return testReg
 }
 
-func TestEnvelope_HeartbeatEvent_RoundTrip(t *testing.T) {
+func TestHeartbeatEvent_RoundTrip(t *testing.T) {
 	isolateRegistry(t)
 
 	heartbeatVal := HeartbeatEvent{
@@ -29,27 +29,28 @@ func TestEnvelope_HeartbeatEvent_RoundTrip(t *testing.T) {
 		UptimeSeconds: 3723,
 	}
 
-	env := core.NewEnvelope("heartbeat-chan", "test-source", heartbeatVal)
-	if env.Headers == nil {
-		env.Headers = make(map[string]string)
-	}
-	// Use canonical versioned type
-	env.Headers["payload-type"] = "service.heartbeat.v1"
-
-	// Marshal to JSON
-	data, err := json.Marshal(env)
-	require.NoError(t, err)
-
-	// Unmarshal back to Envelope
-	env2, err := core.UnmarshalEnvelope(data)
-	require.NoError(t, err)
-
 	// Register heartbeat type for this test
-	err = core.RegisterPayload("service.heartbeat.v1", func() any { return &HeartbeatEvent{} })
+	err := core.RegisterPayload("service.heartbeat.v1", func() any { return &HeartbeatEvent{} })
 	require.NoError(t, err, "Failed to register heartbeat payload")
 
-	// Unmarshal payload
-	typed, err := env2.UnmarshalPayload()
+	msg := core.Message{
+		ChannelName: "heartbeat-chan",
+		Hostname:    "test-source",
+		DataType:    "service.heartbeat.v1",
+		Data:        heartbeatVal,
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	// Unmarshal back to Message
+	msg2, err := core.UnmarshalMessage(data)
+	require.NoError(t, err)
+
+	// Decode typed payload
+	reg := core.GetPayloadRegistry()
+	typed, err := reg.Decode(msg2.DataType, msg2.Data)
 	require.NoError(t, err)
 
 	// Assert exact type
@@ -69,21 +70,21 @@ func TestHeartbeat_AliasCompatibility(t *testing.T) {
 		UptimeSeconds: 42,
 	}
 
-	env := core.NewEnvelope("heartbeat-chan", "test-source", heartbeatVal)
-	if env.Headers == nil {
-		env.Headers = make(map[string]string)
-	}
-	// Use legacy alias
-	env.Headers["payload-type"] = "heartbeat"
-
 	// Register heartbeat type for alias
 	err := core.RegisterPayload("heartbeat", func() any { return &HeartbeatEvent{} })
 	require.NoError(t, err, "Failed to register heartbeat alias")
 
-	// Marshal/Unmarshal
-	data, _ := json.Marshal(env)
-	env2, _ := core.UnmarshalEnvelope(data)
-	typed, err := env2.UnmarshalPayload()
+	msg := core.Message{
+		ChannelName: "heartbeat-chan",
+		Hostname:    "test-source",
+		DataType:    "heartbeat",
+		Data:        heartbeatVal,
+	}
+
+	data, _ := json.Marshal(msg)
+	msg2, _ := core.UnmarshalMessage(data)
+	reg := core.GetPayloadRegistry()
+	typed, err := reg.Decode(msg2.DataType, msg2.Data)
 	require.NoError(t, err)
 
 	// Assert exact type
@@ -93,8 +94,7 @@ func TestHeartbeat_AliasCompatibility(t *testing.T) {
 }
 
 func TestHeartbeat_LegacyCompatibility(t *testing.T) {
-	// Simulate a legacy consumer that only knows about Message.Data
-	// and expects it to be the heartbeat data.
+	// Simulate a consumer receiving a heartbeat event via Message.Data.
 
 	now := time.Now().Round(time.Second)
 	heartbeatVal := HeartbeatEvent{
@@ -103,24 +103,16 @@ func TestHeartbeat_LegacyCompatibility(t *testing.T) {
 		UptimeSeconds: 10,
 	}
 
-	env := core.NewEnvelope("heartbeat", "source", heartbeatVal)
+	msg := core.Message{
+		ChannelName: "heartbeat",
+		Hostname:    "source",
+		Data:        heartbeatVal,
+	}
 
-	// Convert to Message (this is what old consumers get)
-	msg := env.ToMessage()
-
-	// In the new system, if we wrap a struct in an envelope,
-	// ToMessage might put it in Message.Data if it's not a Message struct itself.
-	// NewEnvelopeFromMessage wraps m in Envelope.Payload.
-
-	// Let's check what msg.Data contains.
 	assert.NotNil(t, msg.Data)
-
-	// If msg.Data is from json unmarshal of the envelope, it might be a map.
-	// But here it's still the struct because we didn't marshal/unmarshal.
 
 	h, ok := msg.Data.(HeartbeatEvent)
 	if !ok {
-		// Try pointer
 		hp, ok := msg.Data.(*HeartbeatEvent)
 		if ok {
 			h = *hp

@@ -3,6 +3,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"keyop/core"
 	"log/slog"
 	"os"
@@ -44,6 +45,7 @@ func InitializeDependencies(console bool) core.Dependencies {
 	}
 
 	var logger *slog.Logger
+	var logFile *os.File
 	if console {
 		logger = slog.New(slogcolor.NewHandler(os.Stdout, slogOptions))
 	} else {
@@ -64,13 +66,7 @@ func InitializeDependencies(console bool) core.Dependencies {
 				logger = slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{
 					Level: slogOptions.Level,
 				}))
-				// Ensure file is closed on shutdown; log errors if Close fails.
-				defer func() {
-					if err := f.Close(); err != nil {
-						// Use the logger already created to record file close errors.
-						logger.Error("Failed to close log file", "path", logFilePath, "error", err)
-					}
-				}()
+				logFile = f
 			}
 		}
 	}
@@ -82,7 +78,16 @@ func InitializeDependencies(console bool) core.Dependencies {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	deps.SetContext(ctx)
-	deps.SetCancel(cancel)
+	// Wrap cancel to flush and close the log file on shutdown.
+	deps.SetCancel(func() {
+		cancel()
+		if logFile != nil {
+			if err := logFile.Close(); err != nil {
+				// The log file is closing, so write directly to stderr.
+				fmt.Fprintf(os.Stderr, "ERROR: failed to close log file: %v\n", err)
+			}
+		}
+	})
 
 	// 2. Setup storage and messaging (Authoritative Registry is core.GetPayloadRegistry())
 	dataDir := filepath.Join(home, ".keyop", "data")

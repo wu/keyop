@@ -178,11 +178,11 @@ func TestRegistryConsistency_MessengerDecodeUsesConfiguredRegistry(t *testing.T)
 
 	// Verify messenger uses this registry for decoding
 	payload := map[string]any{"value": "consistency-test"}
-	env := Envelope{
-		ID:      "test-id",
-		Version: EnvelopeV1,
-		Headers: map[string]string{"payload-type": typeName},
-		Payload: payload,
+	msg := Message{
+		Uuid:        "test-id",
+		ChannelName: "chan",
+		DataType:    typeName,
+		Data:        payload,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -194,7 +194,7 @@ func TestRegistryConsistency_MessengerDecodeUsesConfiguredRegistry(t *testing.T)
 		return nil
 	}))
 
-	msgBytes, _ := json.Marshal(env)
+	msgBytes, _ := json.Marshal(msg)
 	require.NoError(t, m.initializePersistentQueue("chan"))
 	require.NoError(t, m.queues["chan"].Enqueue(string(msgBytes)))
 

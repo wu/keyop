@@ -3,7 +3,6 @@ package run
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"keyop/core"
 	"os"
 	"testing"
@@ -111,18 +110,11 @@ func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Send a message with the plugin's payload type
-	env := core.NewEnvelope("chan1", "source1", map[string]any{"value": "plugin-data"})
-	if env.Headers == nil {
-		env.Headers = make(map[string]string)
-	}
-	env.Headers["payload-type"] = payloadType
-
-	_, _ = core.UnmarshalEnvelope([]byte(fmt.Sprintf(`{"v":"v1","id":"1","topic":"chan1","payload":{"value":"plugin-data"},"headers":{"payload-type":"%s"}}`, payloadType)))
-
 	// Use messenger.Send to test the full path
 	require.NoError(t, messenger.Send(core.Message{
 		ChannelName: "chan1",
 		Data:        map[string]any{"value": "plugin-data"},
+		DataType:    payloadType,
 	}))
 	require.NoError(t, messenger.Send(core.Message{ChannelName: "chan1", Data: "trigger-queue-init"})) // Ensure queue is init
 }
@@ -162,15 +154,14 @@ func TestPluginPayloadRegistration_BeforeSubscribers(t *testing.T) {
 		return nil
 	}))
 
-	// Send message with plugin payload-type
-	env := core.Envelope{
-		Version: core.EnvelopeV1,
-		ID:      "1",
-		Topic:   "chan",
-		Headers: map[string]string{"payload-type": pluginPayloadType},
-		Payload: map[string]any{"name": "plugin-val"},
+	// Send message with plugin payload data-type
+	msg := core.Message{
+		Uuid:        "1",
+		ChannelName: "chan",
+		DataType:    pluginPayloadType,
+		Data:        map[string]any{"name": "plugin-val"},
 	}
-	envBytes, _ := json.Marshal(env)
+	envBytes, _ := json.Marshal(msg)
 
 	// Wait for subscription to be active
 	time.Sleep(100 * time.Millisecond)
@@ -213,15 +204,14 @@ func TestMissingPluginPayloadType_FallbackStillProcesses(t *testing.T) {
 		return nil
 	}))
 
-	// Send message with missing payload-type
-	env := core.Envelope{
-		Version: core.EnvelopeV1,
-		ID:      "1",
-		Topic:   "chan",
-		Headers: map[string]string{"payload-type": "missing.plugin.v1"},
-		Payload: map[string]any{"key": "value"},
+	// Send message with missing data-type
+	msg := core.Message{
+		Uuid:        "1",
+		ChannelName: "chan",
+		DataType:    "missing.plugin.v1",
+		Data:        map[string]any{"key": "value"},
 	}
-	envBytes, _ := json.Marshal(env)
+	envBytes, _ := json.Marshal(msg)
 
 	time.Sleep(100 * time.Millisecond)
 	q, _ := core.NewPersistentQueue("chan", tmpDir, core.OsProvider{}, logger)

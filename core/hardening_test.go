@@ -215,7 +215,7 @@ func TestMessenger_RetryCountContract(t *testing.T) {
 	assert.Equal(t, 3, calls, "Expected exactly 3 calls (1 initial + 2 retries)")
 }
 
-func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
+func TestMessenger_UnmarshalFailure_LogsError(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "messenger_unmarshal_err")
 	if err != nil {
 		t.Fatal(err)
@@ -245,48 +245,40 @@ func TestMessenger_UnmarshalFailure_LogsEnvelopeAndLegacyErrors(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		fl.mu.RLock()
 		defer fl.mu.RUnlock()
-		hasEnvelopeErr := false
-		hasLegacyErr := false
-		for i := 0; i < len(fl.lastErrArgs); i += 2 {
-			if fl.lastErrArgs[i] == "envelopeError" {
-				hasEnvelopeErr = true
-			}
-			if fl.lastErrArgs[i] == "legacyError" {
-				hasLegacyErr = true
-			}
-		}
-		return fl.lastErrMsg == "Failed to unmarshal dequeued message as Envelope or Message" && hasEnvelopeErr && hasLegacyErr
+		return fl.lastErrMsg == "Failed to unmarshal message"
 	}, 2*time.Second, 100*time.Millisecond)
 }
 
-func TestEnvelope_TypedPayload_RoundTrip(t *testing.T) {
+func TestTypedPayload_RoundTrip(t *testing.T) {
 	status := DeviceStatusEvent{
 		DeviceID: "sensor-1",
 		Status:   "online",
 		Battery:  85,
 	}
 
-	env := NewEnvelope("device.status", "test-source", status)
-	if env.Headers == nil {
-		env.Headers = make(map[string]string)
+	msg := Message{
+		ChannelName: "device.status",
+		Hostname:    "test-source",
+		DataType:    "device.status",
+		Data:        status,
 	}
-	env.Headers["payload-type"] = "device.status"
 
 	// Marshal to JSON
-	data, err := json.Marshal(env)
+	data, err := json.Marshal(msg)
 	assert.NoError(t, err)
 
-	// Unmarshal back to Envelope
-	env2, err := UnmarshalEnvelope(data)
+	// Unmarshal back to Message
+	msg2, err := UnmarshalMessage(data)
 	assert.NoError(t, err)
 
-	// Unmarshal payload
-	typed, err := env2.UnmarshalPayload()
+	// Decode typed payload
+	reg := GetPayloadRegistry()
+	payloadType := msg2.DataType
+	typed, err := reg.Decode(payloadType, msg2.Data)
 	assert.NoError(t, err)
 
 	typedStatus, ok := typed.(*DeviceStatusEvent)
 	if !ok {
-		// Try non-pointer for robustness, though registry should return pointer based on registration
 		ts, ok2 := typed.(DeviceStatusEvent)
 		if ok2 {
 			typedStatus = &ts
@@ -319,28 +311,21 @@ func TestEnvelope_PayloadRegistry_Concurrency(t *testing.T) {
 		}(i)
 	}
 
-	// Concurrent unmarshaling
+	// Concurrent registry decoding
 	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
 			for j := range iterations {
 				typeName := "device.status" // Always present
-				env := Envelope{
-					Headers: map[string]string{"payload-type": typeName},
-					Payload: DeviceStatusEvent{DeviceID: "test"},
-				}
-				if _, err := env.UnmarshalPayload(); err != nil {
-					t.Logf("env.UnmarshalPayload failed: %v", err)
+				reg := GetPayloadRegistry()
+				if _, err := reg.Decode(typeName, DeviceStatusEvent{DeviceID: "test"}); err != nil {
+					t.Logf("registry.Decode failed: %v", err)
 				}
 
-				// Also try to unmarshal something we might have just registered
+				// Also try to decode something we might have just registered
 				regTypeName := fmt.Sprintf("type-%d-%d", id, j)
-				env2 := Envelope{
-					Headers: map[string]string{"payload-type": regTypeName},
-					Payload: map[string]int{"id": id, "j": j},
-				}
-				if _, err := env2.UnmarshalPayload(); err != nil {
-					t.Logf("env2.UnmarshalPayload failed: %v", err)
+				if _, err := reg.Decode(regTypeName, map[string]int{"id": id, "j": j}); err != nil {
+					t.Logf("registry.Decode for %s failed: %v", regTypeName, err)
 				}
 			}
 		}(i)
@@ -409,25 +394,25 @@ func TestMessenger_ConcurrentSubscribeAndSend_NoDeadlock(t *testing.T) {
 	// If it didn't hang, it's a success
 }
 
-func TestEnvelope_LegacyPayload_BackwardCompatible(t *testing.T) {
+func TestMessage_LegacyPayload_BackwardCompatible(t *testing.T) {
 	legacy := Message{
 		Text: "legacy-content",
 		Uuid: "old-uuid",
 	}
-	env := NewEnvelopeFromMessage(legacy)
+	data, err := json.Marshal(legacy)
+	assert.NoError(t, err)
 
-	msg := env.ToMessage()
+	msg, err := UnmarshalMessage(data)
+	assert.NoError(t, err)
 	assert.Equal(t, "legacy-content", msg.Text)
 	assert.Equal(t, "old-uuid", msg.Uuid)
 }
 
-func TestEnvelope_UnknownType_GracefulFallback(t *testing.T) {
-	env := Envelope{
-		Headers: map[string]string{"payload-type": "unknown.type"},
-		Payload: map[string]any{"key": "value"},
-	}
+func TestRegistry_UnknownType_GracefulFallback(t *testing.T) {
+	reg := GetPayloadRegistry()
+	payload := map[string]any{"key": "value"}
 
-	typed, err := env.UnmarshalPayload()
+	typed, err := reg.Decode("unknown.type", payload)
 	assert.NoError(t, err)
 
 	// Should fallback to map[string]any

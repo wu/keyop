@@ -15,7 +15,78 @@ import (
 	"github.com/google/uuid"
 )
 
+// legacyEnvelope is used only for reading messages persisted in the old envelope
+// format. It is not used for writing.
+type legacyEnvelope struct {
+	Version       string            `json:"v"`
+	ID            string            `json:"id"`
+	CorrelationID string            `json:"correlationId,omitempty"`
+	Timestamp     time.Time         `json:"timestamp"`
+	Source        string            `json:"source"`
+	Topic         string            `json:"topic"`
+	RetryCount    int               `json:"retryCount,omitempty"`
+	Trace         []string          `json:"trace,omitempty"`
+	Headers       map[string]string `json:"headers,omitempty"`
+	Payload       json.RawMessage   `json:"payload"`
+}
+
+// unmarshalLegacyEnvelope attempts to parse data as the old envelope format,
+// returning the converted Message and true on success.
+func unmarshalLegacyEnvelope(data []byte) (Message, bool) {
+	var e legacyEnvelope
+	if err := json.Unmarshal(data, &e); err != nil || e.Version == "" {
+		return Message{}, false
+	}
+	var msg Message
+	if len(e.Payload) > 0 {
+		_ = json.Unmarshal(e.Payload, &msg)
+	}
+	if e.ID != "" {
+		msg.Uuid = e.ID
+	}
+	if e.CorrelationID != "" {
+		msg.Correlation = e.CorrelationID
+	}
+	if !e.Timestamp.IsZero() {
+		msg.Timestamp = e.Timestamp
+	}
+	if e.Source != "" {
+		msg.Hostname = e.Source
+	}
+	if e.Topic != "" {
+		msg.ChannelName = e.Topic
+	}
+	if len(e.Trace) > 0 {
+		msg.Route = e.Trace
+	}
+	if e.RetryCount > 0 {
+		msg.RetryCount = e.RetryCount
+	}
+	if len(e.Headers) > 0 {
+		if dt := e.Headers["payload-type"]; dt != "" && msg.DataType == "" {
+			msg.DataType = dt
+		}
+	}
+	return msg, true
+}
+
+// UnmarshalMessage parses a Message from JSON, handling both the current Message
+// format and the legacy Envelope format for backward compatibility with older
+// queue files.
+func UnmarshalMessage(data []byte) (Message, error) {
+	var msg Message
+	if err := json.Unmarshal(data, &msg); err == nil && (msg.Uuid != "" || msg.Event != "" || msg.ChannelName != "") {
+		return msg, nil
+	}
+	if msg, ok := unmarshalLegacyEnvelope(data); ok {
+		return msg, nil
+	}
+	var m Message
+	return m, json.Unmarshal(data, &m)
+}
+
 type Message struct {
+	Version     string      `json:"version,omitempty"`
 	Timestamp   time.Time   `json:"timestamp,omitempty"`
 	Uuid        string      `json:"uuid,omitempty"`
 	Correlation string      `json:"correlation,omitempty"`
@@ -32,8 +103,10 @@ type Message struct {
 	MetricName  string      `json:"metricName,omitempty"`
 	State       string      `json:"state,omitempty"`
 	Data        interface{} `json:"data,omitempty"`
+	DataType    string      `json:"data-type,omitempty"`
 	Route       []string    `json:"route,omitempty"`
 	Log         []string    `json:"log,omitempty"`
+	RetryCount  int         `json:"retryCount,omitempty"`
 }
 
 type MessengerApi interface {
@@ -127,6 +200,9 @@ func (m *Messenger) Send(msg Message) error {
 	}
 	channelName := msg.ChannelName
 
+	if msg.Version == "" {
+		msg.Version = "1.0"
+	}
 	if msg.Uuid == "" {
 		msg.Uuid = uuid.NewString()
 	}
@@ -147,14 +223,12 @@ func (m *Messenger) Send(msg Message) error {
 		}
 	}
 
-	envelope := NewEnvelopeFromMessage(msg)
-	if tp, ok := msg.Data.(TypedPayload); ok {
-		if envelope.Headers == nil {
-			envelope.Headers = make(map[string]string)
+	if msg.DataType == "" {
+		if tp, ok := msg.Data.(TypedPayload); ok {
+			msg.DataType = tp.PayloadType()
 		}
-		envelope.Headers["payload-type"] = tp.PayloadType()
 	}
-	envelope.Trace = append(envelope.Trace, addRoute)
+	msg.Route = append(msg.Route, addRoute)
 
 	err := m.initializePersistentQueue(channelName)
 	if err != nil {
@@ -166,10 +240,17 @@ func (m *Messenger) Send(msg Message) error {
 	queue := m.queues[channelName]
 	m.mutex.RUnlock()
 
-	logger.Info("SEND", "channel", channelName, "id", envelope.ID, "event", msg.Event, "source", envelope.Source, "payload", msg.Data)
-	msgBytes, err := json.Marshal(envelope)
+	logger.Info("SEND",
+		"time", msg.Timestamp.Format("2006-01-02 15:04:05"),
+		"host", msg.Hostname,
+		"channel", channelName,
+		"event", msg.Event,
+		"id", msg.Uuid,
+		"payload", msg.Data,
+	)
+	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		logger.Error("Failed to marshal envelope", "error", err)
+		logger.Error("Failed to marshal message", "error", err)
 		m.statsMutex.Lock()
 		m.totalFailureCount++
 		m.statsMutex.Unlock()
@@ -238,39 +319,28 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				continue
 			}
 
-			var envelope Envelope
-			var envelopeErr error
-			// Try unmarshaling as Envelope first
-			if envelopeErr = json.Unmarshal([]byte(msgStr), &envelope); envelopeErr == nil && (envelope.Version != "" || envelope.ID != "") {
-				// Success, we have an Envelope
-			} else {
-				// Compatibility: try unmarshaling as legacy Message
-				var legacyMsg Message
-				if legacyErr := json.Unmarshal([]byte(msgStr), &legacyMsg); legacyErr == nil {
-					envelope = NewEnvelopeFromMessage(legacyMsg)
-				} else {
-					logger.Error("Failed to unmarshal dequeued message as Envelope or Message",
-						"envelopeError", envelopeErr,
-						"legacyError", legacyErr,
-						"message", msgStr,
-						"channel", channelName)
-					if ackErr := queue.Ack(source); ackErr != nil {
-						logger.Error("Failed to ack unparseable message", "error", ackErr, "channel", channelName)
-					}
-					continue
+			msg, err := UnmarshalMessage([]byte(msgStr))
+			if err != nil {
+				logger.Error("Failed to unmarshal message",
+					"error", err,
+					"message", msgStr,
+					"channel", channelName)
+				if ackErr := queue.Ack(source); ackErr != nil {
+					logger.Error("Failed to ack unparseable message", "error", ackErr, "channel", channelName)
 				}
+				continue
 			}
 
-			msg := envelope.ToMessage()
-
-			// Try to unmarshal typed payload if header exists
-			if payloadType, ok := envelope.Headers["payload-type"]; ok {
+			// Decode typed payload if data-type is set.
+			payloadType := msg.DataType
+			if payloadType != "" {
 				reg := m.GetPayloadRegistry()
 				if reg != nil {
-					if typed, err := reg.Decode(payloadType, envelope.Payload); err == nil {
+					if typed, decodeErr := reg.Decode(payloadType, msg.Data); decodeErr == nil {
 						msg.Data = typed
+						msg.DataType = payloadType
 					} else {
-						logger.Error("Failed to decode typed payload", "type", payloadType, "error", err)
+						logger.Error("Failed to decode typed payload", "type", payloadType, "error", decodeErr)
 					}
 				}
 			}
@@ -295,7 +365,7 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 				}
 			}
 			if alreadySent {
-				logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "id", envelope.ID)
+				logger.Debug("Discarding message already sent to this channel", "channel", channelName, "route", addRoute, "id", msg.Uuid)
 				if err := queue.Ack(source); err != nil {
 					logger.Error("Failed to ack discarded message", "error", err, "channel", channelName)
 				}
@@ -304,7 +374,6 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 
 			// Add route
 			msg.Route = append(msg.Route, addRoute)
-			envelope.Trace = msg.Route
 
 			for {
 				select {
@@ -319,20 +388,20 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 					m.totalRetryCount++
 					m.statsMutex.Unlock()
 
-					envelope.RetryCount++
-					logger.Error("Message handler returned error", "error", err, "id", envelope.ID, "retryCount", envelope.RetryCount)
+					msg.RetryCount++
+					logger.Error("Message handler returned error", "error", err, "id", msg.Uuid, "retryCount", msg.RetryCount)
 
-					if envelope.RetryCount > m.maxRetryAttempts {
+					if msg.RetryCount > m.maxRetryAttempts {
 						logger.Error("Max retry attempts reached, moving to DLQ",
-							"id", envelope.ID,
+							"id", msg.Uuid,
 							"channel", channelName,
-							"attempts", envelope.RetryCount)
+							"attempts", msg.RetryCount)
 						dlqChannel := "_dlq." + channelName
 						for {
-							if dlqErr := m.SendToDLQ(dlqChannel, envelope, err.Error()); dlqErr != nil {
+							if dlqErr := m.SendToDLQ(dlqChannel, msg, err.Error()); dlqErr != nil {
 								logger.Error("Failed to send to DLQ; original message NOT acked. Retrying DLQ write...",
 									"error", dlqErr,
-									"id", envelope.ID,
+									"id", msg.Uuid,
 									"channel", channelName)
 
 								// Retry DLQ write with backoff to avoid tight loop
@@ -358,7 +427,7 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 					}
 
 					backoff := m.retryBackoffBase
-					for i := 1; i < envelope.RetryCount && backoff < m.retryBackoffMax/2; i++ {
+					for i := 1; i < msg.RetryCount && backoff < m.retryBackoffMax/2; i++ {
 						backoff *= 2
 					}
 					if backoff > m.retryBackoffMax {
@@ -381,7 +450,7 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 						sleepTime = 10 * time.Millisecond
 					}
 
-					logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "id", envelope.ID)
+					logger.Info("Sleeping before retry", "sleepTime", sleepTime, "channel", channelName, "id", msg.Uuid)
 
 					select {
 					case <-ctx.Done():
@@ -408,14 +477,10 @@ func (m *Messenger) SubscribeExtended(ctx context.Context, source string, channe
 	return nil
 }
 
-func (m *Messenger) SendToDLQ(dlqChannel string, envelope Envelope, reason string) error {
-	if envelope.Headers == nil {
-		envelope.Headers = make(map[string]string)
-	}
-	envelope.Headers["dlq-reason"] = reason
-	envelope.Headers["dlq-original-topic"] = envelope.Topic
+func (m *Messenger) SendToDLQ(dlqChannel string, msg Message, reason string) error {
+	msg.Log = append(msg.Log, "dlq-reason: "+reason)
 
-	msgBytes, err := json.Marshal(envelope)
+	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
