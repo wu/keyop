@@ -1,0 +1,27 @@
+x: webui
+
+config:
+  port: 8080
+
+
+
+subs:
+
+  idle:
+    name: idle
+    description: process incoming events
+
+  tides:
+    name: tides
+    description: process incoming events
+
+  alerts:
+    name: alerts
+    description: process incoming events
+
+  messenger:
+    name: messenger
+    description: process incoming events
+
+
+

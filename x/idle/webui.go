@@ -34,16 +34,16 @@ func (svc *Service) WebUITab() webui.TabInfo {
 <h3>Activity Log</h3>
 <div id="idle-history"></div>
 </div>`,
-		JSPath:         "/api/assets/idleMacos/idle.js",
+		JSPath:         "/api/assets/idle/idle.js",
 		RenderMarkdown: true,
 	}
 }
 
 // HandleWebUIAction handles actions from the WebUI.
 func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
-	if action == "refresh-report" {
+	switch action {
+	case "refresh-report":
 		messenger := svc.Deps.MustGetMessenger()
-		// If params has start/end, use them
 		var start, end time.Time
 		if s, ok := params["start"].(string); ok {
 			start, _ = time.Parse(time.RFC3339, s)
@@ -57,6 +57,7 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return nil, err
 		}
 		return map[string]string{"status": "ok", "report": report}, nil
+	default:
+		return nil, fmt.Errorf("unknown action: %s", action)
 	}
-	return nil, fmt.Errorf("unknown action: %s", action)
 }

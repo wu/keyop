@@ -47,20 +47,24 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 		// Check if service implements sqlite.SchemaProvider
 		if provider, ok := service.(sqlite.SchemaProvider); ok {
-			// Find the sqlite service if it exists
+			// Find the sqlite service if it exists and accepts this provider's service type
 			for _, other := range services {
 				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
-					sqliteSvc.RegisterProvider(serviceConfig.Type, provider)
+					if sqliteSvc.AcceptsServiceType(serviceConfig.Type) {
+						sqliteSvc.RegisterProvider(serviceConfig.Type, provider)
+					}
 				}
 			}
 		}
 
 		// Check if service implements sqlite.Consumer
 		if consumer, ok := service.(sqlite.Consumer); ok {
-			// Find the sqlite service if it exists
+			// Find the sqlite service if it exists and accepts this consumer's service type
 			for _, other := range services {
 				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
-					consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+					if sqliteSvc.AcceptsServiceType(serviceConfig.Type) {
+						consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+					}
 				}
 			}
 		}
@@ -102,10 +106,14 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		if sqliteSvc, ok := service.(*sqlite.Service); ok {
 			for _, other := range services[:len(services)-1] {
 				if provider, ok := other.Service.(sqlite.SchemaProvider); ok {
-					sqliteSvc.RegisterProvider(other.Config.Type, provider)
+					if sqliteSvc.AcceptsServiceType(other.Config.Type) {
+						sqliteSvc.RegisterProvider(other.Config.Type, provider)
+					}
 				}
 				if consumer, ok := other.Service.(sqlite.Consumer); ok {
-					consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+					if sqliteSvc.AcceptsServiceType(other.Config.Type) {
+						consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+					}
 				}
 			}
 		}
@@ -121,6 +129,43 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	}
 
 	// validate all service configs before initializing any services
+	// Propagate sqlite DB path mappings from the webui service config.
+	// Only the 'dbPaths' key is accepted (mapping: serviceType -> dbPath).
+	for _, sw := range services {
+		if _, ok := sw.Service.(*webui.Service); !ok {
+			continue
+		}
+		raw, ok := sw.Config.Config["dbPaths"]
+		if !ok {
+			continue
+		}
+		m, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		mapping := make(map[string]string)
+		for k, v := range m {
+			if s, ok := v.(string); ok && s != "" {
+				mapping[k] = s
+			}
+		}
+		if len(mapping) == 0 {
+			continue
+		}
+		// Apply mapping to sqlite services
+		for _, other := range services {
+			if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
+				for svcType, path := range mapping {
+					if sqliteSvc.AcceptsServiceType(svcType) {
+						if sqliteSvc.Cfg.Config == nil {
+							sqliteSvc.Cfg.Config = make(map[string]interface{})
+						}
+						sqliteSvc.Cfg.Config["dbPath"] = path
+					}
+				}
+			}
+		}
+	}
 	logger.Info("Validating service configurations")
 	err := validateServiceConfig(services, logger)
 	if err != nil {

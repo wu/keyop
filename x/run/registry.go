@@ -79,7 +79,7 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"kodi": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return kodi.NewService(deps, cfg)
 	},
-	"idleMacos": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+	"idle": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return idle.NewService(deps, cfg)
 	},
 	"logManager": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {

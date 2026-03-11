@@ -1,0 +1,16 @@
+x: sqlite
+
+config:
+  
+  dbPath: sqlite/tides.sql
+
+  serviceTypes:
+    - tides
+
+subs:
+
+  tides:
+    name: tides
+    description: store events from local tides channel
+
+

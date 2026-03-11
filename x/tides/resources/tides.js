@@ -46,6 +46,7 @@ export function init(el) {
         });
     }
 
+
     // Trigger initial refresh with defaults
     triggerRefresh(startInput ? startInput.value : toISODate(startDate), endInput ? endInput.value : toISODate(endDate));
 }

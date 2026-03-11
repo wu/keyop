@@ -25,6 +25,11 @@ func (d *Dependencies) MustGetStateStore() StateStore {
 	return d.state
 }
 
+// GetStateStore returns the state store if set, otherwise nil.
+func (d *Dependencies) GetStateStore() StateStore {
+	return d.state
+}
+
 func (d *Dependencies) SetLogger(logger Logger) {
 	d.logger = logger
 }

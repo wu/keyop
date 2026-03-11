@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite" // sqlite driver used for embedded builds
@@ -68,16 +69,25 @@ func (svc *Service) Initialize() error {
 	ctx := svc.Deps.MustGetContext()
 
 	dbPath := "events.db"
+	// Prefer explicit configuration, but allow an override from the persistent state store.
 	if p, ok := svc.Cfg.Config["dbPath"].(string); ok {
 		dbPath = p
 	}
+	// DB path may be configured via svc.Cfg.Config["dbPath"].
+	// Note: the runtime may populate this from the webui service configuration before initialization.
 
+	// Expand non-absolute paths into the ~/.keyop directory
 	if !filepath.IsAbs(dbPath) {
 		home, err := svc.Deps.MustGetOsProvider().UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
-		dbPath = filepath.Join(home, ".keyop", dbPath)
+		// Support ~ prefix
+		if strings.HasPrefix(dbPath, "~/") {
+			dbPath = filepath.Join(home, dbPath[2:])
+		} else {
+			dbPath = filepath.Join(home, ".keyop", dbPath)
+		}
 	}
 
 	// Ensure directory exists
@@ -158,4 +168,44 @@ func (svc *Service) DB() *sql.DB {
 // updated after the service is initialized.
 func (svc *Service) GetSQLiteDB() **sql.DB {
 	return &svc.db
+}
+
+// AcceptsServiceType returns true if this sqlite service should accept messages
+// from the provided serviceType. This is controlled by the optional
+// 'serviceTypes' configuration key which may be a comma-separated string or
+// an array of strings. If absent, the sqlite service accepts all service types
+// (backwards compatibility).
+func (svc *Service) AcceptsServiceType(serviceType string) bool {
+	if svc.Cfg.Config == nil {
+		return true
+	}
+	if v, ok := svc.Cfg.Config["serviceTypes"]; ok {
+		switch t := v.(type) {
+		case string:
+			for _, s := range strings.Split(t, ",") {
+				if strings.TrimSpace(s) == serviceType {
+					return true
+				}
+			}
+			return false
+		case []interface{}:
+			for _, vi := range t {
+				if s, ok := vi.(string); ok && s == serviceType {
+					return true
+				}
+			}
+			return false
+		case []string:
+			for _, s := range t {
+				if s == serviceType {
+					return true
+				}
+			}
+			return false
+		default:
+			// Unknown type, be permissive
+			return true
+		}
+	}
+	return true
 }

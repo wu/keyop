@@ -1,0 +1,16 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/idle.sql
+
+  serviceTypes:
+    - idle
+
+subs:
+
+  idle:
+    name: idle
+    description: store events from local idle channel
+
+
