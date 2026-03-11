@@ -72,6 +72,13 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 			logger.Error("failed to scan idle event row", "error", err)
 			continue
 		}
+		// Filter out rows outside the requested time range as a safety check in case
+		// the database driver produced values that compare unexpectedly with the
+		// bound parameters (timezones or format differences).
+		if msg.Timestamp.Before(start) || !msg.Timestamp.Before(end) {
+			// Skip rows that fall outside [start, end)
+			continue
+		}
 		msg.Event = "idle_status"
 		msg.Data = &Event{
 			Now:                   msg.Timestamp,

@@ -458,10 +458,34 @@ func TestMaybeSendIdleReport(t *testing.T) {
 	})
 
 	t.Run("NoDataInRange", func(t *testing.T) {
+		// Use a fresh in-memory database to ensure no prior subtest data contaminates this range.
 		messenger.Reset()
+		db2, err := sql.Open("sqlite", ":memory:")
+		if err != nil {
+			t.Fatalf("failed to open in-memory sqlite: %v", err)
+		}
+		defer func() {
+			if err := db2.Close(); err != nil {
+				t.Fatalf("failed to close in-memory db: %v", err)
+			}
+		}()
+
+		svc2 := &Service{
+			db:       &db2,
+			hostname: "test-host",
+			Deps:     core.Dependencies{},
+		}
+		svc2.Deps.SetLogger(&core.FakeLogger{})
+		svc2.Deps.SetStateStore(&mockStateStore{data: make(map[string]any)})
+
+		schema := svc2.SQLiteSchema()
+		if _, err := db2.Exec(schema); err != nil {
+			t.Fatalf("failed to create schema: %v", err)
+		}
+
 		start := now.Add(-100 * time.Hour)
 		end := now.Add(-50 * time.Hour)
-		md, err := svc.generateIdleReport(messenger, now, start, end, true)
+		md, err := svc2.generateIdleReport(messenger, now, start, end, true)
 		assert.NoError(t, err)
 		assert.Empty(t, md) // Should return empty if no data found
 	})
