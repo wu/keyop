@@ -2,7 +2,6 @@ package run
 
 import (
 	"keyop/core"
-	"keyop/x/anomalyDetector"
 	"keyop/x/aurora"
 	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
@@ -45,9 +44,6 @@ import (
 
 // ServiceRegistry maps service type names to constructors used by the run command and plugin loader.
 var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceConfig) core.Service{
-	"anomalyDetector": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return anomalyDetector.NewService(deps, cfg)
-	},
 	"aurora": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return aurora.NewService(deps, cfg)
 	},
