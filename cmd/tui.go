@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"keyop/core"
 	"keyop/x/webSocketClient"
@@ -340,24 +341,56 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	// Subscribe to heartbeats
 	err = messenger.Subscribe(ctx, "monitorTUI_HB", hbChannel, "monitor", "monitor", 0, func(msg core.Message) error {
 		if msg.ServiceType == "heartbeat" {
-			data, ok := msg.Data.(map[string]interface{})
-			if !ok {
+			var uptime string
+			var uptimeSeconds int64
+
+			if msg.Data != nil {
+				switch d := msg.Data.(type) {
+				case map[string]interface{}:
+					// support both lowercase and capitalized keys
+					if s, ok := d["uptime"].(string); ok {
+						uptime = s
+					} else if s, ok := d["Uptime"].(string); ok {
+						uptime = s
+					}
+					if f, ok := d["uptimeSeconds"].(float64); ok {
+						uptimeSeconds = int64(f)
+					} else if f, ok := d["UptimeSeconds"].(float64); ok {
+						uptimeSeconds = int64(f)
+					}
+				default:
+					// Try to marshal typed payloads into a known shape
+					var parsed struct {
+						Uptime        string `json:"uptime"`
+						UptimeSeconds int64  `json:"uptimeSeconds"`
+					}
+					if b, err := json.Marshal(d); err == nil {
+						_ = json.Unmarshal(b, &parsed)
+						uptime = parsed.Uptime
+						uptimeSeconds = parsed.UptimeSeconds
+					}
+				}
+			}
+
+			// Nothing to do
+			if uptime == "" && uptimeSeconds == 0 {
 				return nil
 			}
 
-			uptime, _ := data["Uptime"].(string)
-			uptimeSecondsVal, _ := data["UptimeSeconds"].(float64)
-
 			mu.Lock()
 			if h, ok := hosts[msg.Hostname]; ok {
-				h.Uptime = uptime
-				h.UptimeSeconds = int64(uptimeSecondsVal)
+				if uptime != "" {
+					h.Uptime = uptime
+				}
+				if uptimeSeconds != 0 {
+					h.UptimeSeconds = uptimeSeconds
+				}
 				h.LastSeen = msg.Timestamp
 			} else {
 				hosts[msg.Hostname] = &hostStatus{
 					Hostname:      msg.Hostname,
 					Uptime:        uptime,
-					UptimeSeconds: int64(uptimeSecondsVal),
+					UptimeSeconds: uptimeSeconds,
 					LastSeen:      msg.Timestamp,
 				}
 			}
