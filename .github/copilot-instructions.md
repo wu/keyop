@@ -76,11 +76,12 @@
 - **Timezone**: Defaults to America/Los_Angeles; falls back to UTC if unavailable.
 - **Web UI**: Static assets are copied to `/webui-static` in Docker images.
 
-## additional notes
+## Policy
 
-Please don't add or stage any files in git or make any commits without discussing it with me first.
+Policy: Never run git commands (add/commit/push/branch/tag) or modify the repository without explicit, written approval
+from the repo owner. If a task requires git, ask first and wait for a clear yes.
 
-Never modify the configuration without discussing it with me first.
+Policy: Never modify the configuration without explicit, written approval from the repo owner.
 
 
 
