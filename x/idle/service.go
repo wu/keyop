@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -105,6 +106,12 @@ func (svc *Service) ValidateConfig() []error {
 func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	stateStore := svc.Deps.MustGetStateStore()
+
+	var err error
+	svc.hostname, err = util.GetShortHostname(svc.Deps.MustGetOsProvider())
+	if err != nil {
+		logger.Error("failed to get hostname, using empty string", "error", err)
+	}
 
 	thresholdStr, _ := svc.Cfg.Config["threshold"].(string)
 	if thresholdStr == "" {
