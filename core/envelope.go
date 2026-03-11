@@ -298,6 +298,14 @@ func init() {
 		panic(fmt.Sprintf("failed to register metric: %v", err))
 	}
 
+	// Register core alert payload
+	if err := reg.Register("core.alert.v1", func() any { return &AlertEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.alert.v1: %v", err))
+	}
+	if err := reg.Register("alert", func() any { return &AlertEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register alert: %v", err))
+	}
+
 	globalPayloadRegistry = reg
 }
 
@@ -360,3 +368,17 @@ type MetricEvent struct {
 }
 
 func (m MetricEvent) PayloadType() string { return "core.metric.v1" }
+
+// AlertEvent represents a common alert payload used by multiple services.
+//
+// Fields are intentionally generic to support different alert types.  Services should
+// populate Summary and Text with human-friendly messages--refer to the 'conventions'
+// document for more details.  The "level" field is optional but can be used to indicate
+// the severity of the alert (e.g., "info", "warning", "critical").
+type AlertEvent struct {
+	Summary string `json:"summary"`
+	Text    string `json:"text"`
+	Level   string `json:"level,omitempty"` // e.g., "info", "warning", "critical"
+}
+
+func (a AlertEvent) PayloadType() string { return "core.alert.v1" }

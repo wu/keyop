@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // localMidnight returns the start of the calendar day for t in t's location.
@@ -167,6 +169,7 @@ func (svc *Service) Check() error {
 	}
 
 	now := time.Now()
+	correlationID := uuid.NewString()
 	wasIdle := svc.isIdle
 	svc.isIdle = idleDuration >= svc.threshold
 
@@ -198,6 +201,7 @@ func (svc *Service) Check() error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "idle_status",
+		Correlation: correlationID,
 		Status:      status,
 		Text:        fmt.Sprintf("Host %s is %s. Idle: %s, Active: %s", svc.hostname, status, formatHumanDuration(idleDuration), formatHumanDuration(activeDuration)),
 		Data: &Event{
@@ -220,9 +224,15 @@ func (svc *Service) Check() error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "idle_duration_metric",
+		Correlation: correlationID,
 		MetricName:  svc.idleMetricName,
 		Metric:      idleDuration.Seconds(),
-		Text:        fmt.Sprintf("Status: %s, Time since status change: %s, Idle duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(idleDuration)),
+		Data: core.MetricEvent{
+			Name:  svc.idleMetricName,
+			Value: idleDuration.Seconds(),
+			Unit:  "seconds",
+		},
+		Text: fmt.Sprintf("Status: %s, Time since status change: %s, Idle duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(idleDuration)),
 	})
 	if err != nil {
 		logger.Error("failed to send idle duration metric", "error", err)
@@ -234,9 +244,15 @@ func (svc *Service) Check() error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "active_duration_metric",
+		Correlation: correlationID,
 		MetricName:  svc.activeMetricName,
 		Metric:      activeDuration.Seconds(),
-		Text:        fmt.Sprintf("Status: %s, Time since status change: %s, Active duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(activeDuration)),
+		Data: core.MetricEvent{
+			Name:  svc.activeMetricName,
+			Value: activeDuration.Seconds(),
+			Unit:  "seconds",
+		},
+		Text: fmt.Sprintf("Status: %s, Time since status change: %s, Active duration: %s", status, formatHumanDuration(timeSinceLastStatusChange), formatHumanDuration(activeDuration)),
 	})
 	if err != nil {
 		logger.Error("failed to send active duration metric", "error", err)
@@ -256,9 +272,15 @@ func (svc *Service) Check() error {
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "idle_alert",
+			Correlation: correlationID,
 			Status:      "idle",
 			Summary:     fmt.Sprintf("Idle on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime)),
+			Data: core.AlertEvent{
+				Summary: fmt.Sprintf("Idle on %s", svc.hostname),
+				Text:    fmt.Sprintf("Host %s has gone idle. Idle for: %s, previously active for: %s", svc.hostname, formatHumanDuration(idleDuration), formatHumanDuration(activeTime)),
+				Level:   "info",
+			},
 		})
 		if err != nil {
 			logger.Error("failed to send idle alert", "error", err)
@@ -278,9 +300,15 @@ func (svc *Service) Check() error {
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "active_alert",
+			Correlation: correlationID,
 			Status:      "active",
 			Summary:     fmt.Sprintf("Active on %s", svc.hostname),
 			Text:        fmt.Sprintf("Host %s is active again.", svc.hostname),
+			Data: core.AlertEvent{
+				Summary: fmt.Sprintf("Active on %s", svc.hostname),
+				Text:    fmt.Sprintf("Host %s is active again.", svc.hostname),
+				Level:   "info",
+			},
 		})
 		if err != nil {
 			logger.Error("failed to send active alert", "error", err)
@@ -301,9 +329,14 @@ func (svc *Service) Check() error {
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Event:       "active_reminder",
-				Status:      "active_reminder",
+				Correlation: correlationID,
 				Summary:     fmt.Sprintf("break time for %s", svc.hostname),
 				Text:        fmt.Sprintf("Active on %s for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
+				Data: core.AlertEvent{
+					Summary: fmt.Sprintf("break time for %s", svc.hostname),
+					Text:    fmt.Sprintf("Active on %s for %s. Consider taking a break!", svc.hostname, formatHumanDuration(activeDuration)),
+					Level:   "info",
+				},
 			})
 			if err != nil {
 				logger.Error("failed to send active reminder alert", "error", err)
