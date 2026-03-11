@@ -23,6 +23,33 @@ h1 {
     color: var(--accent);
 }
 
+#title-area {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sse-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 0.5rem;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2) inset;
+}
+
+.sse-dot.connected {
+    background: #28a745;
+}
+
+.sse-dot.disconnected {
+    background: #dc3545;
+}
+
+.sse-dot.reconnecting {
+    background: #fd7e14;
+}
+
 #tabs-nav {
     display: flex;
 }

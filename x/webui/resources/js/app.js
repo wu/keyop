@@ -53,11 +53,30 @@ function switchTab(tabId) {
     activeTabId = tabId;
 }
 
+const sseStatusEl = document.getElementById('sse-status');
+
+function setSseStatus(state) {
+    if (!sseStatusEl) return;
+    sseStatusEl.classList.remove('connected', 'disconnected', 'reconnecting');
+    if (state === 'open' || state === 'connected') {
+        sseStatusEl.classList.add('connected');
+        sseStatusEl.title = 'SSE: connected';
+    } else if (state === 'reconnecting' || state === 'connecting') {
+        sseStatusEl.classList.add('reconnecting');
+        sseStatusEl.title = 'SSE: reconnecting';
+    } else {
+        sseStatusEl.classList.add('disconnected');
+        sseStatusEl.title = 'SSE: disconnected';
+    }
+}
+
 initSSE((msg) => {
     // Dispatch message to all active modules or relevant module
     Object.values(tabsModules).forEach(module => {
         if (module.onMessage) module.onMessage(msg);
     });
+}, (state) => {
+    setSseStatus(state);
 });
 
 loadTabs();
