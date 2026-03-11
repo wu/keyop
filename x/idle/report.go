@@ -252,7 +252,9 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	md += "## Active periods\n\n"
 	md += "| Hostname | Start | Stop | Duration |\n"
 	md += "|---|---:|---:|---:|\n"
-	for _, p := range allActivePeriods {
+	// Show most recent periods first
+	for i := len(allActivePeriods) - 1; i >= 0; i-- {
+		p := allActivePeriods[i]
 		md += fmt.Sprintf("| %s | %s | %s | %s |\n", p.Hostname, p.Start.Format("3:04pm"), p.Stop.Format("3:04pm"), formatHM(p.DurationSeconds))
 	}
 
