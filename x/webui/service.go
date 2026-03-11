@@ -114,6 +114,8 @@ func (svc *Service) Initialize() error {
 	mux.HandleFunc("POST /api/tabs/{id}/action/{action}", svc.handleTabAction)
 	mux.HandleFunc("GET /events", svc.handleEvents)
 	mux.HandleFunc("GET /api/assets/{type}/{path...}", svc.handleGetAsset)
+	// Serve project images (e.g., /images/keyop.png)
+	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
 	mux.Handle("/", http.FileServer(http.Dir("x/webui/resources")))
 
 	svc.server = &http.Server{

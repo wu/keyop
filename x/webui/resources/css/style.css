@@ -29,6 +29,15 @@ h1 {
     gap: 0.5rem;
 }
 
+#title-area img.logo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    display: block;
+    border-radius: 6px;
+    margin-right: 0.25rem;
+}
+
 .sse-dot {
     width: 12px;
     height: 12px;
