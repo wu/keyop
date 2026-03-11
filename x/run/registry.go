@@ -19,7 +19,7 @@ import (
 	"keyop/x/macosReminders"
 	"keyop/x/memoryMonitor"
 	"keyop/x/messengerStats"
-	"keyop/x/metricsMonitor"
+	"keyop/x/metricmon"
 	"keyop/x/moon"
 	"keyop/x/notify"
 	"keyop/x/nwsWeather"
@@ -31,7 +31,7 @@ import (
 	"keyop/x/speak"
 	"keyop/x/sqlite"
 	"keyop/x/sslMonitor"
-	"keyop/x/statusMonitor"
+	"keyop/x/statusmon"
 	"keyop/x/sun"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
@@ -91,8 +91,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"messengerStats": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return messengerStats.NewService(deps, cfg)
 	},
-	"metricsMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return metricsMonitor.NewService(deps, cfg)
+	"metricmon": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return metricmon.NewService(deps, cfg)
 	},
 	"moon": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return moon.NewService(deps, cfg)
@@ -136,8 +136,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"sslMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return sslMonitor.NewService(deps, cfg)
 	},
-	"statusMonitor": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return statusMonitor.NewService(deps, cfg)
+	"statusmon": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return statusmon.NewService(deps, cfg)
 	},
 	"sun": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return sun.NewService(deps, cfg)

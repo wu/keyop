@@ -1,7 +1,6 @@
-// Package statusMonitor aggregates status information from multiple services and publishes an overall health summary.
-//
-//nolint:revive
-package statusMonitor
+// Package statusmon monitors the status field in messages and sends alerts when services
+// enter problem states or recover. It implements a backoff strategy for repeated alerts.
+package statusmon
 
 import (
 	"fmt"

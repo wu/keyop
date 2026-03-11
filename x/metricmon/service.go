@@ -1,5 +1,8 @@
-//nolint:revive
-package metricsMonitor
+// Package metricmon evaluates numeric metrics against configured thresholds and publishes threshold status events.
+//
+// It parses threshold definitions from the service configuration, listens for metric messages on configured
+// subscriptions, and emits threshold_status messages when thresholds are crossed or recovered.
+package metricmon
 
 import (
 	"encoding/json"
@@ -8,6 +11,10 @@ import (
 	"keyop/util"
 )
 
+// Threshold represents a configured metric threshold and associated actions.
+//
+// MetricName, Value, Condition and optional RecoveryThreshold determine when the threshold
+// is triggered. Updates contains any message updates to apply when the threshold triggers.
 type Threshold struct {
 	MetricName        string         `json:"metricName"`
 	Value             float64        `json:"value"`
@@ -19,6 +26,8 @@ type Threshold struct {
 	ServiceName       string         `json:"serviceName,omitempty"`
 }
 
+// Service monitors incoming metric messages and evaluates them against configured thresholds.
+// When thresholds trigger, Service publishes threshold status updates to the message bus.
 type Service struct {
 	Deps       core.Dependencies
 	Cfg        core.ServiceConfig
@@ -186,7 +195,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 				currentStatus = "critical"
 				triggeredThreshold = &t
 				break // Highest found
-			} else if t.Status == "warning" && currentStatus != "critical" {
+			} else if t.Status == "warning" {
 				currentStatus = "warning"
 				triggeredThreshold = &t
 			} else if t.Updates != nil {
@@ -196,7 +205,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 						currentStatus = "critical"
 						triggeredThreshold = &t
 						break
-					} else if status == "warning" && currentStatus != "critical" {
+					} else if status == "warning" {
 						currentStatus = "warning"
 						triggeredThreshold = &t
 					} else if currentStatus == "ok" {

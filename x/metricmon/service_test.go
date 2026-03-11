@@ -1,5 +1,4 @@
-//nolint:revive
-package metricsMonitor
+package metricmon
 
 import (
 	"keyop/core"

@@ -1,5 +1,4 @@
-//nolint:revive
-package statusMonitor
+package statusmon
 
 import (
 	"context"

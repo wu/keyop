@@ -1,4 +1,4 @@
-x: statusMonitor
+x: statusmon
 freq: 15s
 
 config:
