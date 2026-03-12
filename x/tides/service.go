@@ -273,9 +273,10 @@ func (svc *Service) Check() error {
 				Summary:     summary,
 				Metric:      ap.Value,
 				MetricName:  fmt.Sprintf("tide.%s", svc.stationID),
-				Data: map[string]interface{}{
-					"stationId": svc.stationID,
-					"peak":      ap,
+				Data: core.AlertEvent{
+					Summary: summary,
+					Text:    fmt.Sprintf("Station %s: %s at %s", svc.stationID, summary, ap.Time),
+					Level:   "warning",
 				},
 			}); err != nil {
 				return err
@@ -531,7 +532,7 @@ func (svc *Service) sendExtremeTideStatus(messenger core.MessengerApi, peak *Tid
 	type pendingMsg struct {
 		status, summary, text string
 		metric                float64
-		data                  map[string]interface{}
+		data                  any
 	}
 	var toSend []pendingMsg
 
@@ -539,10 +540,7 @@ func (svc *Service) sendExtremeTideStatus(messenger core.MessengerApi, peak *Tid
 		newStatus := "ok"
 		var summary, text string
 		var metric float64
-		data := map[string]interface{}{
-			"stationId": svc.stationID,
-			"window":    ws.label,
-		}
+		var data any
 
 		if peak != nil && peak.Time != "" {
 			prevHigh := ws.window.High()
@@ -556,16 +554,30 @@ func (svc *Service) sendExtremeTideStatus(messenger core.MessengerApi, peak *Tid
 				text = fmt.Sprintf("Station %s: rising toward extreme %s high tide %.2f ft at %s (record %.2f ft)",
 					svc.stationID, ws.label, peak.Value, peak.Time, prevHigh.Value)
 				metric = peak.Value
-				data["peak"] = peak
-				data["previous"] = prevHigh
+				peakCopy := *peak
+				prevCopy := prevHigh
+				data = TideAlertEvent{
+					AlertEvent: core.AlertEvent{Summary: summary, Text: text, Level: "warning"},
+					StationID:  svc.stationID,
+					Window:     ws.label,
+					Peak:       peakCopy,
+					Previous:   &prevCopy,
+				}
 			} else if isExtremeLow && state == "falling" {
 				newStatus = "warning"
 				summary = fmt.Sprintf("Extreme %s low tide falling: %.2f ft", ws.label, peak.Value)
 				text = fmt.Sprintf("Station %s: falling toward extreme %s low tide %.2f ft at %s (record %.2f ft)",
 					svc.stationID, ws.label, peak.Value, peak.Time, prevLow.Value)
 				metric = peak.Value
-				data["peak"] = peak
-				data["previous"] = prevLow
+				peakCopy := *peak
+				prevCopy := prevLow
+				data = TideAlertEvent{
+					AlertEvent: core.AlertEvent{Summary: summary, Text: text, Level: "warning"},
+					StationID:  svc.stationID,
+					Window:     ws.label,
+					Peak:       peakCopy,
+					Previous:   &prevCopy,
+				}
 			}
 		}
 
@@ -575,17 +587,22 @@ func (svc *Service) sendExtremeTideStatus(messenger core.MessengerApi, peak *Tid
 		}
 
 		if svc.extremeTideStatus[ws.label] == newStatus {
-			continue // no change — skip
+			continue
 		}
 		svc.extremeTideStatus[ws.label] = newStatus
 		changed = true
-		toSend = append(toSend, pendingMsg{
-			status:  newStatus,
-			summary: summary,
-			text:    text,
-			metric:  metric,
-			data:    data,
-		})
+
+		// Only emit a message when an extreme tide is in effect (warning).
+		// When status becomes 'ok' we update internal state but do not emit a message.
+		if newStatus == "warning" {
+			toSend = append(toSend, pendingMsg{
+				status:  newStatus,
+				summary: summary,
+				text:    text,
+				metric:  metric,
+				data:    data,
+			})
+		}
 	}
 
 	if changed {

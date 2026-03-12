@@ -141,16 +141,33 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
-	if msg.Text == "" {
+	// Prefer AlertEvent.Summary, then Message Summary/Text
+	var rawText string
+	if ae, ok := core.ExtractAlertEvent(msg.Data); ok && ae != nil && ae.Summary != "" {
+		rawText = ae.Summary
+	} else if msg.Summary != "" {
+		rawText = msg.Summary
+	} else if msg.Text != "" {
+		rawText = msg.Text
+	}
+	if rawText == "" {
 		return nil
 	}
 
-	text := msg.Text
-	logger.Info("Sending notification", "text", text)
-	// osascript -e 'display notification "message" with the title "KeyOp"'
+	// formatted display text for notification body
 	title := fmt.Sprintf("%s - %s", msg.ServiceName, msg.Hostname)
-	text = fmt.Sprintf("[%s] %s", msg.Timestamp.Format("3:04pm"), text)
-	logger.Warn("Executing notify command", "title", title, "body", text)
+	displayText := fmt.Sprintf("[%s] %s", msg.Timestamp.Format("3:04pm"), rawText)
+
+	logger.Info("Sending notification", "text", rawText)
+	logger.Warn("Executing notify command", "title", title, "body", displayText)
+
+	// prepare correlation for emitted events
+	correlation := ""
+	if msg.Correlation != "" {
+		correlation = msg.Correlation
+	} else if msg.Uuid != "" {
+		correlation = msg.Uuid
+	}
 
 	now := time.Now()
 	allowed, firstDrop := svc.limiter.AddEventAt(now)
@@ -198,29 +215,24 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			}); sendErr != nil {
 				logger.Error("Failed to send notify_rate_limit event", "error", sendErr)
 			}
-			// also emit unified notify event indicating suppression
-			correlation := ""
-			if msg.Correlation != "" {
-				correlation = msg.Correlation
-			} else if msg.Uuid != "" {
-				correlation = msg.Uuid
-			}
-			if sendErr := messenger.Send(core.Message{
-				Correlation: correlation,
-				ChannelName: svc.Cfg.Name,
-				ServiceName: svc.Cfg.Name,
-				ServiceType: svc.Cfg.Type,
-				Event:       "notify",
-				Text:        text,
-				Data:        e,
-			}); sendErr != nil {
-				logger.Error("Failed to send notify event for rate-limited message", "error", sendErr)
-			}
+		}
+		// unified notify event indicating suppression
+		e := Event{Now: time.Now(), Summary: rawText, Sent: false, Details: fmt.Sprintf("notify_rate_limit: %d", svc.limiter.Limit())}
+		if sendErr := messenger.Send(core.Message{
+			Correlation: correlation,
+			ChannelName: svc.Cfg.Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Event:       "notify",
+			Text:        displayText,
+			Data:        e,
+		}); sendErr != nil {
+			logger.Error("Failed to send notify event for rate-limited message", "error", sendErr)
 		}
 		return nil
 	}
 
-	logger.Warn("Executing notify command", "title", title, "body", text)
+	logger.Warn("Executing notify command", "title", title, "body", displayText)
 	osProvider := svc.Deps.MustGetOsProvider()
 	// allow overriding the helper command and icon via config
 	notifyCmd := "keyop-notify"
@@ -239,7 +251,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			}
 		}
 	}
-	args := []string{"--title", title, "--body", text}
+	args := []string{"--title", title, "--body", displayText}
 	if icon != "" {
 		args = append(args, "--icon", icon)
 	}
@@ -260,7 +272,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		cmd = osProvider.Command(notifyCmd, args...)
 		if runErr := cmd.Run(); runErr != nil {
 			// final fallback: use osascript to display a basic notification
-			script := fmt.Sprintf("display notification \"%s\" with title \"%s\"", strings.ReplaceAll(text, "\"", "\\\""), strings.ReplaceAll(title, "\"", "\\\""))
+			script := fmt.Sprintf("display notification \"%s\" with title \"%s\"", strings.ReplaceAll(displayText, "\"", "\\\""), strings.ReplaceAll(title, "\"", "\\\""))
 			logger.Warn("Falling back to osascript", "script", script)
 			osaScriptCmd := osProvider.Command("osascript", "-e", script)
 			if osaErr := osaScriptCmd.Run(); osaErr != nil {
@@ -273,13 +285,6 @@ func (svc *Service) messageHandler(msg core.Message) error {
 
 	// If we got here, cmd is the 'open' command for the app bundle
 	err = cmd.Run()
-
-	correlation := ""
-	if msg.Correlation != "" {
-		correlation = msg.Correlation
-	} else if msg.Uuid != "" {
-		correlation = msg.Uuid
-	}
 
 	if err != nil {
 		logger.Error("Failed to execute osascript command", "error", err)
@@ -296,14 +301,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			logger.Error("Failed to send notify_error event", "error", sendErr)
 		}
 		// also emit unified notify event indicating failure
-		e := Event{Now: time.Now(), Summary: text, Sent: false, Details: err.Error()}
+		e := Event{Now: time.Now(), Summary: rawText, Sent: false, Details: err.Error()}
 		if sendErr := messenger.Send(core.Message{
 			Correlation: correlation,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "notify",
-			Text:        text,
+			Text:        displayText,
 			Data:        e,
 		}); sendErr != nil {
 			logger.Error("Failed to send notify event for errored notification", "error", sendErr)
@@ -312,14 +317,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 
 	// On success, emit a minimal notify event with the notification text in Text.
-	e := Event{Now: time.Now(), Summary: text, Sent: true}
+	e := Event{Now: time.Now(), Summary: rawText, Sent: true}
 	if sendErr := messenger.Send(core.Message{
 		Correlation: correlation,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "notify",
-		Text:        text,
+		Text:        displayText,
 		Data:        e,
 	}); sendErr != nil {
 		logger.Error("Failed to send notify event", "error", sendErr)

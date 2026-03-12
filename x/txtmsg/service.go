@@ -153,17 +153,28 @@ func (svc *Service) Initialize() error {
 func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
-	if msg.Text == "" {
+
+	// Prefer AlertEvent.Summary, then Message Summary/Text
+	var rawText string
+	if ae, ok := core.ExtractAlertEvent(msg.Data); ok && ae != nil && ae.Summary != "" {
+		rawText = ae.Summary
+	} else if msg.Summary != "" {
+		rawText = msg.Summary
+	} else if msg.Text != "" {
+		rawText = msg.Text
+	}
+	if rawText == "" {
 		return nil
 	}
 
-	logger.Info("Sending message", "text", msg.Text)
+	logger.Info("Sending message", "text", rawText)
 
-	content := fmt.Sprintf("%s-%s: %s", msg.ServiceName, msg.ServiceType, msg.Text)
+	content := fmt.Sprintf("%s-%s: %s", msg.ServiceName, msg.ServiceType, rawText)
 	script := fmt.Sprintf(`tell application "Messages" to send "keyop: %s" to buddy "%s"`, content, svc.Address)
 	logger.Warn("Executing osascript command", "script", script)
 	osProvider := svc.Deps.MustGetOsProvider()
 
+	// prepare correlation for emitted events
 	correlation := ""
 	if msg.Correlation != "" {
 		correlation = msg.Correlation
@@ -178,14 +189,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	if latestStatus == "active" {
 		details := "suppressed: host reported active"
 		// emit unified text event indicating suppression
-		e := Event{Now: time.Now(), Summary: msg.Text, Sent: false, Details: details}
+		e := Event{Now: time.Now(), Summary: rawText, Sent: false, Details: details}
 		if sendErr := messenger.Send(core.Message{
 			Correlation: correlation,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "txtmsg",
-			Text:        msg.Text,
+			Text:        rawText,
 			Data:        e,
 		}); sendErr != nil {
 			logger.Error("Failed to send txtmsg event for suppressed message", "error", sendErr)
@@ -215,14 +226,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			}
 		}
 		// emit unified text event indicating suppression
-		e := Event{Now: time.Now(), Summary: msg.Text, Sent: false, Details: fmt.Sprintf("txtmsg_rate_limit: %d", svc.limiter.Limit())}
+		e := Event{Now: time.Now(), Summary: rawText, Sent: false, Details: fmt.Sprintf("txtmsg_rate_limit: %d", svc.limiter.Limit())}
 		if sendErr := messenger.Send(core.Message{
 			Correlation: correlation,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "txtmsg",
-			Text:        msg.Text,
+			Text:        rawText,
 			Data:        e,
 		}); sendErr != nil {
 			logger.Error("Failed to send text event for rate-limited message", "error", sendErr)
@@ -248,14 +259,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			logger.Error("Failed to send txtmsg_error event", "error", sendErr)
 		}
 		// emit unified text event with error
-		e := Event{Now: time.Now(), Summary: msg.Text, Sent: false, Details: err.Error()}
+		e := Event{Now: time.Now(), Summary: rawText, Sent: false, Details: err.Error()}
 		if sendErr := messenger.Send(core.Message{
 			Correlation: correlation,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "txtmsg",
-			Text:        msg.Text,
+			Text:        rawText,
 			Data:        e,
 		}); sendErr != nil {
 			logger.Error("Failed to send text event for errored message", "error", sendErr)
@@ -264,14 +275,14 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 
 	// On success emit unified text event
-	e := Event{Now: time.Now(), Summary: msg.Text, Sent: true}
+	e := Event{Now: time.Now(), Summary: rawText, Sent: true}
 	if sendErr := messenger.Send(core.Message{
 		Correlation: correlation,
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "txtmsg",
-		Text:        msg.Text,
+		Text:        rawText,
 		Data:        e,
 	}); sendErr != nil {
 		logger.Error("Failed to send text event for sent message", "error", sendErr)

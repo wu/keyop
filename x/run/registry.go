@@ -2,6 +2,7 @@ package run
 
 import (
 	"keyop/core"
+	"keyop/x/alerts"
 	"keyop/x/aurora"
 	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
@@ -100,6 +101,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"notify": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return notify.NewService(deps, cfg)
+	},
+	"alerts": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return alerts.NewService(deps, cfg)
 	},
 	"txtmsg": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return txtmsg.NewService(deps, cfg)

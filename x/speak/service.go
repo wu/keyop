@@ -139,20 +139,33 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
+	// compute text early so it can be included in any emitted speak events
 	var text string
-	if msg.Summary != "" {
+	if aePtr, ok := core.AsType[*core.AlertEvent](msg.Data); ok && aePtr != nil && aePtr.Summary != "" {
+		text = aePtr.Summary
+	} else if aeVal, ok := core.AsType[core.AlertEvent](msg.Data); ok && aeVal.Summary != "" {
+		text = aeVal.Summary
+	} else if msg.Summary != "" {
 		text = msg.Summary
 	} else if msg.Text != "" {
 		text = msg.Text
 	} else {
-		return nil
+		text = ""
 	}
 
+	// compute correlation identifier for emitted events
 	correlation := ""
 	if msg.Correlation != "" {
 		correlation = msg.Correlation
 	} else if msg.Uuid != "" {
 		correlation = msg.Uuid
+	}
+
+	// If the message contains a core.AlertEvent with Level == "info", do not speak it.
+	// Still emit a speak event indicating it was not spoken due to the info level.
+	if isAlertLevelInfo(msg.Data) {
+		svc.sendSpeakSkippedEvent(messenger, correlation, text)
+		return nil
 	}
 
 	now := time.Now()
@@ -246,6 +259,30 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	}
 
 	return nil
+}
+
+// isAlertLevelInfo returns true when data represents an AlertEvent with Level == "info".
+func isAlertLevelInfo(data any) bool {
+	if ae, ok := core.ExtractAlertEvent(data); ok && ae != nil {
+		return ae.Level == "info"
+	}
+	return false
+}
+
+// sendSpeakSkippedEvent emits a speak event indicating the incoming alert was skipped due to info level.
+func (svc *Service) sendSpeakSkippedEvent(messenger core.MessengerApi, correlation, text string) {
+	e := Event{Now: time.Now(), Summary: text, Sent: false, Details: "skipped: alert level info"}
+	if sendErr := messenger.Send(core.Message{
+		Correlation: correlation,
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "speak",
+		Text:        text,
+		Data:        e,
+	}); sendErr != nil {
+		svc.Deps.MustGetLogger().Error("Failed to send speak event for info-level alert", "error", sendErr)
+	}
 }
 
 // Check is a no-op for this service, it only reacts to incoming messages from a subscription.

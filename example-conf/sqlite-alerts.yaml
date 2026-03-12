@@ -1,0 +1,16 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/alerts.sql
+
+  serviceTypes:
+    - alerts
+
+subs:
+
+  alerts:
+    name: alerts
+    description: process incoming events
+
+

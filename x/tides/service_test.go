@@ -1011,11 +1011,15 @@ func TestCheck_SendsExtremeTideWarning(t *testing.T) {
 	for _, w := range warnings {
 		assert.Contains(t, w.Text, "9414290")
 		assert.InDelta(t, peakValue, w.Metric, 0.001)
-		d, ok := w.Data.(map[string]interface{})
-		require.True(t, ok)
-		assert.NotEmpty(t, d["window"])
-		assert.NotNil(t, d["peak"])
-		assert.NotNil(t, d["previous"])
+		if tePtr, ok := core.AsType[*TideAlertEvent](w.Data); ok && tePtr != nil {
+			assert.Equal(t, svc.stationID, tePtr.StationID)
+			assert.InDelta(t, peakValue, tePtr.Peak.Value, 0.001)
+		} else if teVal, ok := core.AsType[TideAlertEvent](w.Data); ok {
+			assert.Equal(t, svc.stationID, teVal.StationID)
+			assert.InDelta(t, peakValue, teVal.Peak.Value, 0.001)
+		} else {
+			t.Fatalf("expected TideAlertEvent payload, got %T", w.Data)
+		}
 	}
 }
 
@@ -1083,9 +1087,7 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		messenger.Mu.Lock()
 		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
 		messenger.Mu.Unlock()
-		for _, m := range msgs {
-			assert.Equal(t, "ok", m.Status)
-		}
+		assert.Empty(t, msgs, "no message should be sent when next peak is not extreme")
 	})
 
 	t.Run("warning when falling toward extreme low", func(t *testing.T) {
@@ -1133,10 +1135,7 @@ func TestSendExtremeTideStatus(t *testing.T) {
 		messenger.Mu.Lock()
 		msgs := filterByEvent(messenger.SentMessages, "extreme_tide")
 		messenger.Mu.Unlock()
-		require.NotEmpty(t, msgs)
-		for _, m := range msgs {
-			assert.Equal(t, "ok", m.Status)
-		}
+		assert.Empty(t, msgs, "no message should be sent when next peak is not extreme")
 	})
 }
 

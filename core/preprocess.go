@@ -2,8 +2,8 @@
 package core
 
 import (
-	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -114,25 +114,17 @@ func ValidateConditions(key string, raw []interface{}) []error {
 // Used by pub_preprocess: each matching condition yields one outgoing message.
 func ApplyConditions(msg Message, conditions []ConditionConfig) []Message {
 	var results []Message
-
-	msgMap, err := messageToMap(msg)
-	if err != nil {
+	if len(conditions) == 0 {
 		return results
 	}
 
-	workingMap := copyMap(msgMap)
-
+	working := msg
 	for _, cond := range conditions {
-		if evaluateCondition(workingMap, cond) {
-			for k, v := range cond.Updates {
-				workingMap[k] = v
-			}
-			if newMsg, err := mapToMessage(workingMap); err == nil {
-				results = append(results, newMsg)
-			}
+		if evaluateConditionReflect(working, cond) {
+			_ = applyUpdatesToMessage(&working, cond.Updates)
+			results = append(results, working)
 		}
 	}
-
 	return results
 }
 
@@ -148,37 +140,24 @@ func ApplySubPreprocess(msg Message, conditions []ConditionConfig) (Message, boo
 		return msg, true
 	}
 
-	msgMap, err := messageToMap(msg)
-	if err != nil {
-		return msg, true
-	}
-
-	workingMap := copyMap(msgMap)
+	working := msg
 	matched := false
-
 	for _, cond := range conditions {
-		if evaluateCondition(workingMap, cond) {
+		if evaluateConditionReflect(working, cond) {
 			matched = true
-			for k, v := range cond.Updates {
-				workingMap[k] = v
-			}
+			_ = applyUpdatesToMessage(&working, cond.Updates)
 		}
 	}
-
 	if !matched {
 		return Message{}, false
 	}
-
-	newMsg, err := mapToMessage(workingMap)
-	if err != nil {
-		return msg, true
-	}
-	return newMsg, true
+	return working, true
 }
 
-// evaluateCondition tests whether a single ConditionConfig matches the given message map.
-func evaluateCondition(msgMap map[string]any, cond ConditionConfig) bool {
-	val, ok := msgMap[cond.Field]
+// evaluateConditionReflect evaluates a ConditionConfig against the provided message
+// using reflection to read message fields (including nested fields inside Data).
+func evaluateConditionReflect(msg Message, cond ConditionConfig) bool {
+	val, ok := getValueByJSONPath(msg, cond.Field)
 	if !ok {
 		return false
 	}
@@ -243,11 +222,265 @@ func evaluateCondition(msgMap map[string]any, cond ConditionConfig) bool {
 		}
 		return fVal <= fTarget
 	}
-
 	return false
 }
 
-// toFloat coerces a value to float64, supporting numeric types and numeric strings.
+// getValueByJSONPath reads a value from the message using a dot-separated path where
+// segments correspond to JSON field names (e.g. "data.level" or "metricName").
+func getValueByJSONPath(root interface{}, path string) (any, bool) {
+	if path == "" {
+		return nil, false
+	}
+	segments := strings.Split(path, ".")
+	cur := reflect.ValueOf(root)
+	for _, seg := range segments {
+		// dereference pointers/interfaces
+		for cur.Kind() == reflect.Ptr || cur.Kind() == reflect.Interface {
+			if cur.IsNil() {
+				return nil, false
+			}
+			cur = cur.Elem()
+		}
+
+		switch cur.Kind() {
+		case reflect.Struct:
+			f, ok := findFieldByJSONTag(cur, seg)
+			if !ok {
+				return nil, false
+			}
+			cur = f
+		case reflect.Map:
+			if cur.Type().Key().Kind() != reflect.String {
+				return nil, false
+			}
+			mv := cur.MapIndex(reflect.ValueOf(seg))
+			if !mv.IsValid() {
+				return nil, false
+			}
+			cur = mv
+		default:
+			return nil, false
+		}
+	}
+
+	// final dereference
+	for cur.Kind() == reflect.Ptr || cur.Kind() == reflect.Interface {
+		if cur.IsNil() {
+			return nil, false
+		}
+		cur = cur.Elem()
+	}
+	if !cur.IsValid() {
+		return nil, false
+	}
+	return cur.Interface(), true
+}
+
+// findFieldByJSONTag locates a struct field by its json tag (first segment before a comma)
+// or by common fallbacks (lower-cased field name).
+func findFieldByJSONTag(rv reflect.Value, name string) (reflect.Value, bool) {
+	rt := rv.Type()
+	for i := 0; i < rt.NumField(); i++ {
+		ft := rt.Field(i)
+		// skip unexported fields
+		if ft.PkgPath != "" {
+			continue
+		}
+		tag := ft.Tag.Get("json")
+		tagName := strings.Split(tag, ",")[0]
+		if tagName == "-" {
+			continue
+		}
+		if tagName == "" {
+			// fallback: lower-first field name
+			tagName = lowerFirst(ft.Name)
+		}
+		if tagName == name || ft.Name == name {
+			return rv.Field(i), true
+		}
+	}
+	return reflect.Value{}, false
+}
+
+// applyUpdatesToMessage applies the updates map onto the provided Message using reflection.
+// It supports top-level fields, setting Data and DataType, and single-segment nested
+// updates under Data (e.g. "data.level").
+func applyUpdatesToMessage(msg *Message, updates map[string]any) error {
+	if updates == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(msg).Elem()
+	for k, v := range updates {
+		if k == "data" {
+			msg.Data = v
+			continue
+		}
+		if k == "data-type" || k == "dataType" {
+			msg.DataType = fmt.Sprintf("%v", v)
+			continue
+		}
+		if strings.HasPrefix(k, "data.") {
+			sub := strings.TrimPrefix(k, "data.")
+			setNestedDataField(msg, sub, v)
+			continue
+		}
+		// top-level message fields
+		field, ok := findFieldByJSONTag(rv, k)
+		if !ok {
+			// unknown field — skip
+			continue
+		}
+		setReflectValue(field, v)
+	}
+	return nil
+}
+
+// setNestedDataField sets a shallow field inside msg.Data while preserving typed payloads
+// where possible. If Data is nil or not addressable, it is replaced with a map[string]any.
+func setNestedDataField(msg *Message, key string, value any) {
+	if msg.Data == nil {
+		m := map[string]any{key: value}
+		msg.Data = m
+		return
+	}
+
+	orig := reflect.ValueOf(msg.Data)
+	isPtr := orig.Kind() == reflect.Ptr
+	// dereference
+	for orig.Kind() == reflect.Interface || orig.Kind() == reflect.Ptr {
+		if orig.IsNil() {
+			m := map[string]any{key: value}
+			msg.Data = m
+			return
+		}
+		orig = orig.Elem()
+	}
+
+	switch orig.Kind() {
+	case reflect.Map:
+		// prefer map[string]any for easy mutation
+		if m, ok := msg.Data.(map[string]any); ok {
+			m[key] = value
+			msg.Data = m
+			return
+		}
+		// otherwise construct a new map of same type
+		newMap := reflect.MakeMap(orig.Type())
+		for _, mapKey := range orig.MapKeys() {
+			newMap.SetMapIndex(mapKey, orig.MapIndex(mapKey))
+		}
+		newMap.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
+		msg.Data = newMap.Interface()
+		return
+	case reflect.Struct:
+		// create a new addressable copy so we can set fields
+		newPtr := reflect.New(orig.Type())
+		newPtr.Elem().Set(orig)
+		f, ok := findFieldByJSONTag(newPtr.Elem(), key)
+		if ok && f.CanSet() {
+			setReflectValue(f, value)
+			// restore pointerness if original was a pointer
+			if isPtr {
+				msg.Data = newPtr.Interface()
+			} else {
+				msg.Data = newPtr.Elem().Interface()
+			}
+			return
+		}
+		// fallback to map
+		m := map[string]any{key: value}
+		msg.Data = m
+		return
+	default:
+		// cannot set nested field on primitive types — replace with a map
+		m := map[string]any{key: value}
+		msg.Data = m
+		return
+	}
+}
+
+// setReflectValue attempts to set field to value converting simple scalar types and
+// populating structs from map[string]any when needed.
+func setReflectValue(field reflect.Value, value any) {
+	if !field.CanSet() {
+		return
+	}
+	v := reflect.ValueOf(value)
+	// dereference interfaces/pointers on incoming value for convenience
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			// set zero value
+			field.Set(reflect.Zero(field.Type()))
+			return
+		}
+		v = v.Elem()
+	}
+
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString(fmt.Sprintf("%v", value))
+	case reflect.Float32, reflect.Float64:
+		if f, ok := toFloat(value); ok {
+			field.SetFloat(f)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if f, ok := toFloat(value); ok {
+			field.SetInt(int64(f))
+		}
+	case reflect.Bool:
+		if b, ok := value.(bool); ok {
+			field.SetBool(b)
+		} else if s, ok := value.(string); ok {
+			if s == "true" || s == "1" {
+				field.SetBool(true)
+			} else {
+				field.SetBool(false)
+			}
+		}
+	case reflect.Interface:
+		field.Set(v)
+	case reflect.Struct:
+		// If incoming is a map[string]any, try to populate struct fields
+		if m, ok := value.(map[string]any); ok {
+			// create new struct and populate
+			newVal := reflect.New(field.Type()).Elem()
+			for mk, mv := range m {
+				if f, ok := findFieldByJSONTag(newVal, mk); ok && f.CanSet() {
+					setReflectValue(f, mv)
+				}
+			}
+			field.Set(newVal)
+			return
+		}
+		// if types are assignable, set directly
+		if v.Type().AssignableTo(field.Type()) {
+			field.Set(v)
+		}
+	case reflect.Ptr:
+		// allocate a new value and set
+		eleType := field.Type().Elem()
+		newPtr := reflect.New(eleType)
+		if v.Type().AssignableTo(eleType) {
+			newPtr.Elem().Set(v)
+			field.Set(newPtr)
+			return
+		}
+		if m, ok := value.(map[string]any); ok && eleType.Kind() == reflect.Struct {
+			for mk, mv := range m {
+				if f, ok := findFieldByJSONTag(newPtr.Elem(), mk); ok && f.CanSet() {
+					setReflectValue(f, mv)
+				}
+			}
+			field.Set(newPtr)
+		}
+	default:
+		// try direct conversion if possible
+		if v.Type().ConvertibleTo(field.Type()) {
+			field.Set(v.Convert(field.Type()))
+		}
+	}
+}
+
 func toFloat(v any) (float64, bool) {
 	switch i := v.(type) {
 	case float64:
@@ -266,32 +499,9 @@ func toFloat(v any) (float64, bool) {
 	}
 }
 
-func messageToMap(msg Message) (map[string]any, error) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
 	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func mapToMessage(m map[string]any) (Message, error) {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return Message{}, err
-	}
-	var msg Message
-	err = json.Unmarshal(data, &msg)
-	return msg, err
-}
-
-func copyMap(src map[string]any) map[string]any {
-	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
-	return dst
+	return strings.ToLower(s[:1]) + s[1:]
 }

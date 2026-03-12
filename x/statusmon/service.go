@@ -163,6 +163,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	shouldAlert := false
 	alertText := ""
 	alertSummary := msg.Summary
+	if alertSummary == "" {
+		alertSummary = fmt.Sprintf("%s is %s", msg.ServiceName, msg.Status)
+	}
 	alertStatus := msg.Status
 
 	if isProblem(msg.Status) {
@@ -261,6 +264,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			Status:      alertStatus,
 			Text:        alertText,
 			Summary:     alertSummary,
+			Data: core.AlertEvent{
+				Summary: alertSummary,
+				Text:    alertText,
+				Level:   alertStatus,
+			},
 		})
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 )
 
@@ -195,3 +196,60 @@ type AlertEvent struct {
 }
 
 func (a AlertEvent) PayloadType() string { return "core.alert.v1" }
+
+// ExtractAlertEvent attempts to retrieve a core.AlertEvent from the provided data.
+// It supports direct AlertEvent typed values/pointers and structs that embed AlertEvent.
+func ExtractAlertEvent(data any) (*AlertEvent, bool) {
+	if data == nil {
+		return nil, false
+	}
+	if aePtr, ok := AsType[*AlertEvent](data); ok && aePtr != nil {
+		return aePtr, true
+	}
+	if aeVal, ok := AsType[AlertEvent](data); ok {
+		return &aeVal, true
+	}
+	v := reflect.ValueOf(data)
+	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return nil, false
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return nil, false
+	}
+	t := v.Type()
+	alertType := reflect.TypeOf(AlertEvent{})
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		f := v.Field(i)
+		// direct field of type AlertEvent or *AlertEvent
+		if field.Type == alertType {
+			aeVal := f.Interface().(AlertEvent)
+			return &aeVal, true
+		}
+		if field.Type.Kind() == reflect.Ptr && field.Type.Elem() == alertType {
+			if f.IsNil() {
+				return nil, false
+			}
+			aePtr := f.Interface().(*AlertEvent)
+			return aePtr, true
+		}
+		// also check anonymous embedding where field is anonymous
+		if field.Anonymous {
+			if field.Type == alertType {
+				aeVal := f.Interface().(AlertEvent)
+				return &aeVal, true
+			}
+			if field.Type.Kind() == reflect.Ptr && field.Type.Elem() == alertType {
+				if f.IsNil() {
+					return nil, false
+				}
+				aePtr := f.Interface().(*AlertEvent)
+				return aePtr, true
+			}
+		}
+	}
+	return nil, false
+}

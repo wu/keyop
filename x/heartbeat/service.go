@@ -110,6 +110,11 @@ func (svc *Service) Check() error {
 
 	if shouldSendRestart {
 		hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
+		alert := core.AlertEvent{
+			Summary: fmt.Sprintf("%s restarted", hostname),
+			Text:    fmt.Sprintf("Service %s on host %s restarted", svc.Cfg.Name, hostname),
+			Level:   "info",
+		}
 		err := messenger.Send(core.Message{
 			Correlation: correlationID,
 			ChannelName: svc.Cfg.Name,
@@ -117,6 +122,7 @@ func (svc *Service) Check() error {
 			ServiceType: svc.Cfg.Type,
 			Event:       "restart",
 			Text:        fmt.Sprintf("%s restarted", hostname),
+			Data:        alert,
 		})
 		if err != nil {
 			logger.Error("Failed to send restart alert", "error", err)
