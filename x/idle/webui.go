@@ -18,7 +18,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "idle",
-		Title: "Idle Report",
+		Title: "Idle",
 		Content: `<div id="idle-container">
 <h3>Idle Status</h3>
 <div id="idle-status">Loading status...</div>

@@ -107,15 +107,58 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 		if len(msgs) == 0 {
 			continue
 		}
-		first := msgs[0].Timestamp
-		last := msgs[len(msgs)-1].Timestamp
-		if last.After(first) {
-			coverageIntervals = append(coverageIntervals, interval{Start: first, Stop: last})
+		// Build coverage segments: don't assume continuous coverage between first and last
+		// if there are large gaps (machine was likely offline). Use a max gap threshold
+		// to split coverage into separate intervals. The threshold is based on service
+		// configured sampling threshold (idle detection) but clamped to a minimum.
+		maxGap := 3 * svc.threshold
+		if maxGap < 5*time.Minute {
+			maxGap = 5 * time.Minute
+		}
+		segStart := msgs[0].Timestamp
+		segEnd := msgs[0].Timestamp
+		for i := 1; i < len(msgs); i++ {
+			m := msgs[i]
+			gap := m.Timestamp.Sub(segEnd)
+			if gap <= maxGap {
+				// extend current segment
+				segEnd = m.Timestamp
+			} else {
+				// close previous segment and start a new one
+				if segEnd.After(segStart) {
+					coverageIntervals = append(coverageIntervals, interval{Start: segStart, Stop: segEnd})
+				}
+				segStart = m.Timestamp
+				segEnd = m.Timestamp
+			}
+		}
+		// append final segment
+		if segEnd.After(segStart) {
+			coverageIntervals = append(coverageIntervals, interval{Start: segStart, Stop: segEnd})
 		}
 
 		inActive := false
 		var activeStart time.Time
+		var prevTs time.Time
 		for i, m := range msgs {
+			if i == 0 {
+				prevTs = m.Timestamp
+			}
+			// detect large gaps between consecutive messages
+			if i > 0 {
+				gap := m.Timestamp.Sub(prevTs)
+				if gap > maxGap {
+					// close any open active period at prevTs
+					if inActive {
+						stop := prevTs
+						if stop.After(activeStart) {
+							allActivePeriods = append(allActivePeriods, ActivePeriod{Hostname: host, Start: activeStart, Stop: stop, DurationSeconds: stop.Sub(activeStart).Seconds()})
+						}
+						inActive = false
+					}
+				}
+			}
+
 			if m.Status == "active" {
 				if !inActive {
 					activeStart = m.Timestamp
@@ -131,9 +174,22 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 				}
 			}
 
-			// If last message and still active, extend to end of range
-			if i == len(msgs)-1 && inActive {
+			prevTs = m.Timestamp
+			// If last message and still active, we'll handle after loop with gap-aware logic
+		}
+
+		// After iterating messages, if still active, decide whether to extend to end
+		if inActive {
+			// If the last message is close to the report end (within maxGap), extend to end
+			lastTs := msgs[len(msgs)-1].Timestamp
+			if end.Sub(lastTs) <= maxGap {
 				stop := end
+				if stop.After(activeStart) {
+					allActivePeriods = append(allActivePeriods, ActivePeriod{Hostname: host, Start: activeStart, Stop: stop, DurationSeconds: stop.Sub(activeStart).Seconds()})
+				}
+			} else {
+				// otherwise close at lastTs
+				stop := msgs[len(msgs)-1].Timestamp
 				if stop.After(activeStart) {
 					allActivePeriods = append(allActivePeriods, ActivePeriod{Hostname: host, Start: activeStart, Stop: stop, DurationSeconds: stop.Sub(activeStart).Seconds()})
 				}
@@ -163,6 +219,13 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	activeTotalSecs := 0.0
 	for _, p := range mergedActive {
 		activeTotalSecs += p.DurationSeconds
+	}
+
+	// Include merged active periods into coverage intervals so active time isn't
+	// accidentally considered "unknown" when active periods extend beyond
+	// the message-only coverage (e.g., last active state extended to 'end').
+	for _, p := range mergedActive {
+		coverageIntervals = append(coverageIntervals, interval{Start: p.Start, Stop: p.Stop})
 	}
 
 	// Merge coverage intervals to compute known coverage
