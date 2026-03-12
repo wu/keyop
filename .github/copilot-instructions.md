@@ -59,6 +59,7 @@
 - **Messenger**: Handles message routing between services and plugins.
 - **State Store**: Persists service/plugin state to disk (default: `~/.keyop/data`).
 - **Terminal UI**: Optional TUI for monitoring system state.
+- **Web UI**: Optional web interface for monitoring and configuration, served from static assets.
 - **Docker**: Multi-stage Dockerfiles for building and running minimal images, with support for plugins and web UI
   static assets.
 
@@ -75,6 +76,15 @@
 - **Logging**: Uses `slog` with color output in console mode, or logs to `~/.keyop/logs` by default.
 - **Timezone**: Defaults to America/Los_Angeles; falls back to UTC if unavailable.
 - **Web UI**: Static assets are copied to `/webui-static` in Docker images.
+
+## Service Structure
+
+- Store main service code in "service.go"
+- Store sqlite code in "sqlite.go"
+- Store web server code in "webui.go""
+- Extract reusable code into domain-specific files (e.g., "aurora.go" for aurora-related functionality).
+- Store package-level docs in "doc.go" with a package comment.
+- Store payload definitions in "payloads.go"
 
 ## Policy
 
