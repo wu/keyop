@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"keyop/core"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -270,35 +269,54 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	// Build hourly activity
 	// We determine how many hours are in the range [start, end)
 	numHours := int(end.Sub(start).Hours()) + 1
-	hourly := make([]int, numHours)
-	for _, p := range mergedActive {
-		for h := 0; h < numHours; h++ {
-			hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
-			if hourStart.After(end) {
-				continue
-			}
+	minuteLines := make([]string, numHours)
+	minuteCounts := make([]int, numHours)
 
-			hourEnd := hourStart.Add(time.Hour)
-			if p.Stop.Before(hourStart) || p.Start.After(hourEnd) {
+	for h := 0; h < numHours; h++ {
+		hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+		// initialize 60-minute line with unknown markers (space)
+		mins := make([]rune, 60)
+		for i := 0; i < 60; i++ {
+			mins[i] = ' ' // unknown
+		}
+		count := 0
+
+		// For each minute, determine if it's covered and/or active
+		for i := 0; i < 60; i++ {
+			minuteStart := hourStart.Add(time.Duration(i) * time.Minute)
+			minuteEnd := minuteStart.Add(time.Minute)
+			// Determine if this minute intersects any coverage interval
+			covered := false
+			for _, c := range mergedCoverage {
+				if c.Stop.Before(minuteStart) || c.Start.After(minuteEnd) {
+					continue
+				}
+				covered = true
+				break
+			}
+			if !covered {
+				// leave as unknown (space)
 				continue
 			}
-			s := p.Start
-			if s.Before(hourStart) {
-				s = hourStart
-			}
-			e := p.Stop
-			if e.After(hourEnd) {
-				e = hourEnd
-			}
-			overlap := e.Sub(s).Minutes()
-			if overlap > 0 {
-				mins := int(overlap + 0.5)
-				if mins > 60 {
-					mins = 60
+			// If covered, check if any active period overlaps this minute
+			active := false
+			for _, p := range mergedActive {
+				if p.Stop.Before(minuteStart) || p.Start.After(minuteEnd) {
+					continue
 				}
-				hourly[h] += mins
+				active = true
+				break
+			}
+			if active {
+				mins[i] = '█'
+				count++
+			} else {
+				mins[i] = '·' // known but idle
 			}
 		}
+
+		minuteLines[h] = string(mins)
+		minuteCounts[h] = count
 	}
 
 	md := fmt.Sprintf("# Idle report: %s to %s\n", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
@@ -311,11 +329,9 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	for h := numHours - 1; h >= 0; h-- {
 		hourTime := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
 		label := hourTime.Format("01-02 15:00")
-		bars := hourly[h]
-		if bars > 60 {
-			bars = 60
-		}
-		md += fmt.Sprintf("%s | %s %2dm\n", label, strings.Repeat("█", bars), hourly[h])
+		line := minuteLines[h]
+		count := minuteCounts[h]
+		md += fmt.Sprintf("%s | %s %2dm\n", label, line, count)
 	}
 	md += "```\n\n"
 
