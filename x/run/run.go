@@ -100,6 +100,15 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
+		// Check if service implements webui.PanelProvider
+		if panelProv, ok := service.(webui.PanelProvider); ok {
+			for _, other := range services {
+				if webuiSvc, ok := other.Service.(*webui.Service); ok {
+					webuiSvc.RegisterPanelProvider(serviceConfig.Type, panelProv)
+				}
+			}
+		}
+
 		services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
 
 		// If this is the sqlite service, check previously created services for SchemaProvider or SQLiteConsumer
@@ -120,9 +129,14 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 		// If this is the webui service, check previously created services for TabProvider
 		if webuiSvc, ok := service.(*webui.Service); ok {
+			// Self-register so the webui's own tab and assets are available
+			webuiSvc.RegisterProvider(webuiSvc.Cfg.Type, webuiSvc)
 			for _, other := range services[:len(services)-1] {
 				if provider, ok := other.Service.(webui.TabProvider); ok {
 					webuiSvc.RegisterProvider(other.Config.Type, provider)
+				}
+				if panelProv, ok := other.Service.(webui.PanelProvider); ok {
+					webuiSvc.RegisterPanelProvider(other.Config.Type, panelProv)
 				}
 			}
 		}

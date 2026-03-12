@@ -57,8 +57,15 @@ func TestWebUI_GetTabs(t *testing.T) {
 	var tabs []TabInfo
 	err := json.Unmarshal(rr.Body.Bytes(), &tabs)
 	assert.NoError(t, err)
-	assert.Len(t, tabs, 1)
-	assert.Equal(t, "test", tabs[0].ID)
+	// Ensure the registered test tab exists in the returned list
+	found := false
+	for _, tab := range tabs {
+		if tab.ID == "test" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "test tab not found")
 }
 
 func TestWebUI_Events(t *testing.T) {

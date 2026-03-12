@@ -1,4 +1,5 @@
 // Package nwsWeather fetches weather data and alerts from NOAA/NWS and converts them into internal events and metrics.
+// nolint:revive
 package nwsWeather
 
 import (

@@ -53,6 +53,9 @@ type Service struct {
 	providers   map[string]TabProvider
 	providersMu sync.RWMutex
 
+	panelProviders   map[string]PanelProvider
+	panelProvidersMu sync.RWMutex
+
 	assetProviders   map[string]AssetProvider
 	assetProvidersMu sync.RWMutex
 
@@ -76,6 +79,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		Deps:           deps,
 		Cfg:            cfg,
 		providers:      make(map[string]TabProvider),
+		panelProviders: make(map[string]PanelProvider),
 		assetProviders: make(map[string]AssetProvider),
 		port:           port,
 		clients:        make(map[chan []byte]bool),
@@ -111,6 +115,7 @@ func (svc *Service) Initialize() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tabs", svc.handleGetTabs)
+	mux.HandleFunc("GET /api/panels", svc.handleGetPanels)
 	mux.HandleFunc("POST /api/tabs/{id}/action/{action}", svc.handleTabAction)
 	mux.HandleFunc("GET /events", svc.handleEvents)
 	mux.HandleFunc("GET /api/assets/{type}/{path...}", svc.handleGetAsset)

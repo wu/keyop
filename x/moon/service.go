@@ -4,6 +4,7 @@ package moon
 import (
 	"fmt"
 	"keyop/core"
+	"math"
 	"sync"
 	"time"
 
@@ -14,11 +15,34 @@ import (
 
 // Service computes lunar-phase related metrics and publishes events when phases change or match configured criteria.
 type Service struct {
-	Deps          core.Dependencies
-	Cfg           core.ServiceConfig
-	lastMoonPhase float64
-	mu            sync.Mutex
+	Deps            core.Dependencies
+	Cfg             core.ServiceConfig
+	lastMoonPhase   float64
+	mu              sync.Mutex
+	cachedMoonEvent MoonEvent
+	cachedAt        time.Time
+	cacheTTL        time.Duration
 }
+
+const defaultMoonCacheTTL = 15 * time.Minute
+
+// MoonEvent is a typed payload with moon phase details sent on moon events.
+//
+//nolint:revive
+type MoonEvent struct {
+	Now            time.Time `json:"now"`
+	Phase          float64   `json:"phase"`
+	Name           string    `json:"name"`
+	Illumination   int       `json:"illumination"`
+	NextNew        string    `json:"next_new,omitempty"`
+	NextFull       string    `json:"next_full,omitempty"`
+	NextMajorName  string    `json:"next_major_name,omitempty"`
+	NextMajorTime  string    `json:"next_major_time,omitempty"`
+	NextMajorInSec int       `json:"next_major_in_sec,omitempty"`
+}
+
+// PayloadType returns the registered payload type name for MoonEvent.
+func (m MoonEvent) PayloadType() string { return "service.moon.v1" }
 
 // NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
@@ -26,11 +50,27 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		Deps:          deps,
 		Cfg:           cfg,
 		lastMoonPhase: -1, // Initialize to an impossible value
+		cacheTTL:      defaultMoonCacheTTL,
 	}
 }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
+	return nil
+}
+
+// RegisterPayloads registers the moon payload types with the provided registry.
+func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
+	if err := reg.Register("moon", func() any { return &MoonEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register moon alias: %w", err)
+		}
+	}
+	if err := reg.Register("service.moon.v1", func() any { return &MoonEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register service.moon.v1: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -74,7 +114,70 @@ func (svc *Service) Check() error {
 		lastPhaseName = getMoonPhaseName(lastPhase)
 	}
 
-	// Send event message with details
+	// Attempt to use cached moon event if fresh
+	var me MoonEvent
+	useCache := false
+	var nextMajorName string
+	var nextIn time.Duration
+
+	svc.mu.Lock()
+	if !svc.cachedAt.IsZero() && time.Since(svc.cachedAt) < svc.cacheTTL {
+		me = svc.cachedMoonEvent
+		useCache = true
+	}
+	svc.mu.Unlock()
+
+	if useCache {
+		// derive helper values for alert text
+		nextMajorName = me.NextMajorName
+		nextIn = time.Duration(me.NextMajorInSec) * time.Second
+	} else {
+		// Compute upcoming major phases (absolute times)
+		dy := decimalYear(now)
+		nextNew := jdeToTime(moonphase.New(dy))
+		if !nextNew.After(now) {
+			nextNew = jdeToTime(moonphase.New(decimalYear(now.Add(30 * 24 * time.Hour))))
+		}
+		nextFull := jdeToTime(moonphase.Full(dy))
+		if !nextFull.After(now) {
+			nextFull = jdeToTime(moonphase.Full(decimalYear(now.Add(30 * 24 * time.Hour))))
+		}
+
+		var nextMajorTime time.Time
+		if nextNew.Before(nextFull) {
+			nextMajorTime = nextNew
+			nextMajorName = "New Moon"
+		} else {
+			nextMajorTime = nextFull
+			nextMajorName = "Full Moon"
+		}
+
+		nextIn = time.Until(nextMajorTime).Round(time.Minute)
+
+		// Compute illumination percentage
+		f := math.Mod(phase, 28) / 28.0
+		illumFrac := (1 - math.Cos(2*math.Pi*f)) / 2
+		illumPct := int(math.Round(illumFrac * 100))
+
+		me = MoonEvent{
+			Now:            now,
+			Phase:          phase,
+			Name:           phaseName,
+			Illumination:   illumPct,
+			NextNew:        nextNew.UTC().Format(time.RFC3339),
+			NextFull:       nextFull.UTC().Format(time.RFC3339),
+			NextMajorName:  nextMajorName,
+			NextMajorTime:  nextMajorTime.UTC().Format(time.RFC3339),
+			NextMajorInSec: int(nextIn.Seconds()),
+		}
+
+		svc.mu.Lock()
+		svc.cachedMoonEvent = me
+		svc.cachedAt = time.Now()
+		svc.mu.Unlock()
+	}
+
+	// Send event message with typed payload
 	eventMsg := core.Message{
 		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
@@ -83,10 +186,7 @@ func (svc *Service) Check() error {
 		Event:       "moon_phase",
 		Text:        fmt.Sprintf("Current moon phase: %s (%.2f)", phaseName, phase),
 		Summary:     fmt.Sprintf("Moon: %s", phaseName),
-		Data: map[string]interface{}{
-			"phase": phase,
-			"name":  phaseName,
-		},
+		Data:        me,
 	}
 	if err := messenger.Send(eventMsg); err != nil {
 		return err
@@ -94,15 +194,15 @@ func (svc *Service) Check() error {
 
 	// Send alert if the phase name has changed
 	if phaseName != lastPhaseName {
-		nextEvent, timeUntil := timeUntilNextMajorPhase(now)
 		alertMsg := core.Message{
 			Correlation: correlationID,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "moon_phase_change",
-			Text:        fmt.Sprintf("The moon is now in the %s phase. Next %s in %s.", phaseName, nextEvent, formatDuration(timeUntil)),
+			Text:        fmt.Sprintf("The moon is now in the %s phase. Next %s in %s.", phaseName, nextMajorName, formatDuration(nextIn)),
 			Summary:     fmt.Sprintf("Moon phase: %s", phaseName),
+			Data:        me,
 		}
 		return messenger.Send(alertMsg)
 	}
@@ -143,27 +243,6 @@ func getMoonPhaseName(phase float64) string {
 		return "Waning Crescent"
 	}
 	return "New Moon"
-}
-
-// timeUntilNextMajorPhase returns the name and exact time.Time of the next New Moon or Full Moon,
-// whichever comes first, using the Meeus algorithm for precise timing.
-func timeUntilNextMajorPhase(from time.Time) (string, time.Duration) {
-	dy := decimalYear(from)
-
-	nextNew := jdeToTime(moonphase.New(dy))
-	if !nextNew.After(from) {
-		nextNew = jdeToTime(moonphase.New(decimalYear(from.Add(30 * 24 * time.Hour))))
-	}
-
-	nextFull := jdeToTime(moonphase.Full(dy))
-	if !nextFull.After(from) {
-		nextFull = jdeToTime(moonphase.Full(decimalYear(from.Add(30 * 24 * time.Hour))))
-	}
-
-	if nextNew.Before(nextFull) {
-		return "New Moon", time.Until(nextNew).Round(time.Minute)
-	}
-	return "Full Moon", time.Until(nextFull).Round(time.Minute)
 }
 
 // decimalYear converts a time.Time to a decimal year for use with the Meeus algorithms.

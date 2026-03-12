@@ -13,24 +13,30 @@ import (
 
 // Service calculates sun times (sunrise, sunset) and publishes events used by scheduling subsystems.
 type Service struct {
-	Deps      core.Dependencies
-	Cfg       core.ServiceConfig
-	Lat       float64
-	Lon       float64
-	Alt       float64
-	cachedLat *float64
-	cachedLon *float64
-	cachedAlt *float64
-	timers    []*time.Timer
-	mu        sync.RWMutex
+	Deps         core.Dependencies
+	Cfg          core.ServiceConfig
+	Lat          float64
+	Lon          float64
+	Alt          float64
+	cachedLat    *float64
+	cachedLon    *float64
+	cachedAlt    *float64
+	cachedEvents Events
+	cachedAt     time.Time
+	cacheTTL     time.Duration
+	timers       []*time.Timer
+	mu           sync.RWMutex
 }
+
+const defaultSunCacheTTL = 15 * time.Minute
 
 // NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps:   deps,
-		Cfg:    cfg,
-		timers: make([]*time.Timer, 0),
+		Deps:     deps,
+		Cfg:      cfg,
+		cacheTTL: defaultSunCacheTTL,
+		timers:   make([]*time.Timer, 0),
 	}
 
 	if lat, ok := cfg.Config["lat"].(float64); ok {
@@ -60,6 +66,21 @@ func (svc *Service) ValidateConfig() []error {
 	// alt is optional, defaults to 0 if not provided in config or gps message
 
 	return errs
+}
+
+// RegisterPayloads registers the sun payload types with the provided registry.
+func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
+	if err := reg.Register("sun", func() any { return &SunEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register sun alias: %w", err)
+		}
+	}
+	if err := reg.Register("service.sun.v1", func() any { return &SunEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("failed to register service.sun.v1: %w", err)
+		}
+	}
+	return nil
 }
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
@@ -95,6 +116,9 @@ func (svc *Service) gpsHandler(msg core.Message) error {
 		if okAlt {
 			svc.cachedAlt = &alt
 		}
+		// Invalidate cached events so expensive recomputation runs on next scheduled refresh
+		svc.cachedEvents = Events{}
+		svc.cachedAt = time.Time{}
 		svc.mu.Unlock()
 		if okAlt {
 			svc.Deps.MustGetLogger().Debug("sun: updated cached gps coordinates", "lat", lat, "lon", lon, "alt", alt)
@@ -118,6 +142,22 @@ type Events struct {
 	NightLength string    `json:"night_length"`
 }
 
+// SunEvent is a typed payload sent on sun events.
+//
+//nolint:revive
+type SunEvent struct {
+	Now         time.Time `json:"now"`
+	Sunrise     time.Time `json:"sunrise"`
+	Sunset      time.Time `json:"sunset"`
+	CivilDawn   time.Time `json:"civil_dawn"`
+	CivilDusk   time.Time `json:"civil_dusk"`
+	DayLength   string    `json:"day_length"`
+	NightLength string    `json:"night_length"`
+}
+
+// PayloadType returns the registered payload type name for SunEvent.
+func (s SunEvent) PayloadType() string { return "service.sun.v1" }
+
 // Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	lat, lon, alt := svc.getObserverData()
@@ -125,7 +165,23 @@ func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
 	logger.Info("Calculating sun events", "lat", lat, "lon", lon, "alt", alt, "time", now)
 
-	events := svc.calculateSunEvents(lat, lon, alt, now)
+	// Try to use cached events to avoid expensive recomputation; refresh after cacheTTL
+	var events Events
+	useCache := false
+	svc.mu.RLock()
+	if !svc.cachedAt.IsZero() && time.Since(svc.cachedAt) < svc.cacheTTL {
+		events = svc.cachedEvents
+		useCache = true
+	}
+	svc.mu.RUnlock()
+
+	if !useCache {
+		events = svc.calculateSunEvents(lat, lon, alt, now)
+		svc.mu.Lock()
+		svc.cachedEvents = events
+		svc.cachedAt = time.Now()
+		svc.mu.Unlock()
+	}
 
 	// Determine the next event
 	nextEventName := ""
@@ -154,6 +210,16 @@ func (svc *Service) Check() error {
 	// Send event message
 	messenger := svc.Deps.MustGetMessenger()
 
+	se := SunEvent{
+		Now:         now,
+		Sunrise:     events.Sunrise,
+		Sunset:      events.Sunset,
+		CivilDawn:   events.CivilDawn,
+		CivilDusk:   events.CivilDusk,
+		DayLength:   events.DayLength,
+		NightLength: events.NightLength,
+	}
+
 	eventMsg := core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
@@ -161,7 +227,7 @@ func (svc *Service) Check() error {
 		Event:       "sun_check",
 		Text:        fmt.Sprintf("Next sun event: %s at %s", nextEventName, nextEventTime.Format("15:04")),
 		Summary:     fmt.Sprintf("Next: %s %s", nextEventName, nextEventTime.Format("15:04")),
-		Data:        events,
+		Data:        se,
 	}
 	return messenger.Send(eventMsg)
 }
@@ -209,7 +275,19 @@ func (svc *Service) scheduleAlerts() {
 				n := name
 				dl := dayLength
 				nl := nightLength
+				// capture the events snapshot for this scheduled timer to avoid closure mutation
+				ev := events
 				timer := time.AfterFunc(duration, func() {
+					// Build a typed SunEvent payload to include with the scheduled event
+					se := SunEvent{
+						Now:         time.Now(),
+						Sunrise:     ev.Sunrise,
+						Sunset:      ev.Sunset,
+						CivilDawn:   ev.CivilDawn,
+						CivilDusk:   ev.CivilDusk,
+						DayLength:   dl,
+						NightLength: nl,
+					}
 					if err := messenger.Send(core.Message{
 						ChannelName: svc.Cfg.Name,
 						ServiceName: svc.Cfg.Name,
@@ -217,6 +295,7 @@ func (svc *Service) scheduleAlerts() {
 						Event:       "sun_event",
 						Text:        fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
 						Summary:     n,
+						Data:        se,
 					}); err != nil {
 						logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
 					}

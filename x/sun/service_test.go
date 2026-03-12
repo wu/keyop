@@ -64,9 +64,17 @@ func TestSunService(t *testing.T) {
 		}
 		assert.NotNil(t, eventMsg)
 		assert.Contains(t, eventMsg.Text, "Next sun event:")
-		events := eventMsg.Data.(Events)
-		assert.NotEmpty(t, events.Sunrise)
-		assert.NotEmpty(t, events.Sunset)
+		// Accept either the legacy Events type or the new SunEvent typed payload
+		switch d := eventMsg.Data.(type) {
+		case SunEvent:
+			assert.NotEmpty(t, d.Sunrise)
+			assert.NotEmpty(t, d.Sunset)
+		case Events:
+			assert.NotEmpty(t, d.Sunrise)
+			assert.NotEmpty(t, d.Sunset)
+		default:
+			t.Fatalf("unexpected data type: %T", eventMsg.Data)
+		}
 	})
 
 	t.Run("GPS updates cache", func(t *testing.T) {

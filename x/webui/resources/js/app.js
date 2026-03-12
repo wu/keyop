@@ -35,7 +35,10 @@ async function loadTabs() {
     });
 
     if (tabs.length > 0) {
-        switchTab(tabs[0].id);
+        // Prefer 'dashboard' tab as the default if present
+        const preferred = tabs.find(t => t.id === 'dashboard' || (t.title && t.title.toLowerCase() === 'dashboard'));
+        const first = preferred || tabs[0];
+        switchTab(first.id);
     }
 }
 

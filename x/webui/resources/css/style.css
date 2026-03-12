@@ -63,22 +63,45 @@ h1 {
     display: flex;
 }
 
+#tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0.5rem;
+}
+
 .tab-link {
-    padding: 0.5rem 1rem;
-    margin-left: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    margin-left: 0;
     cursor: pointer;
-    border-radius: 6px;
-    color: var(--text);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.7);
     font-weight: 500;
+    letter-spacing: 0.2px;
+    background: transparent;
+    position: relative;
+    transition: color 120ms ease, background-color 120ms ease;
 }
 
 .tab-link:hover {
-    background-color: var(--border);
+    background-color: rgba(255, 255, 255, 0.02);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .tab-link.active {
-    background-color: var(--accent);
-    color: var(--accent-text);
+    color: var(--accent);
+}
+
+/* purple underline like in design */
+.tab-link.active::after {
+    content: "";
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    bottom: -8px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), #b086ff);
+    border-radius: 2px;
 }
 
 main {
@@ -193,4 +216,172 @@ input[type="date"]:focus {
 
 #tide-refresh-btn:hover {
     opacity: 0.95;
+}
+
+/* Dashboard panels layout */
+#dashboard-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.dashboard-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.02));
+    border-radius: 10px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 8px var(--shadow);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    aspect-ratio: 3 / 4; /* portrait: taller than wide */
+    overflow: hidden;
+}
+
+.dashboard-panel .panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.dashboard-panel .panel-title {
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.dashboard-panel .panel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center; /* center content vertically */
+    padding: 0.5rem 0.25rem;
+}
+
+/* Sun wrapper centers content and adds spacing */
+.sun-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1rem;
+    padding: 0.25rem 0;
+}
+
+/* Sun panel specifics */
+.sun-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+.sun-icon svg {
+    width: 80px;
+    height: 80px;
+    color: var(--accent);
+}
+
+.sun-icon img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.sun-event {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    margin: 0.5rem 0;
+}
+
+.sun-remaining {
+    width: 100%;
+    font-size: 0.95rem;
+    color: var(--text);
+    opacity: 0.95;
+    text-align: center;
+    margin: 0.5rem 0 1rem;
+}
+
+/* Moon panel image styles */
+.moon-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+.moon-icon img.moon-image {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.moon-phase {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    margin: 0.5rem 0;
+}
+
+.moon-illum {
+    font-size: 0.9rem;
+    color: var(--text);
+    opacity: 0.9;
+    text-align: center;
+    margin: 0.25rem 0;
+}
+
+.moon-remaining {
+    font-size: 0.9rem;
+    color: var(--text);
+    text-align: center;
+    margin: 0.25rem 0 0.75rem;
+}
+
+/* Stack day/night vertically and prevent wrapping */
+.sun-meta {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.sun-length {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.sun-label {
+    font-size: 0.75rem;
+    color: var(--text);
+    opacity: 0.7;
+}
+
+.sun-value {
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+    #dashboard-panels {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
 }
