@@ -42,9 +42,30 @@ export function init(el) {
         });
     }
 
+    // Trigger initial refresh only if the tab is active. Otherwise wait until it becomes active.
+    function isActive() {
+        return container && container.classList && container.classList.contains('active');
+    }
 
-    // Trigger initial refresh with defaults
-    triggerRefresh(startInput ? startInput.value : toISODate(startDate), endInput ? endInput.value : toISODate(endDate));
+    if (isActive()) {
+        triggerRefresh(startInput ? startInput.value : toISODate(startDate), endInput ? endInput.value : toISODate(endDate));
+    } else {
+        // Observe the container for class changes to detect when it becomes active
+        try {
+            const obs = new MutationObserver((mutations, observer) => {
+                if (isActive()) {
+                    triggerRefresh(startInput ? startInput.value : toISODate(startDate), endInput ? endInput.value : toISODate(endDate));
+                    observer.disconnect();
+                }
+            });
+            obs.observe(container, {attributes: true, attributeFilter: ['class']});
+        } catch (e) {
+            // Fallback: if MutationObserver isn't available, trigger once after a short delay
+            setTimeout(() => {
+                if (isActive()) triggerRefresh(startInput ? startInput.value : toISODate(startDate), endInput ? endInput.value : toISODate(endDate));
+            }, 500);
+        }
+    }
 }
 
 function renderReport(html) {
@@ -57,6 +78,9 @@ function renderReport(html) {
 
 export function onMessage(msg) {
     if (!container) return;
+
+    // Only respond to idle messages when the tab is active
+    if (!container.classList || !container.classList.contains('active')) return;
 
     // Check if it's an idle status event
     if (msg.event === 'idle_status' || msg.channelName === 'idle' || msg.serviceType === 'idleMacos') {
