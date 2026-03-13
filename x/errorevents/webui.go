@@ -17,8 +17,17 @@ func (svc *Service) WebUITab() webui.TabInfo {
 		ID:    "errors",
 		Title: "Errors",
 		Content: `<div id="errors-container">
-<h3>Recent Errors</h3>
-<div id="errors-list">Loading errors...</div>
+<div class="errors-layout">
+  <div class="filter-sidebar">
+    <div class="filter-title">Services</div>
+    <div class="service-list">
+      <div class="service-item active" data-service="all">all</div>
+    </div>
+  </div>
+  <div class="errors-content">
+    <div id="errors-list">Loading errors...</div>
+  </div>
+</div>
 </div>`,
 		JSPath: "/api/assets/errorevents/errors.js",
 	}

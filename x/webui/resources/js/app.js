@@ -162,14 +162,15 @@ function setSseStatus(state) {
     }
 }
 
-initSSE((msg) => {
-    // Dispatch message to all active modules or relevant module
-    Object.values(tabsModules).forEach(module => {
-        if (module.onMessage) module.onMessage(msg);
+loadTabs().then(() => {
+    initSSE((msg) => {
+        // Dispatch message to all active modules or relevant module
+        Object.values(tabsModules).forEach(module => {
+            if (module.onMessage) module.onMessage(msg);
+        });
+    }, (state) => {
+        setSseStatus(state);
     });
-}, (state) => {
-    setSseStatus(state);
-});
 
-loadTabs();
-setupTabKeyboardNavigation();
+    setupTabKeyboardNavigation();
+});

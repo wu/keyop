@@ -17,8 +17,17 @@ func (svc *Service) WebUITab() webui.TabInfo {
 		ID:    "alerts",
 		Title: "Alerts",
 		Content: `<div id="alerts-container">
-<h3>Recent Alerts</h3>
-<div id="alerts-list">Loading alerts...</div>
+<div class="alerts-layout">
+  <div class="filter-sidebar">
+    <div class="filter-title">Services</div>
+    <div class="service-list">
+      <div class="service-item active" data-service="all">all</div>
+    </div>
+  </div>
+  <div class="alerts-content">
+    <div id="alerts-list">Loading alerts...</div>
+  </div>
+</div>
 </div>`,
 		JSPath: "/api/assets/alerts/alerts.js",
 	}

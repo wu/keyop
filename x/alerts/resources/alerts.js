@@ -72,18 +72,26 @@ export function updateBubble() {
 export function onMessage(msg) {
     if (!alertsContainer) return;
 
-    // Only process alert-type messages
-    if (msg.dataType !== 'core.alert.v1') return;
-
-    // Check if the alerts tab content is visible
-    const tabContent = alertsContainer.closest('.tab-content');
-    if (!tabContent || !tabContent.classList.contains('active')) {
+    // Filter for alert-related messages: check channelName, event, or dataType
+    if (msg.channelName !== 'alerts' && !msg.event?.includes('alert') && msg.dataType !== 'core.alert.v1' && msg.dataType !== 'alert') {
         return;
     }
 
-    // When a new alert message arrives and tab is active, add it to the list
-    if (msg.data && (msg.data.summary || msg.data.text)) {
+    // Check if the alerts tab content is visible
+    const tabContent = alertsContainer.closest('.tab-content');
+    const isTabActive = tabContent && tabContent.classList.contains('active');
+
+    // When a new alert message arrives, process it
+    if (msg.text || msg.summary || msg.data) {
+        // Always add the alert to the list (whether tab is active or not)
+        // This ensures the alert is present when the user switches to the alerts tab
         addAlertToList(msg);
+
+        // Update unread count only if tab isn't active
+        if (!isTabActive) {
+            unreadAlertCount++;
+            updateBubble();
+        }
     }
 }
 
@@ -138,13 +146,21 @@ function addAlertToList(msg) {
                 const alertItem = e.target.closest('.alert-item');
                 if (alertItem) {
                     alertItem.remove();
+                    // Decrement the unread count since we're removing an alert
+                    unreadAlertCount = Math.max(0, unreadAlertCount - 1);
+                    updateBubble();
                 }
                 if (listDiv.children.length === 0) {
-                    alertsContainer.innerHTML = '<div class="no-alerts">No active alerts</div>';
+                    listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
+                    // Rebuild service list to only show "all"
+                    rebuildServiceList();
                 }
             }
         });
     }
+
+    // Update service list if a new service has appeared
+    rebuildServiceList();
 }
 
 async function refreshAlerts() {
@@ -166,13 +182,18 @@ async function refreshAlerts() {
         const result = await response.json();
         const alerts = result.alerts || [];
 
-        const list = alertsContainer.querySelector('#alerts-list');
-        if (!list) return;
+        let list = alertsContainer.querySelector('#alerts-list');
+
+        // If the layout doesn't exist yet, create it
+        if (!list) {
+            alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item active" data-service="all">all</div></div></div><div class="alerts-content"><div id="alerts-list"></div></div></div>';
+            list = alertsContainer.querySelector('#alerts-list');
+        }
 
         if (alerts.length === 0) {
             list.innerHTML = '<div class="no-alerts">No active alerts</div>';
 
-            // Also clear the service list to only show "all"
+            // Also ensure service list is visible with only "all"
             const sidebar = alertsContainer.querySelector('.filter-sidebar');
             if (sidebar) {
                 sidebar.innerHTML = `
@@ -249,71 +270,6 @@ async function refreshAlerts() {
             content.appendChild(list);
         }
 
-        function rebuildServiceList() {
-            const sidebar = alertsContainer.querySelector('.filter-sidebar');
-            if (!sidebar) return;
-
-            // Get all unique services that still have items visible (not filtered out)
-            const items = document.querySelectorAll('.alert-item');
-            const serviceNames = new Set();
-            items.forEach(item => {
-                // Only include services that would be visible if filtering was applied
-                // (i.e., not hidden by a different service filter)
-                const isVisible = item.style.display !== 'none';
-                if (isVisible) {
-                    const service = item.dataset.serviceName;
-                    if (service) serviceNames.add(service);
-                }
-            });
-
-            const sortedServices = Array.from(serviceNames).sort();
-
-            // Build new service list
-            const serviceListHTML = `
-        <div class="filter-title">Services</div>
-        <div class="service-list">
-            <div class="service-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all">all</div>
-            ${sortedServices.map(service => `
-                <div class="service-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">${service}</div>
-            `).join('')}
-        </div>
-    `;
-
-            sidebar.innerHTML = serviceListHTML;
-
-            // Update the service index based on new list
-            const services = alertsContainer.querySelectorAll('.service-item');
-            navController.selectedServiceIndex = 0;
-            services.forEach((item, index) => {
-                if (item.dataset.service === navController.selectedService) {
-                    navController.selectedServiceIndex = index;
-                }
-            });
-
-            // Re-attach service filter handlers
-            alertsContainer.querySelectorAll('.service-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    alertsContainer.querySelectorAll('.service-item').forEach(i => i.classList.remove('active'));
-                    item.classList.add('active');
-
-                    navController.selectedService = item.dataset.service;
-                    navController.selectedIndex = -1;
-                    navController.applyServiceFilter();
-                });
-            });
-        }
-
-        alertsContainer.querySelectorAll('.service-item').forEach(item => {
-            item.addEventListener('click', () => {
-                alertsContainer.querySelectorAll('.service-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-
-                navController.selectedService = item.dataset.service;
-                navController.selectedIndex = -1;
-                navController.applyServiceFilter();
-            });
-        });
-
         // Attach checkbox handlers
         alertsContainer.querySelectorAll('.alert-checkbox-input').forEach(checkbox => {
             checkbox.addEventListener('change', async (e) => {
@@ -327,6 +283,8 @@ async function refreshAlerts() {
                     const listDiv = alertsContainer.querySelector('#alerts-list');
                     if (listDiv && listDiv.children.length === 0) {
                         listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
+                        // Rebuild service list to only show "all"
+                        rebuildServiceList();
                     }
                 }
             });
@@ -361,6 +319,60 @@ async function markAlertSeen(alertID) {
     } catch (err) {
         console.error('Failed to mark alert as seen:', err);
     }
+}
+
+function rebuildServiceList() {
+    const sidebar = alertsContainer.querySelector('.filter-sidebar');
+    if (!sidebar || !navController) return;
+
+    // Get all unique services that still have items visible (not filtered out)
+    const items = document.querySelectorAll('.alert-item');
+    const serviceNames = new Set();
+    items.forEach(item => {
+        // Only include services that would be visible if filtering was applied
+        // (i.e., not hidden by a different service filter)
+        const isVisible = item.style.display !== 'none';
+        if (isVisible) {
+            const service = item.dataset.serviceName;
+            if (service) serviceNames.add(service);
+        }
+    });
+
+    const sortedServices = Array.from(serviceNames).sort();
+
+    // Build new service list
+    const serviceListHTML = `
+        <div class="filter-title">Services</div>
+        <div class="service-list">
+            <div class="service-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all">all</div>
+            ${sortedServices.map(service => `
+                <div class="service-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">${service}</div>
+            `).join('')}
+        </div>
+    `;
+
+    sidebar.innerHTML = serviceListHTML;
+
+    // Update the service index based on new list
+    const services = alertsContainer.querySelectorAll('.service-item');
+    navController.selectedServiceIndex = 0;
+    services.forEach((item, index) => {
+        if (item.dataset.service === navController.selectedService) {
+            navController.selectedServiceIndex = index;
+        }
+    });
+
+    // Re-attach service filter handlers
+    alertsContainer.querySelectorAll('.service-item').forEach(item => {
+        item.addEventListener('click', () => {
+            alertsContainer.querySelectorAll('.service-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+
+            navController.selectedService = item.dataset.service;
+            navController.selectedIndex = -1;
+            navController.applyServiceFilter();
+        });
+    });
 }
 
 function setupNavigation() {
