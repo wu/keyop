@@ -134,6 +134,22 @@ func init() {
 		panic(fmt.Sprintf("failed to register alert: %v", err))
 	}
 
+	// Register core error payload
+	if err := reg.Register("core.error.v1", func() any { return &ErrorEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.error.v1: %v", err))
+	}
+	if err := reg.Register("error", func() any { return &ErrorEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register error: %v", err))
+	}
+
+	// Register core temp payload
+	if err := reg.Register("core.temp.v1", func() any { return &TempEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.temp.v1: %v", err))
+	}
+	if err := reg.Register("temp", func() any { return &TempEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register temp: %v", err))
+	}
+
 	globalPayloadRegistry = reg
 }
 
@@ -208,6 +224,28 @@ type AlertEvent struct {
 }
 
 func (a AlertEvent) PayloadType() string { return "core.alert.v1" }
+
+// ErrorEvent represents an error event that services can emit.
+// It carries summary and text information about an error that occurred.
+// Fields are intentionally generic to support different error types.  Services should
+// populate Summary and Text with human-friendly messages.  The "level" field is optional
+// but can be used to indicate the severity of the error (e.g., "debug", "info", "warning", "error", "critical").
+type ErrorEvent struct {
+	Summary string `json:"summary"`
+	Text    string `json:"text"`
+	Level   string `json:"level,omitempty"` // e.g., "debug", "info", "warning", "error", "critical"
+}
+
+func (e ErrorEvent) PayloadType() string { return "core.error.v1" }
+
+// TempEvent represents a temperature reading event that services can emit.
+// It carries temperature readings in both Celsius and Fahrenheit.
+type TempEvent struct {
+	TempC float32 `json:"tempC"` // Temperature in Celsius
+	TempF float32 `json:"tempF"` // Temperature in Fahrenheit
+}
+
+func (t TempEvent) PayloadType() string { return "core.temp.v1" }
 
 // ExtractAlertEvent attempts to retrieve a core.AlertEvent from the provided data.
 // It supports direct AlertEvent typed values/pointers and structs that embed AlertEvent.

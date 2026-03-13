@@ -106,9 +106,16 @@ func (svc *Service) Initialize() error {
 	for payloadType, provider := range svc.providers {
 		schema := provider.SQLiteSchema()
 		if schema != "" {
+			// Execute the schema. For migration purposes, we handle some errors gracefully.
 			if _, err := db.Exec(schema); err != nil {
-				svc.mu.RUnlock()
-				return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
+				// Check if this is a "duplicate column" error (for ALTER TABLE migrations)
+				errMsg := err.Error()
+				if strings.Contains(errMsg, "duplicate column") || strings.Contains(errMsg, "already exists") {
+					logger.Debug("SQLite: migration already applied", "payloadType", payloadType)
+				} else {
+					svc.mu.RUnlock()
+					return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
+				}
 			}
 		}
 	}

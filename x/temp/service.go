@@ -2,6 +2,8 @@
 package temp
 
 import (
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"keyop/core"
@@ -18,6 +20,7 @@ type Service struct {
 	Cfg        core.ServiceConfig
 	DevicePath string
 	MaxTemp    *float64
+	db         **sql.DB
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -138,6 +141,12 @@ func (svc Service) temp() (Event, error) {
 	// generate correlation id for this check to tie together the events and metrics in the backend
 	correlationID := uuid.New().String()
 
+	// Create typed TempEvent payload
+	tempEvent := core.TempEvent{
+		TempC: temp.TempC,
+		TempF: temp.TempF,
+	}
+
 	eventErr := messenger.Send(core.Message{
 		Correlation: correlationID,
 		ChannelName: svc.Cfg.Name,
@@ -148,7 +157,7 @@ func (svc Service) temp() (Event, error) {
 		Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, temp.TempF),
 		MetricName:  metricName,
 		Metric:      float64(temp.TempF),
-		Data:        temp,
+		Data:        tempEvent,
 	})
 	if eventErr != nil {
 		return temp, eventErr
@@ -166,4 +175,58 @@ func (svc Service) temp() (Event, error) {
 		Summary:     fmt.Sprintf("%s is %.1f°", svc.Cfg.Name, temp.TempF),
 	})
 	return temp, metricErr
+}
+
+// SQLiteSchema returns the DDL for the temps table.
+func (svc *Service) SQLiteSchema() string {
+	return `CREATE TABLE IF NOT EXISTS temps (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp DATETIME,
+		service_name TEXT,
+		service_type TEXT,
+		hostname TEXT,
+		event TEXT,
+		temp_c REAL,
+		temp_f REAL,
+		data TEXT
+	);
+	ALTER TABLE temps ADD COLUMN temp_c REAL;
+	ALTER TABLE temps ADD COLUMN temp_f REAL;`
+}
+
+// SQLiteInsert prepares an INSERT for incoming messages with temperature data.
+func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
+	var dataJSON string
+	if msg.Data != nil {
+		if b, err := json.Marshal(msg.Data); err == nil {
+			dataJSON = string(b)
+		} else {
+			svc.Deps.MustGetLogger().Warn("temps: failed to marshal data for sqlite insert", "error", err)
+		}
+	}
+
+	// Extract temperature values from TempEvent
+	var tempC, tempF float32
+	if tp, ok := core.AsType[*core.TempEvent](msg.Data); ok {
+		if tp != nil {
+			tempC = tp.TempC
+			tempF = tp.TempF
+		}
+	} else if tv, ok := core.AsType[core.TempEvent](msg.Data); ok {
+		tempC = tv.TempC
+		tempF = tv.TempF
+	}
+
+	return `INSERT INTO temps (timestamp, service_name, service_type, hostname, event, temp_c, temp_f, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		[]any{msg.Timestamp, msg.ServiceName, msg.ServiceType, msg.Hostname, msg.Event, tempC, tempF, dataJSON}
+}
+
+// SetSQLiteDB allows the runtime to provide a pointer to the DB instance.
+func (svc *Service) SetSQLiteDB(db **sql.DB) {
+	svc.db = db
+}
+
+// PayloadTypes returns the payload type names that this provider handles.
+func (svc *Service) PayloadTypes() []string {
+	return []string{"core.temp.v1", "temp"}
 }

@@ -1,0 +1,17 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/errors.sql
+
+  payloadTypes:
+    - core.error.v1
+    - error
+
+subs:
+
+  errorevents:
+    name: errorevents
+    description: process incoming events
+
+

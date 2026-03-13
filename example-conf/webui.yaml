@@ -2,8 +2,10 @@ x: webui
 
 config:
   port: 8080
-
-
+  dbPaths:
+    core.alert.v1: sqlite/alerts.sql
+    core.error.v1: sqlite/errors.sql
+    core.temp.v1: sqlite/temps.sql
 
 subs:
 
@@ -19,9 +21,16 @@ subs:
     name: alerts
     description: process incoming events
 
+  errorevents:
+    name: errorevents
+    description: process incoming events
+
+  temp:
+    name: temp
+    description: process incoming events
+
   messenger:
     name: messenger
     description: process incoming events
-
 
 

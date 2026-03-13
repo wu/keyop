@@ -9,6 +9,7 @@ import (
 	"keyop/core"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -201,6 +202,11 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 	for _, p := range svc.providers {
 		tabs = append(tabs, p.WebUITab())
 	}
+
+	// Sort tabs alphabetically by title
+	sort.Slice(tabs, func(i, j int) bool {
+		return tabs[i].Title < tabs[j].Title
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tabs)

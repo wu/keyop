@@ -1,8 +1,6 @@
-// Package alerts provides a lightweight service that acts as a schema
-// provider for storing alert messages into SQLite. It intentionally keeps
-// behaviour minimal: the runtime will register this provider with any
-// configured sqlite service that accepts the "alerts" service type.
-package alerts
+// Package errorevents provides a lightweight service that acts as a schema
+// provider for storing error messages into SQLite.
+package errorevents
 
 import (
 	"database/sql"
@@ -10,9 +8,9 @@ import (
 	"keyop/core"
 )
 
-// Service implements a minimal alerts service that also acts as a SQLite
-// schema provider so alerts can be persisted to a sqlite instance configured
-// to accept the "alerts" service type.
+// Service implements a minimal errors service that also acts as a SQLite
+// schema provider so errors can be persisted to a sqlite instance configured
+// to accept the "errors" payload type.
 type Service struct {
 	Deps   core.Dependencies
 	Cfg    core.ServiceConfig
@@ -20,7 +18,7 @@ type Service struct {
 	dbPath string
 }
 
-// NewService constructs the alerts service.
+// NewService constructs the errors service.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return &Service{Deps: deps, Cfg: cfg}
 }
@@ -40,9 +38,9 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
-// SQLiteSchema returns the DDL for the alerts table.
+// SQLiteSchema returns the DDL for the errors table.
 func (svc *Service) SQLiteSchema() string {
-	return `CREATE TABLE IF NOT EXISTS alerts (
+	return `CREATE TABLE IF NOT EXISTS errors (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp DATETIME,
 		service_name TEXT,
@@ -55,37 +53,37 @@ func (svc *Service) SQLiteSchema() string {
 		data TEXT,
 		seen INTEGER DEFAULT 0
 	);
-	ALTER TABLE alerts ADD COLUMN seen INTEGER DEFAULT 0;`
+	ALTER TABLE errors ADD COLUMN seen INTEGER DEFAULT 0;`
 }
 
 // SQLiteInsert prepares an INSERT for incoming messages. It marshals the Data
 // field to JSON for storage in the data column.
 func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 	// Accept any message for insertion; the sqlite service will only call this
-	// provider for messages whose ServiceType matched during registration.
+	// provider for messages whose DataType matched during registration.
 	var dataJSON string
 	if msg.Data != nil {
 		if b, err := json.Marshal(msg.Data); err == nil {
 			dataJSON = string(b)
 		} else {
 			// Best-effort: log but don't fail the insert generation
-			svc.Deps.MustGetLogger().Warn("alerts: failed to marshal data for sqlite insert", "error", err)
+			svc.Deps.MustGetLogger().Warn("errors: failed to marshal data for sqlite insert", "error", err)
 		}
 	}
 
-	// Prefer typed payload (core.AlertEvent).
+	// Prefer typed payload (core.ErrorEvent).
 	var summary, severity string
-	if ap, ok := core.AsType[*core.AlertEvent](msg.Data); ok {
-		if ap != nil {
-			summary = ap.Summary
-			severity = ap.Level
+	if ep, ok := core.AsType[*core.ErrorEvent](msg.Data); ok {
+		if ep != nil {
+			summary = ep.Summary
+			severity = ep.Level
 		}
-	} else if av, ok := core.AsType[core.AlertEvent](msg.Data); ok {
-		summary = av.Summary
-		severity = av.Level
+	} else if ev, ok := core.AsType[core.ErrorEvent](msg.Data); ok {
+		summary = ev.Summary
+		severity = ev.Level
 	}
 
-	return `INSERT INTO alerts (timestamp, service_name, service_type, hostname, event, severity, summary, text, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	return `INSERT INTO errors (timestamp, service_name, service_type, hostname, event, severity, summary, text, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		[]any{msg.Timestamp, msg.ServiceName, msg.ServiceType, msg.Hostname, msg.Event, severity, summary, msg.Text, dataJSON}
 }
 
@@ -100,8 +98,8 @@ func (svc *Service) SetDBPath(path string) {
 }
 
 // PayloadTypes returns the payload type names that this provider handles.
-// Alerts are represented by the core.AlertEvent in the payload registry and
-// the legacy alias "alert" for backwards compatibility.
+// Errors are represented by the core.ErrorEvent in the payload registry and
+// the legacy alias "error" for backwards compatibility.
 func (svc *Service) PayloadTypes() []string {
-	return []string{"core.alert.v1", "alert"}
+	return []string{"core.error.v1", "error"}
 }

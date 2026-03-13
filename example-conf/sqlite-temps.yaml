@@ -1,0 +1,17 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/temps.sql
+
+  payloadTypes:
+    - core.temp.v1
+    - temp
+
+subs:
+
+  temp:
+    name: temp
+    description: process incoming events
+
+

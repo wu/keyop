@@ -1,0 +1,9 @@
+x: errorevents
+
+config:
+
+subs:
+
+  errors:
+    name: errors
+    description: process error events

@@ -1,0 +1,11 @@
+x: temp
+
+config:
+  devicePath: /sys/bus/w1/devices/28-000000000001/w1_slave
+
+subs:
+
+  temps:
+    name: temps
+    description: process temperature events
+
