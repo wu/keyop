@@ -33,47 +33,63 @@ func (svc *Service) SQLiteSchema() string {
 }
 
 // SQLiteInsert returns the SQL INSERT statement and the arguments to be used for a given message.
+// This implementation requires a typed TideEvent payload and does not attempt
+// to decode legacy map-based payloads.
 func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 	if msg.Event != "tide" {
 		return "", nil
 	}
 
-	data, ok := msg.Data.(map[string]any)
-	if !ok {
-		return "", nil
-	}
-
-	stationID, _ := data["stationId"].(string)
-	state, _ := data["state"].(string)
-
-	// Extract value from 'current' map (as sent in 'tide' events)
-	var value float64
-	if current, ok := data["current"].(map[string]any); ok {
-		if v, ok := current["v"].(float64); ok {
-			value = v
-		} else if v, ok := current["value"].(float64); ok {
-			value = v
+	// Require typed TideEvent payloads only.
+	if tePtr, ok := core.AsType[*TideEvent](msg.Data); ok && tePtr != nil {
+		stationID := tePtr.StationID
+		state := tePtr.State
+		value := tePtr.Current.Value
+		if value == 0 {
+			value = msg.Metric
 		}
-	}
-	if value == 0 {
-		value = msg.Metric
-	}
-
-	var npTime, npType string
-	var npValue float64
-	if np, ok := data["nextPeak"].(map[string]any); ok {
-		npTime, _ = np["time"].(string)
-		npValue, _ = np["value"].(float64)
-		npType, _ = np["type"].(string)
+		var npTime, npType string
+		var npValue float64
+		if tePtr.NextPeak != nil {
+			npTime = tePtr.NextPeak.Time
+			npValue = tePtr.NextPeak.Value
+			npType = tePtr.NextPeak.Type
+		}
+		return `INSERT INTO tide_events (timestamp, station_id, value, state, next_peak_time, next_peak_value, next_peak_type) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			[]any{msg.Timestamp, stationID, value, state, npTime, npValue, npType}
 	}
 
-	return `INSERT INTO tide_events (timestamp, station_id, value, state, next_peak_time, next_peak_value, next_peak_type) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		[]any{msg.Timestamp, stationID, value, state, npTime, npValue, npType}
+	// Support non-pointer typed value as well.
+	if teVal, ok := core.AsType[TideEvent](msg.Data); ok {
+		stationID := teVal.StationID
+		state := teVal.State
+		value := teVal.Current.Value
+		if value == 0 {
+			value = msg.Metric
+		}
+		var npTime, npType string
+		var npValue float64
+		if teVal.NextPeak != nil {
+			npTime = teVal.NextPeak.Time
+			npValue = teVal.NextPeak.Value
+			npType = teVal.NextPeak.Type
+		}
+		return `INSERT INTO tide_events (timestamp, station_id, value, state, next_peak_time, next_peak_value, next_peak_type) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			[]any{msg.Timestamp, stationID, value, state, npTime, npValue, npType}
+	}
+
+	// Not a typed TideEvent — do not attempt legacy decoding.
+	return "", nil
 }
 
 // SetSQLiteDB sets the database pointer to be used by the service.
 func (svc *Service) SetSQLiteDB(db **sql.DB) {
 	svc.db = db
+}
+
+// PayloadTypes returns the payload type names that this provider handles.
+func (svc *Service) PayloadTypes() []string {
+	return []string{"service.tide.v1", "tide"}
 }
 
 // loadDayFile reads the records for the given day from SQLite.

@@ -90,3 +90,10 @@ func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 func (svc *Service) SetSQLiteDB(db **sql.DB) {
 	svc.db = db
 }
+
+// PayloadTypes returns the payload type names that this provider handles.
+// Alerts are represented by the core.AlertEvent in the payload registry and
+// the legacy alias "alert" for backwards compatibility.
+func (svc *Service) PayloadTypes() []string {
+	return []string{"core.alert.v1", "alert"}
+}

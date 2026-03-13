@@ -47,25 +47,48 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 		// Check if service implements sqlite.SchemaProvider
 		if provider, ok := service.(sqlite.SchemaProvider); ok {
-			// Find the sqlite service if it exists and accepts this provider's service type
-			for _, other := range services {
-				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
-					if sqliteSvc.AcceptsServiceType(serviceConfig.Type) {
-						sqliteSvc.RegisterProvider(serviceConfig.Type, provider)
+			// Require provider to declare payload types; register it keyed by payload
+			// type with any matching sqlite services. Providers that do not declare
+			// payload types will not be registered (payload-only registration).
+			if ptp, ok := service.(core.PayloadTypeProvider); ok {
+				for _, payloadType := range ptp.PayloadTypes() {
+					for _, other := range services {
+						if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
+							if sqliteSvc.AcceptsPayloadType(payloadType) {
+								sqliteSvc.RegisterProvider(payloadType, provider)
+							}
+						}
 					}
 				}
+			} else {
+				logger.Warn("sqlite schema provider does not declare payload types; skipping registration", "service", serviceConfig.Name)
 			}
 		}
 
 		// Check if service implements sqlite.Consumer
 		if consumer, ok := service.(sqlite.Consumer); ok {
-			// Find the sqlite service if it exists and accepts this consumer's service type
-			for _, other := range services {
-				if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
-					if sqliteSvc.AcceptsServiceType(serviceConfig.Type) {
-						consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+			// Require consumer to declare payload types so we can match sqlite services.
+			if ptp, ok := service.(core.PayloadTypeProvider); ok {
+				assigned := false
+				for _, payloadType := range ptp.PayloadTypes() {
+					for _, other := range services {
+						if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
+							if sqliteSvc.AcceptsPayloadType(payloadType) {
+								consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+								assigned = true
+								break
+							}
+						}
+					}
+					if assigned {
+						break
 					}
 				}
+				if !assigned {
+					logger.Debug("sqlite consumer did not match any sqlite service for payload types", "service", serviceConfig.Name)
+				}
+			} else {
+				logger.Warn("sqlite consumer does not declare payload types; not providing DB", "service", serviceConfig.Name)
 			}
 		}
 
@@ -115,13 +138,31 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		if sqliteSvc, ok := service.(*sqlite.Service); ok {
 			for _, other := range services[:len(services)-1] {
 				if provider, ok := other.Service.(sqlite.SchemaProvider); ok {
-					if sqliteSvc.AcceptsServiceType(other.Config.Type) {
-						sqliteSvc.RegisterProvider(other.Config.Type, provider)
+					if ptp, ok := other.Service.(core.PayloadTypeProvider); ok {
+						for _, payloadType := range ptp.PayloadTypes() {
+							if sqliteSvc.AcceptsPayloadType(payloadType) {
+								sqliteSvc.RegisterProvider(payloadType, provider)
+							}
+						}
+					} else {
+						logger.Warn("previous service is sqlite schema provider but does not declare payload types; skipping", "service", other.Config.Name)
 					}
 				}
 				if consumer, ok := other.Service.(sqlite.Consumer); ok {
-					if sqliteSvc.AcceptsServiceType(other.Config.Type) {
-						consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+					if ptp, ok := other.Service.(core.PayloadTypeProvider); ok {
+						assigned := false
+						for _, payloadType := range ptp.PayloadTypes() {
+							if sqliteSvc.AcceptsPayloadType(payloadType) {
+								consumer.SetSQLiteDB(sqliteSvc.GetSQLiteDB())
+								assigned = true
+								break
+							}
+						}
+						if !assigned {
+							logger.Debug("sqlite consumer did not match any payloadTypes for sqlite service", "service", other.Config.Name)
+						}
+					} else {
+						logger.Warn("previous service is sqlite consumer but does not declare payload types; not setting DB", "service", other.Config.Name)
 					}
 				}
 			}
@@ -144,7 +185,7 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 	// validate all service configs before initializing any services
 	// Propagate sqlite DB path mappings from the webui service config.
-	// Only the 'dbPaths' key is accepted (mapping: serviceType -> dbPath).
+	// Only the 'dbPaths' key is accepted (mapping: payloadType -> dbPath).
 	for _, sw := range services {
 		if _, ok := sw.Service.(*webui.Service); !ok {
 			continue
@@ -169,8 +210,8 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 		// Apply mapping to sqlite services
 		for _, other := range services {
 			if sqliteSvc, ok := other.Service.(*sqlite.Service); ok {
-				for svcType, path := range mapping {
-					if sqliteSvc.AcceptsServiceType(svcType) {
+				for payloadType, path := range mapping {
+					if sqliteSvc.AcceptsPayloadType(payloadType) {
 						if sqliteSvc.Cfg.Config == nil {
 							sqliteSvc.Cfg.Config = make(map[string]interface{})
 						}

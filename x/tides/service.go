@@ -203,16 +203,18 @@ func (svc *Service) Check() error {
 
 	messenger := svc.Deps.MustGetMessenger()
 
-	data := map[string]interface{}{
-		"stationId": svc.stationID,
-		"current":   current,
-		"state":     state,
+	// Construct a typed TideEvent payload and send it. Using a typed payload
+	// ensures the DataType is set consistently and consumers can decode it.
+	ev := TideEvent{
+		StationID: svc.stationID,
+		Current:   *current,
+		State:     state,
 	}
 	if next != nil {
-		data["next"] = next
+		ev.Next = next
 	}
 	if peak != nil {
-		data["nextPeak"] = peak
+		ev.NextPeak = peak
 	}
 
 	peakText := ""
@@ -229,7 +231,7 @@ func (svc *Service) Check() error {
 		Summary:     fmt.Sprintf("Tide: %.2f ft %s", current.Value, state),
 		Metric:      current.Value,
 		MetricName:  fmt.Sprintf("tide.%s", svc.stationID),
-		Data:        data,
+		Data:        ev,
 	}); err != nil {
 		return err
 	}
@@ -313,9 +315,9 @@ func (svc *Service) Check() error {
 			allPeriods = append(allPeriods, periods...)
 		}
 		if len(allPeriods) > 0 {
-			// include in the data sent to the web UI: attach periods and threshold
-			data["periods"] = allPeriods
-			data["threshold"] = svc.lowTideThreshold
+			// Attach periods and threshold to the event for the web UI.
+			ev.Periods = allPeriods
+			ev.Threshold = svc.lowTideThreshold
 		}
 	}
 

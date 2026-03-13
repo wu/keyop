@@ -165,6 +165,18 @@ type TypedPayload interface {
 	PayloadType() string
 }
 
+// PayloadTypeProvider is implemented by services or providers that expose
+// the payload type(s) they handle. This is used for registering schema
+// providers with the sqlite service based on message DataType.
+//
+// Services that implement SchemaProvider and also provide PayloadTypes()
+// will be registered with sqlite instances keyed by payload type (preferred).
+// Legacy services that do not implement this interface will continue to be
+// registered by service type for backward compatibility.
+type PayloadTypeProvider interface {
+	PayloadTypes() []string
+}
+
 // DeviceStatusEvent represents a common event for device status updates.
 type DeviceStatusEvent struct {
 	DeviceID string `json:"deviceId"`

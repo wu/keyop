@@ -4,8 +4,9 @@ config:
 
   dbPath: sqlite/alerts.sql
 
-  serviceTypes:
-    - alerts
+  payloadTypes:
+    - core.alert.v1
+    - alert
 
 subs:
 

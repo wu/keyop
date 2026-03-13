@@ -4,8 +4,9 @@ config:
   
   dbPath: sqlite/tides.sql
 
-  serviceTypes:
-    - tides
+  payloadTypes:
+    - service.tide.v1
+    - tide
 
 subs:
 

@@ -74,7 +74,7 @@ func TestSQLiteService(t *testing.T) {
 	provider := &mockProvider{
 		schema: "CREATE TABLE test_table (id INTEGER PRIMARY KEY, val TEXT)",
 	}
-	svc.RegisterProvider("test-service", provider)
+	svc.RegisterProvider("service.test.v1", provider)
 
 	if err := svc.Initialize(); err != nil {
 		t.Fatalf("failed to initialize: %v", err)
@@ -88,6 +88,7 @@ func TestSQLiteService(t *testing.T) {
 	// Test message handling
 	msg := core.Message{
 		ServiceType: "test-service",
+		DataType:    "service.test.v1",
 		Event:       "test_event",
 		Status:      "hello sqlite",
 	}
@@ -164,7 +165,7 @@ func TestSQLiteService_MultipleSubs(t *testing.T) {
 	provider := &mockProvider{
 		schema: "CREATE TABLE test_table_multi (val TEXT)",
 	}
-	svc.RegisterProvider("test-service", provider)
+	svc.RegisterProvider("service.test.v1", provider)
 
 	if err := svc.Initialize(); err != nil {
 		t.Fatalf("failed to initialize: %v", err)
@@ -179,13 +180,13 @@ func TestSQLiteService_MultipleSubs(t *testing.T) {
 	}
 
 	// Send message to first channel
-	msg1 := core.Message{ServiceType: "test-service", Event: "test_event", Status: "from chan1"}
+	msg1 := core.Message{ServiceType: "test-service", DataType: "service.test.v1", Event: "test_event", Status: "from chan1"}
 	if err := handlers["channel-one"](msg1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Send message to second channel
-	msg2 := core.Message{ServiceType: "test-service", Event: "test_event", Status: "from chan2"}
+	msg2 := core.Message{ServiceType: "test-service", DataType: "service.test.v1", Event: "test_event", Status: "from chan2"}
 	if err := handlers["channel-two"](msg2); err != nil {
 		t.Fatal(err)
 	}

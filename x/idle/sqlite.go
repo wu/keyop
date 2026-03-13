@@ -54,3 +54,8 @@ func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 func (svc *Service) SetSQLiteDB(db **sql.DB) {
 	svc.db = db
 }
+
+// PayloadTypes returns the payload type names that this provider handles.
+func (svc *Service) PayloadTypes() []string {
+	return []string{"service.idle.v1", "idle"}
+}

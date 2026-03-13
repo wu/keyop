@@ -4,7 +4,8 @@ config:
 
   dbPath: sqlite/idle.sql
 
-  serviceTypes:
+  payloadTypes:
+    - service.idle.v1
     - idle
 
 subs:

@@ -46,11 +46,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
-// RegisterProvider registers a schema provider for a specific service type.
-func (svc *Service) RegisterProvider(serviceType string, provider SchemaProvider) {
+// RegisterProvider registers a schema provider keyed by payload type.
+func (svc *Service) RegisterProvider(payloadType string, provider SchemaProvider) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
-	svc.providers[serviceType] = provider
+	svc.providers[payloadType] = provider
 }
 
 // ValidateConfig validates the service configuration.
@@ -103,12 +103,12 @@ func (svc *Service) Initialize() error {
 
 	// Initialize schemas
 	svc.mu.RLock()
-	for serviceType, provider := range svc.providers {
+	for payloadType, provider := range svc.providers {
 		schema := provider.SQLiteSchema()
 		if schema != "" {
 			if _, err := db.Exec(schema); err != nil {
 				svc.mu.RUnlock()
-				return fmt.Errorf("failed to initialize schema for %s: %w", serviceType, err)
+				return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
 			}
 		}
 	}
@@ -127,12 +127,17 @@ func (svc *Service) Initialize() error {
 }
 
 func (svc *Service) handleMessage(msg core.Message) error {
+	// Only route by typed payload DataType. Legacy service-type routing removed.
+	if msg.DataType == "" {
+		return nil
+	}
+
 	svc.mu.RLock()
-	provider, ok := svc.providers[msg.ServiceType]
+	provider, ok := svc.providers[msg.DataType]
 	svc.mu.RUnlock()
 
 	if !ok {
-		// Skip messages from services that didn't register a schema.
+		// No provider registered for this payload type
 		return nil
 	}
 
@@ -143,7 +148,7 @@ func (svc *Service) handleMessage(msg core.Message) error {
 
 	_, err := svc.db.Exec(query, args...)
 	if err != nil {
-		svc.Deps.MustGetLogger().Error("failed to insert message into sqlite", "error", err, "serviceType", msg.ServiceType, "query", query)
+		svc.Deps.MustGetLogger().Error("failed to insert message into sqlite", "error", err, "dataType", msg.DataType, "query", query)
 		return err
 	}
 
@@ -170,34 +175,34 @@ func (svc *Service) GetSQLiteDB() **sql.DB {
 	return &svc.db
 }
 
-// AcceptsServiceType returns true if this sqlite service should accept messages
-// from the provided serviceType. This is controlled by the optional
-// 'serviceTypes' configuration key which may be a comma-separated string or
-// an array of strings. If absent, the sqlite service accepts all service types
+// AcceptsPayloadType returns true if this sqlite service should accept messages
+// for the provided payloadType. This is controlled by the optional
+// 'payloadTypes' configuration key which may be a comma-separated string or
+// an array of strings. If absent, the sqlite service accepts all payload types
 // (backwards compatibility).
-func (svc *Service) AcceptsServiceType(serviceType string) bool {
+func (svc *Service) AcceptsPayloadType(payloadType string) bool {
 	if svc.Cfg.Config == nil {
 		return true
 	}
-	if v, ok := svc.Cfg.Config["serviceTypes"]; ok {
+	if v, ok := svc.Cfg.Config["payloadTypes"]; ok {
 		switch t := v.(type) {
 		case string:
 			for _, s := range strings.Split(t, ",") {
-				if strings.TrimSpace(s) == serviceType {
+				if strings.TrimSpace(s) == payloadType {
 					return true
 				}
 			}
 			return false
 		case []interface{}:
 			for _, vi := range t {
-				if s, ok := vi.(string); ok && s == serviceType {
+				if s, ok := vi.(string); ok && s == payloadType {
 					return true
 				}
 			}
 			return false
 		case []string:
 			for _, s := range t {
-				if s == serviceType {
+				if s == payloadType {
 					return true
 				}
 			}

@@ -1,0 +1,8 @@
+x: alerts
+
+subs:
+  alerts:
+    name: alerts
+    description: read alerts from local channel
+
+

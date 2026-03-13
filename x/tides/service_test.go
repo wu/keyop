@@ -940,12 +940,18 @@ func TestCheck_SendsMessageFromCache(t *testing.T) {
 	assert.NotEmpty(t, msg.Summary)
 	assert.Equal(t, "tide.9414290", msg.MetricName)
 
-	data, ok := msg.Data.(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "9414290", data["stationId"])
-	assert.NotNil(t, data["current"])
-	assert.Contains(t, []string{"rising", "falling", ""}, data["state"])
-	_ = data["nextPeak"]
+	// Expect typed TideEvent payload (could be value or pointer).
+	var ev *TideEvent
+	if evPtr, ok := msg.Data.(*TideEvent); ok {
+		ev = evPtr
+	} else if evVal, ok := msg.Data.(TideEvent); ok {
+		ev = &evVal
+	}
+	require.NotNil(t, ev, "expected TideEvent payload, got %T", msg.Data)
+	assert.Equal(t, "9414290", ev.StationID)
+	assert.NotZero(t, ev.Current.Value)
+	assert.Contains(t, []string{"rising", "falling", ""}, ev.State)
+	_ = ev.NextPeak
 }
 
 func TestCheck_SendsExtremeTideWarning(t *testing.T) {
@@ -1570,14 +1576,14 @@ func TestSQLiteIntegration(t *testing.T) {
 			Timestamp:   time.Now(),
 			ChannelName: "tides",
 			Event:       "tide",
-			Data: map[string]any{
-				"stationId": "9414290",
-				"current":   map[string]any{"v": 2.5},
-				"state":     "rising",
-				"nextPeak": map[string]any{
-					"time":  "2026-03-09 12:00",
-					"value": 5.5,
-					"type":  "high",
+			Data: &TideEvent{
+				StationID: "9414290",
+				Current:   TideRecord{Time: "2026-03-09 11:54", Value: 2.5},
+				State:     "rising",
+				NextPeak: &TidePeak{
+					Time:  "2026-03-09 12:00",
+					Value: 5.5,
+					Type:  "high",
 				},
 			},
 		}
