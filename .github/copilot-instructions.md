@@ -93,6 +93,10 @@ from the repo owner. If a task requires git, ask first and wait for a clear yes.
 
 Policy: Never modify the configuration without explicit, written approval from the repo owner.
 
+Policy: Do not look for server process ids or attempt to kill processes unless you are explicitly asked to do so by the
+repo owner as part of a specific task. You can make requests to the server process. Ask me and I will provide the
+local port.
+
 
 
 ---

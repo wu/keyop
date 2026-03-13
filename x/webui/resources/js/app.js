@@ -61,6 +61,88 @@ function switchTab(tabId) {
     });
 
     activeTabId = tabId;
+    focusOnTabs = true; // Reset to tabs focus when switching
+}
+
+function updateTabVisualFocus(tabIndex) {
+    // Update visual focus (keyboard focus highlight) without switching tabs
+    document.querySelectorAll('.tab-link').forEach((link, index) => {
+        link.classList.toggle('tab-focused', index === tabIndex);
+    });
+}
+
+
+let selectedTabIndex = 0; // Track which tab is selected
+let focusedTabIndex = 0; // Track which tab has keyboard focus (visually highlighted but not active)
+let focusOnTabs = true;  // Is keyboard focus on tabs or on items?
+let allTabIds = [];      // List of tab IDs in order
+
+
+function setupTabKeyboardNavigation() {
+    document.addEventListener('keydown', (e) => {
+        // Get all tab links
+        const tabLinks = Array.from(document.querySelectorAll('.tab-link'));
+        if (tabLinks.length === 0) return;
+
+        // Store tab IDs if not already done
+        if (allTabIds.length === 0) {
+            allTabIds = tabLinks.map(link => link.dataset.tabId);
+            selectedTabIndex = allTabIds.indexOf(activeTabId);
+            focusedTabIndex = selectedTabIndex;
+            updateTabVisualFocus(focusedTabIndex);
+        }
+
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            if (focusOnTabs) {
+                // Move focus to next tab (don't switch yet)
+                if (focusedTabIndex < allTabIds.length - 1) {
+                    focusedTabIndex++;
+                    updateTabVisualFocus(focusedTabIndex);
+                }
+            }
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            if (focusOnTabs) {
+                // Move focus to previous tab (don't switch yet)
+                if (focusedTabIndex > 0) {
+                    focusedTabIndex--;
+                    updateTabVisualFocus(focusedTabIndex);
+                }
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (focusOnTabs && focusedTabIndex !== selectedTabIndex) {
+                // Switch to focused tab on Enter
+                selectedTabIndex = focusedTabIndex;
+                switchTab(allTabIds[focusedTabIndex]);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors')) {
+                // Move focus from tabs to items - deselect tab visual
+                focusOnTabs = false;
+                updateTabVisualFocus(-1); // Clear any focused tab
+                // Dispatch a pseudo-event to the tab module to select first item
+                const tabModule = tabsModules[activeTabId];
+                if (tabModule && tabModule.focusItems) {
+                    tabModule.focusItems();
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors')) {
+                // Move focus from items back to tabs (only if at top of items)
+                const tabModule = tabsModules[activeTabId];
+                if (tabModule && tabModule.canReturnToTabs && tabModule.canReturnToTabs()) {
+                    focusOnTabs = true;
+                    // Sync focused tab to current active tab when returning
+                    focusedTabIndex = selectedTabIndex;
+                    updateTabVisualFocus(focusedTabIndex);
+                }
+            }
+        }
+    });
 }
 
 const sseStatusEl = document.getElementById('sse-status');
@@ -90,3 +172,4 @@ initSSE((msg) => {
 });
 
 loadTabs();
+setupTabKeyboardNavigation();
