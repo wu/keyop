@@ -16,7 +16,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "temps",
-		Title: "Temperatures",
+		Title: "Temps",
 		Content: `<div id="temps-container">
 <canvas id="temps-chart"></canvas>
 </div>`,

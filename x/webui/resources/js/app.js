@@ -10,6 +10,13 @@ async function loadTabs() {
     const response = await fetch('/api/tabs');
     const tabs = await response.json();
 
+    // Sort tabs: dashboard first, then alphabetical by title
+    tabs.sort((a, b) => {
+        if (a.id === 'dashboard') return -1;
+        if (b.id === 'dashboard') return 1;
+        return a.title.localeCompare(b.title);
+    });
+
     tabs.forEach(tab => {
         // Create tab link
         const link = document.createElement('div');

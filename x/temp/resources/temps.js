@@ -37,8 +37,9 @@ export async function init(container) {
 function resizeCanvas() {
     if (!canvas || !tempsContainer) return;
     const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.offsetWidth || tempsContainer.offsetWidth || 800;
+    const cssW = tempsContainer.offsetWidth || 800;
     const cssH = 400;
+    canvas.style.width = cssW + 'px';
     canvas.style.height = cssH + 'px';
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
@@ -208,7 +209,7 @@ function render() {
         const servicePoints = history.filter(pt => pt.serviceName === serviceName);
 
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
 
         servicePoints.forEach((pt, i) => {
@@ -219,16 +220,6 @@ function render() {
         });
 
         ctx.stroke();
-
-        // Draw points
-        ctx.fillStyle = color;
-        servicePoints.forEach(pt => {
-            const x = PAD.left + ((pt.timestamp - firstTime) / timeRange) * chartW;
-            const y = PAD.top + chartH - ((pt.tempF - minTemp) / (maxTemp - minTemp)) * chartH;
-            ctx.beginPath();
-            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-        });
     });
 
     // Legend

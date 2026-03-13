@@ -1,8 +1,59 @@
 let alertsContainer = null;
+let unreadAlertCount = 0;
+let highestSeverity = 'info'; // Track highest severity level
+
+// Severity levels in order of priority
+const SEVERITY_LEVELS = {info: 0, warning: 1, error: 2, critical: 3};
+const SEVERITY_COLORS = {
+    info: '#3b82f6',      // blue
+    warning: '#fbbf24',   // yellow
+    error: '#ef4444',     // red
+    critical: '#dc2626'   // darker red
+};
+
+function updateHighestSeverity(severity) {
+    const currentLevel = SEVERITY_LEVELS[highestSeverity] || 0;
+    const newLevel = SEVERITY_LEVELS[severity?.toLowerCase()] || 0;
+    if (newLevel > currentLevel) {
+        highestSeverity = severity?.toLowerCase() || 'info';
+    }
+}
+
+function recalculateHighestSeverity() {
+    // Scan all remaining alert items and find the highest severity
+    highestSeverity = 'info';
+    const alertItems = document.querySelectorAll('.alert-item');
+    alertItems.forEach(item => {
+        const severitySpan = item.querySelector('.alert-severity');
+        if (severitySpan) {
+            const severity = severitySpan.textContent.toLowerCase();
+            updateHighestSeverity(severity);
+        }
+    });
+}
 
 export async function init(container) {
     alertsContainer = container;
     await refreshAlerts();
+}
+
+export function updateBubble() {
+    // Find the tab link for alerts
+    const tabLink = document.querySelector('[data-tab-id="alerts"]');
+    if (!tabLink) return;
+
+    // Remove existing bubble if any
+    let bubble = tabLink.querySelector('.notification-bubble');
+    if (bubble) bubble.remove();
+
+    // Add new bubble if count > 0
+    if (unreadAlertCount > 0) {
+        bubble = document.createElement('span');
+        bubble.className = 'notification-bubble';
+        bubble.textContent = unreadAlertCount;
+        bubble.style.backgroundColor = SEVERITY_COLORS[highestSeverity] || '#dc3545';
+        tabLink.appendChild(bubble);
+    }
 }
 
 export function onMessage(msg) {
@@ -10,6 +61,13 @@ export function onMessage(msg) {
 
     // Only process alert-type messages
     if (msg.dataType !== 'core.alert.v1') return;
+
+    // Increment unread count and track severity
+    unreadAlertCount++;
+    if (msg.data) {
+        updateHighestSeverity(msg.data.level);
+    }
+    updateBubble();
 
     // Check if the alerts tab content is visible
     const tabContent = alertsContainer.closest('.tab-content');
@@ -74,11 +132,18 @@ function addAlertToList(msg) {
     if (newCheckbox) {
         newCheckbox.addEventListener('change', async (e) => {
             if (e.target.checked) {
+                // Decrement unread count
+                if (unreadAlertCount > 0) {
+                    unreadAlertCount--;
+                }
                 // Remove from UI
                 const alertItem = e.target.closest('.alert-item');
                 if (alertItem) {
                     alertItem.remove();
                 }
+                // Recalculate highest severity and update bubble
+                recalculateHighestSeverity();
+                updateBubble();
                 // If no more alerts, show "No active alerts"
                 if (listDiv.children.length === 0) {
                     alertsContainer.innerHTML = '<div class="no-alerts">No active alerts</div>';
@@ -103,6 +168,14 @@ async function refreshAlerts() {
 
         const result = await response.json();
         const alerts = result.alerts || [];
+
+        // Set unread count based on loaded alerts and find highest severity
+        unreadAlertCount = alerts.length;
+        highestSeverity = 'info';
+        alerts.forEach(alert => {
+            updateHighestSeverity(alert.severity);
+        });
+        updateBubble();
 
         if (alerts.length === 0) {
             alertsContainer.innerHTML = '<div class="no-alerts">No active alerts</div>';
@@ -136,11 +209,18 @@ async function refreshAlerts() {
                 if (e.target.checked) {
                     const alertID = parseInt(e.target.dataset.alertId, 10);
                     await markAlertSeen(alertID);
+                    // Decrement unread count
+                    if (unreadAlertCount > 0) {
+                        unreadAlertCount--;
+                    }
                     // Remove from UI
                     const alertItem = document.querySelector(`[data-alert-id="${alertID}"]`);
                     if (alertItem) {
                         alertItem.remove();
                     }
+                    // Recalculate highest severity and update bubble
+                    recalculateHighestSeverity();
+                    updateBubble();
                     // If no more alerts, show "No active alerts"
                     const listDiv = alertsContainer.querySelector('#alerts-list');
                     if (listDiv && listDiv.children.length === 0) {
