@@ -228,45 +228,30 @@ export function onMessage(msg) {
     if (!container) return;
     if (!container.classList || !container.classList.contains('active')) return;
 
-    // Filter for idle events
-    if (msg.dataType !== 'service.idle.v1') return;
+    // Filter for idle events - check event type or service type
+    if (msg.event !== 'idle_status' && msg.serviceType !== 'idle') return;
 
     if (!reportData) return; // No report yet, skip
 
-    // When a new idle event arrives, refresh the current hour's data
-    // We'll do this by fetching a fresh report for just the data range covering the current hour
+    // Use the same rolling 24-hour window as init()
     const now = new Date();
-    const hourStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0);
-    const hourEnd = new Date(hourStart);
-    hourEnd.setHours(hourEnd.getHours() + 1);
-
-    const startIso = hourStart.toISOString().slice(0, 19);
-    const endIso = hourEnd.toISOString().slice(0, 19);
+    const start = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
 
     fetch('/api/tabs/idle/action/fetch-idle-report', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            start: startIso,
-            end: endIso,
+            start: start.toISOString(),
+            end: now.toISOString(),
         }),
     })
         .then(response => response.json())
         .then(data => {
-            if (data && data.data && data.data.hourlyData && data.data.hourlyData.length > 0) {
-                // Find the current hour in existing data and update it
-                const newHourData = data.data.hourlyData[0];
-                const currentHourIdx = reportData.hourlyData.findIndex(h => {
-                    const hTime = new Date(h.time);
-                    const cTime = new Date(newHourData.time);
-                    return hTime.getTime() === cTime.getTime();
-                });
-
-                if (currentHourIdx >= 0) {
-                    reportData.hourlyData[currentHourIdx] = newHourData;
-                    render();
-                }
+            if (data && data.data) {
+                // Replace entire report data with fresh data
+                reportData = data.data;
+                render();
             }
         })
-        .catch(err => console.error('Failed to fetch updated hour:', err));
+        .catch(err => console.error('Failed to fetch updated report:', err));
 }

@@ -180,18 +180,47 @@ function render() {
         ctx.fillText(label, PAD.left - 6, y + 4);
     }
 
-    // X-axis time labels
+    // X-axis time labels and grid lines
     const firstTime = history[0].timestamp;
     const lastTime = history[history.length - 1].timestamp;
     const timeRange = lastTime - firstTime || 1;
-    ctx.fillStyle = '#888';
+
+    // Draw vertical grid lines at hours and half-hours
+    const msPerHour = 60 * 60 * 1000;
+    const startHour = new Date(firstTime);
+    startHour.setMinutes(0, 0, 0);
+
+    for (let t = new Date(startHour); t <= lastTime; t = new Date(t.getTime() + 30 * 60 * 1000)) {
+        if (t < firstTime) continue;
+        const x = PAD.left + ((t - firstTime) / timeRange) * chartW;
+        const isHour = t.getMinutes() === 0;
+
+        if (isHour) {
+            // Full hour: darker line
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+        } else {
+            // Half hour: lighter line
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(x, PAD.top);
+        ctx.lineTo(x, PAD.top + chartH);
+        ctx.stroke();
+    }
+
+    // Hour labels on x-axis
+    ctx.fillStyle = '#aaa';
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    [0, 0.5, 1].forEach(frac => {
-        const t = new Date(firstTime.getTime() + frac * timeRange);
-        const x = PAD.left + frac * chartW;
+
+    for (let t = new Date(startHour); t <= lastTime; t = new Date(t.getTime() + msPerHour)) {
+        if (t < firstTime) continue;
+        const x = PAD.left + ((t - firstTime) / timeRange) * chartW;
         ctx.fillText(t.toLocaleTimeString(), x, H - PAD.bottom + 16);
-    });
+    }
 
     // Y-axis label
     ctx.save();
