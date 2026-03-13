@@ -1,3 +1,40 @@
+## [0.5.0](https://github.com/wu/keyop/compare/0.4.0...0.5.0) (2026-03-13)
+
+### Features
+
+* add arrow key navigation for web ui ([c3804d9](https://github.com/wu/keyop/commit/c3804d97493b74679f2edb1b63f30d7f4751c2ad))
+* add connection indicator dot to web ui ([49d9d7c](https://github.com/wu/keyop/commit/49d9d7ca1f29d7848430dcea570b6630d2c710a8))
+* add error events and temps to web ui ([5880073](https://github.com/wu/keyop/commit/58800735b857b33364ceb32d9b867a2899e8cddc))
+* add keyboard navigation for tabs ([b919473](https://github.com/wu/keyop/commit/b91947319134b588f883b481b43df92cd3793d9d))
+* add message stats to web ui ([b1482c4](https://github.com/wu/keyop/commit/b1482c4c72221f234537645aa3b97a1a31ef0ef2))
+* add simple web ui ([a17fbc2](https://github.com/wu/keyop/commit/a17fbc27c977dd0c6337f9a6618656294cc3fc91))
+* improve display of idle report ([c55617c](https://github.com/wu/keyop/commit/c55617cf16b354c82cd3679585956e2c92f9cd4a))
+* improvements for idle page in web ui ([909f5a4](https://github.com/wu/keyop/commit/909f5a48aa6875fd05c0326768666491e7bf4fe7))
+* migrate envelope attributes to message ([a4d54cf](https://github.com/wu/keyop/commit/a4d54cf64887b9cb67fb9cbfbd1b454ff3642889))
+* remove macos notes service ([69766bb](https://github.com/wu/keyop/commit/69766bbfeb4ff43b046b89d484b05ea22af8f3c5))
+* update copilot instructions ([dc028c5](https://github.com/wu/keyop/commit/dc028c527459b08644b7201ae0eeab943cc98bc1))
+* update graphite, metrics, and status monitors to read multiple channels ([6fc0069](https://github.com/wu/keyop/commit/6fc0069575b323acf4975213a2beea333938e6a6))
+* update idle service ([d7da2a0](https://github.com/wu/keyop/commit/d7da2a05a2ef77a222008a252eb596eaef324edc))
+* update sqlite plugin to support multiple instances ([cbe1b61](https://github.com/wu/keyop/commit/cbe1b615194381e2eb821cf035b5ce9f577fb26d))
+* updates to payload registration to support alerts ([55acdc5](https://github.com/wu/keyop/commit/55acdc5675e81fc215e82dbeda38f8098b50201c))
+* use AlertEvents for notifications ([d719337](https://github.com/wu/keyop/commit/d719337020557ee651ddf7bac0e23b5eacad26bd))
+* web ui dashboard with moon and sun penals ([a8b39fc](https://github.com/wu/keyop/commit/a8b39fc5e7f5cd3d44a7993cea659e11442b7ff4))
+* web ui improvements ([c267e3e](https://github.com/wu/keyop/commit/c267e3e9b71f9f5a71e6dda99719ec98b19d5550))
+
+### Bug Fixes
+
+* add icon to web ui ([fd6a446](https://github.com/wu/keyop/commit/fd6a4466c4433bb8f359bb9fa16b82b420106b1c))
+* improve display of active times in idle tab in web ui ([1f9961d](https://github.com/wu/keyop/commit/1f9961d7e0cd68de341933404ddb942aa3dab492))
+* only refresh idle data when idle tab is selected ([0985ab9](https://github.com/wu/keyop/commit/0985ab929c79223e7212cd42094db7c2b83bce70))
+* remove anomaly detector ([67cbb86](https://github.com/wu/keyop/commit/67cbb8650d339eefc20361ca965bf125cf9bff92))
+* rename packages ([83ad30f](https://github.com/wu/keyop/commit/83ad30f293a5e04048c842331cbfbc3c855ad726))
+* resolve an error with a failing test ([47107d8](https://github.com/wu/keyop/commit/47107d8476788677115b2a99d6885c22db7f8297))
+* resolve bug in idle service with missing data ([cc49cd7](https://github.com/wu/keyop/commit/cc49cd788b46c6032957cc7693534b95d25c9bce))
+* resolve linter issues ([386df67](https://github.com/wu/keyop/commit/386df67930e826f671dc6d984bded6907dd00c02))
+* set hostname for idle service ([7d664e0](https://github.com/wu/keyop/commit/7d664e04a2951633ba16c1d1c3d69db2eed9e5ae))
+* update tui to handle heartbeat event payload ([9b867f8](https://github.com/wu/keyop/commit/9b867f802315c04c85e52232015f2202926bc795))
+* web ui improvements ([cf36c0a](https://github.com/wu/keyop/commit/cf36c0abf2f81a93c713258d2bbafb31e8133730))
+
 ## [0.4.0](https://github.com/wu/keyop/compare/0.3.0...0.4.0) (2026-03-09)
 
 ### Features
