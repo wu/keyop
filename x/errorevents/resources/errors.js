@@ -143,6 +143,18 @@ async function refreshErrors() {
 
         if (errors.length === 0) {
             list.innerHTML = '<div class="no-errors">No active errors</div>';
+
+            // Also clear the service list to only show "all"
+            const sidebar = errorsContainer.querySelector('.filter-sidebar');
+            if (sidebar) {
+                sidebar.innerHTML = `
+                    <div class="filter-title">Services</div>
+                    <div class="service-list">
+                        <div class="service-item active" data-service="all">all</div>
+                    </div>
+                `;
+            }
+            
             unreadErrorCount = 0;
             updateBubble();
             return;
@@ -341,18 +353,30 @@ function setupNavigation() {
             if (listDiv && listDiv.children.length === 0) {
                 listDiv.innerHTML = '<div class="no-errors">No active errors</div>';
                 navController.selectedIndex = -1;
+
+                // When all errors are gone, refresh from server to ensure service list is clean
+                await refreshErrors();
             } else if (visibleItems.length === 0) {
                 // No visible items (service was filtered and now has no items)
                 // Refresh from server to get the current state and rebuild the service list
                 await refreshErrors();
 
-                // Reinitialize navigation with new DOM
-                setupNavigation();
+                // Ensure all items are visible before resetting nav state
+                errorsContainer.querySelectorAll('.error-item').forEach(item => {
+                    item.style.display = '';
+                });
 
-                // After refresh, switch to "all" view
+                // Reset navigation state (don't recreate nav controller to avoid duplicate event listeners)
                 navController.selectedService = 'all';
+                navController.selectedServiceIndex = 0;
                 navController.selectedIndex = -1;
+                navController.focusOnServices = false;
                 navController.applyServiceFilter();
+
+                // Double-check that all items are now visible
+                errorsContainer.querySelectorAll('.error-item').forEach(item => {
+                    item.style.display = '';
+                });
 
                 // Update service list UI
                 errorsContainer.querySelectorAll('.service-item').forEach(s => s.classList.remove('active'));
