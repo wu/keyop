@@ -421,9 +421,10 @@ func TestMaybeSendIdleReport(t *testing.T) {
 	messenger := testutil.NewFakeMessenger()
 
 	t.Run("Last24Hours", func(t *testing.T) {
-		md, err := svc.generateIdleReport(messenger, now, time.Time{}, time.Time{}, true)
+		md, report, err := svc.generateIdleReport(messenger, now, time.Time{}, time.Time{}, true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, md)
+		assert.NotNil(t, report)
 		assert.Contains(t, md, "test-host")
 		assert.Contains(t, md, "Active periods")
 
@@ -441,9 +442,10 @@ func TestMaybeSendIdleReport(t *testing.T) {
 			start.Add(30*time.Minute), "test-host", "active", 0.0, 1800.0)
 		assert.NoError(t, err)
 
-		md, err := svc.generateIdleReport(messenger, now, start, end, true)
+		md, report, err := svc.generateIdleReport(messenger, now, start, end, true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, md)
+		assert.NotNil(t, report)
 
 		// Verify hourly activity labels and order
 		label11 := "03-09 11:00"
@@ -485,8 +487,15 @@ func TestMaybeSendIdleReport(t *testing.T) {
 
 		start := now.Add(-100 * time.Hour)
 		end := now.Add(-50 * time.Hour)
-		md, err := svc2.generateIdleReport(messenger, now, start, end, true)
+		md, report, err := svc2.generateIdleReport(messenger, now, start, end, true)
 		assert.NoError(t, err)
 		assert.Empty(t, md) // Should return empty if no data found
+		// Should return non-nil report with empty hourly data showing "unknown" for all hours
+		assert.NotNil(t, report)
+		assert.Empty(t, report.ActivePeriods)
+		assert.Greater(t, len(report.HourlyData), 0) // Should have hourly data showing all unknown
+		assert.Equal(t, 0.0, report.TotalActiveDurationSecs)
+		assert.Equal(t, 0.0, report.TotalIdleDurationSecs)
+		assert.Greater(t, report.TotalUnknownDurationSecs, 0.0)
 	})
 }

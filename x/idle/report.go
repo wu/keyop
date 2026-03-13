@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -12,23 +13,24 @@ import (
 // If start is zero, it defaults to the beginning of the day (midnight) for the report day (yesterday if now is given).
 // If end is zero, it defaults to the end of that same day.
 // If both are zero, it defaults to the last 24 hours from 'now'.
-func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start, end time.Time, force bool) (string, error) {
+// Returns both markdown (for backward compatibility) and structured report data.
+func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start, end time.Time, force bool) (string, *Report, error) {
 	logger := svc.Deps.MustGetLogger()
 
 	if svc.db == nil || *svc.db == nil {
 		logger.Warn("idle: database not available; skipping report")
-		return "", nil
+		return "", nil, nil
 	}
 
 	if !force {
 		if now.Hour() < 0 || now.Hour() >= 1 {
-			return "", nil
+			return "", nil, nil
 		}
 	}
 
 	reportDay := localMidnight(now).AddDate(0, 0, -1)
 	if !force && !svc.lastReportDay.IsZero() && svc.lastReportDay.Equal(reportDay) {
-		return "", nil
+		return "", nil, nil
 	}
 
 	// Default time range logic
@@ -55,7 +57,7 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 		ORDER BY timestamp ASC`,
 		start, end)
 	if err != nil {
-		return "", fmt.Errorf("failed to query idle events: %w", err)
+		return "", nil, fmt.Errorf("failed to query idle events: %w", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -95,7 +97,34 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 
 	if len(msgsByHost) == 0 {
 		logger.Warn("idle: no idle_status messages found in database for range", "start", start, "end", end)
-		return "", nil
+
+		// Build hourly data for the range showing all as unknown (no data)
+		numHours := int(end.Sub(start).Hours()) + 1
+		hourlyData := make([]HourData, 0, numHours)
+
+		for h := 0; h < numHours; h++ {
+			hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+			// All spaces = unknown
+			minuteData := strings.Repeat(" ", 60)
+			hourlyData = append(hourlyData, HourData{
+				Hour:       hourStart.Hour(),
+				Time:       hourStart.UTC().Format(time.RFC3339),
+				MinuteData: minuteData,
+				ActiveMins: 0,
+			})
+		}
+
+		// Return empty report showing full unknown range
+		emptyReport := &Report{
+			ReportStart:              start.UTC().Format(time.RFC3339),
+			ReportEnd:                end.UTC().Format(time.RFC3339),
+			TotalActiveDurationSecs:  0,
+			TotalIdleDurationSecs:    0,
+			TotalUnknownDurationSecs: end.Sub(start).Seconds(),
+			HourlyData:               hourlyData,
+			ActivePeriods:            []ActivePeriod{},
+		}
+		return "", emptyReport, nil
 	}
 
 	// Build per-host active periods and coverage intervals
@@ -269,11 +298,12 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	// Build hourly activity
 	// We determine how many hours are in the range [start, end)
 	numHours := int(end.Sub(start).Hours()) + 1
-	minuteLines := make([]string, numHours)
-	minuteCounts := make([]int, numHours)
+	hourlyData := make([]HourData, 0, numHours)
+	hourStarts := make([]time.Time, 0, numHours) // Keep track of original times for markdown
 
 	for h := 0; h < numHours; h++ {
 		hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+		hourStarts = append(hourStarts, hourStart)
 		// initialize 60-minute line with unknown markers (space)
 		mins := make([]rune, 60)
 		for i := 0; i < 60; i++ {
@@ -315,10 +345,27 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 			}
 		}
 
-		minuteLines[h] = string(mins)
-		minuteCounts[h] = count
+		hourData := HourData{
+			Hour:       hourStart.Hour(),
+			Time:       hourStart.UTC().Format(time.RFC3339),
+			MinuteData: string(mins),
+			ActiveMins: count,
+		}
+		hourlyData = append(hourlyData, hourData)
 	}
 
+	// Build structured report for incremental updates
+	structuredReport := &Report{
+		ReportStart:              start.UTC().Format(time.RFC3339),
+		ReportEnd:                end.UTC().Format(time.RFC3339),
+		TotalActiveDurationSecs:  activeTotalSecs,
+		TotalIdleDurationSecs:    idleTotalSecs,
+		TotalUnknownDurationSecs: unknownTotalSecs,
+		HourlyData:               hourlyData,
+		ActivePeriods:            allActivePeriods,
+	}
+
+	// For backward compatibility with markdown display, generate markdown from structured data
 	md := fmt.Sprintf("# Idle report: %s to %s\n", start.Format("2006-01-02 15:04"), end.Format("2006-01-02 15:04"))
 	md += fmt.Sprintf("* **Total active:** %s\n", formatHM(activeTotalSecs))
 	md += fmt.Sprintf("* **Total idle:** %s\n", formatHM(idleTotalSecs))
@@ -326,12 +373,11 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 
 	md += "## Hourly activity\n\n"
 	md += "```\n"
-	for h := numHours - 1; h >= 0; h-- {
-		hourTime := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+	for i := len(hourlyData) - 1; i >= 0; i-- {
+		hd := hourlyData[i]
+		hourTime := hourStarts[i]
 		label := hourTime.Format("01-02 15:00")
-		line := minuteLines[h]
-		count := minuteCounts[h]
-		md += fmt.Sprintf("%s | %s %2dm\n", label, line, count)
+		md += fmt.Sprintf("%s | %s %2dm\n", label, hd.MinuteData, hd.ActiveMins)
 	}
 	md += "```\n\n"
 
@@ -353,5 +399,5 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 		_ = svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
 	}
 	logger.Info("idle: generated report from database (web-only)")
-	return md, nil
+	return md, structuredReport, nil
 }

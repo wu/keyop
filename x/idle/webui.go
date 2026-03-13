@@ -20,22 +20,24 @@ func (svc *Service) WebUITab() webui.TabInfo {
 		ID:    "idle",
 		Title: "Idle",
 		Content: `<div id="idle-container">
-<h3>Idle Status</h3>
 <div id="idle-status">Loading status...</div>
+<div id="idle-totals"></div>
 <div id="idle-report-section">
-<h3>Recent Daily Report</h3>
-<div id="idle-report-controls">
-<label>Start: <input type="date" id="idle-start-date"></label>
-<label>End: <input type="date" id="idle-end-date"></label>
-<button id="idle-refresh-btn">Refresh</button>
+<canvas id="idle-report-canvas"></canvas>
+<div id="idle-summary">
+<table id="idle-active-periods-table">
+<thead>
+<tr><th>Hostname</th><th>Start</th><th>Stop</th><th>Duration</th></tr>
+</thead>
+<tbody id="idle-periods-body"></tbody>
+</table>
 </div>
-<div id="idle-report-content">Loading report...</div>
 </div>
-<h3>Activity Log</h3>
+<h3 style="color: #c77dff;">Activity Log</h3>
 <div id="idle-history"></div>
 </div>`,
 		JSPath:         "/api/assets/idle/idle.js",
-		RenderMarkdown: true,
+		RenderMarkdown: false,
 	}
 }
 
@@ -43,6 +45,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
 	switch action {
 	case "refresh-report":
+		// Legacy: markdown-based report for backward compatibility
 		messenger := svc.Deps.MustGetMessenger()
 		var start, end time.Time
 		if s, ok := params["start"].(string); ok {
@@ -52,11 +55,33 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			end, _ = time.Parse(time.RFC3339, e)
 		}
 
-		report, err := svc.generateIdleReport(messenger, time.Now(), start, end, true)
+		md, _, err := svc.generateIdleReport(messenger, time.Now(), start, end, true)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]string{"status": "ok", "report": report}, nil
+		return map[string]string{"status": "ok", "report": md}, nil
+
+	case "fetch-idle-report":
+		// New: structured report data for incremental updates
+		messenger := svc.Deps.MustGetMessenger()
+		var start, end time.Time
+		if s, ok := params["start"].(string); ok {
+			start, _ = time.Parse(time.RFC3339, s)
+		}
+		if e, ok := params["end"].(string); ok {
+			end, _ = time.Parse(time.RFC3339, e)
+		}
+
+		_, report, err := svc.generateIdleReport(messenger, time.Now(), start, end, true)
+		if err != nil {
+			return nil, err
+		}
+		if report == nil {
+			return map[string]any{"status": "ok", "data": nil}, nil
+		}
+		// Return as JSON (will be marshaled by webui)
+		return map[string]any{"status": "ok", "data": report}, nil
+
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}

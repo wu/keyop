@@ -29,6 +29,25 @@ type ActivePeriod struct {
 	DurationSeconds float64   `yaml:"durationSeconds" json:"durationSeconds"`
 }
 
+// HourData represents the minute-by-minute activity for a single hour.
+type HourData struct {
+	Hour       int    `json:"hour"`       // 0-23 (in UTC or local time)
+	Time       string `json:"time"`       // ISO 8601 timestamp of hour start
+	MinuteData string `json:"minuteData"` // 60-char string: '█' = active, '·' = idle, ' ' = unknown
+	ActiveMins int    `json:"activeMins"` // count of active minutes
+}
+
+// Report represents structured idle report data that can be displayed and incrementally updated.
+type Report struct {
+	ReportStart              string         `json:"reportStart"` // ISO 8601
+	ReportEnd                string         `json:"reportEnd"`   // ISO 8601
+	TotalActiveDurationSecs  float64        `json:"totalActiveDurationSecs"`
+	TotalIdleDurationSecs    float64        `json:"totalIdleDurationSecs"`
+	TotalUnknownDurationSecs float64        `json:"totalUnknownDurationSecs"`
+	HourlyData               []HourData     `json:"hourlyData"`    // one per hour, chronological
+	ActivePeriods            []ActivePeriod `json:"activePeriods"` // detailed active periods
+}
+
 // Event represents a typed payload for idle events.
 type Event struct {
 	Now                          time.Time `json:"now"`
@@ -151,7 +170,7 @@ func (svc *Service) Initialize() error {
 	// If lastReportDay not set, generate report for previous day immediately.
 	if svc.lastReportDay.IsZero() {
 		messenger := svc.Deps.MustGetMessenger()
-		if _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, true); err != nil {
+		if _, _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, true); err != nil {
 			logger.Warn("idle: initial report failed", "error", err)
 		}
 	}
@@ -358,7 +377,7 @@ func (svc *Service) Check() error {
 	}
 
 	// Attempt to generate nightly report between 00:00 and 01:00 local time
-	if _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, false); err != nil {
+	if _, _, err := svc.generateIdleReport(messenger, time.Now(), time.Time{}, time.Time{}, false); err != nil {
 		logger.Warn("idle: failed to generate nightly report", "error", err)
 	}
 

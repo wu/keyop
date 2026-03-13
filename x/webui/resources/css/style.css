@@ -683,3 +683,55 @@ input[type="date"]:focus {
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     }
 }
+
+/* Idle report styling */
+#idle-report-canvas {
+    border: 1px solid #444;
+    background-color: #1a1a1a;
+    margin: 15px 0;
+    width: 100%;
+    display: block;
+}
+
+#idle-summary {
+    margin: 20px 0;
+}
+
+#idle-totals {
+    padding: 10px;
+    background-color: #2a2a2a;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+#idle-active-periods-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+#idle-active-periods-table thead {
+    background-color: #333333;
+}
+
+#idle-active-periods-table th,
+#idle-active-periods-table td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #444;
+}
+
+#idle-active-periods-table th {
+    font-weight: bold;
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+}
+
+#idle-active-periods-table tbody tr:hover {
+    background-color: #2a2a2a;
+}
+
