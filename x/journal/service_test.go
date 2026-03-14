@@ -4,6 +4,7 @@ import (
 	"context"
 	"keyop/core"
 	"keyop/core/testutil"
+	"keyop/util"
 	"testing"
 	"time"
 
@@ -255,7 +256,7 @@ func TestPreprocessMarkdownLists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := preprocessMarkdownLists(tt.input)
+			result := util.PreprocessMarkdownLists(tt.input)
 			assert.Contains(t, result, tt.contains)
 		})
 	}
@@ -270,7 +271,7 @@ More text
 - Item 1
 - Item 2`
 
-	result := preprocessMarkdownLists(input)
+	result := util.PreprocessMarkdownLists(input)
 
 	// Should not have separator between non-list content
 	lines := 0
@@ -624,7 +625,7 @@ Not a list
 
 - Group 3 Item 1`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 
 	// Should have separators between groups
 	assert.Contains(t, result, `<div class="list-group-gap"></div>`)
@@ -640,7 +641,7 @@ func TestPreprocessMarkdownListsWithNestedContent(t *testing.T) {
 
 - Item 2`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	assert.NotEmpty(t, result)
 	// Should not add separator between these items
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
@@ -653,7 +654,7 @@ func TestPreprocessMarkdownListsOnlyBlankLines(t *testing.T) {
 
 - Item 2`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	// Should have one separator
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 1, count)
@@ -665,7 +666,7 @@ func TestPreprocessMarkdownListsEndWithList(t *testing.T) {
 - Item 1
 - Item 2`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	// Should not add separator (no list after)
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 0, count)
@@ -759,7 +760,7 @@ func TestRenderMarkdownWithCodeBlock(t *testing.T) {
 
 	html, htmlOk := resultMap["html"].(string)
 	assert.True(t, htmlOk)
-	assert.Contains(t, html, "<pre>")
+	assert.Contains(t, html, "<pre")
 	assert.Contains(t, html, "<code")
 }
 
@@ -789,7 +790,7 @@ func TestRenderMarkdownListFormatting(t *testing.T) {
 	assert.Contains(t, html, "<li>Item 2</li>")
 }
 
-// Test preprocessMarkdownLists with multiple blanks
+// Test util.PreprocessMarkdownLists with multiple blanks
 func TestPreprocessMarkdownListsMultipleBlankLines(t *testing.T) {
 	content := `- Item 1
 
@@ -799,25 +800,25 @@ func TestPreprocessMarkdownListsMultipleBlankLines(t *testing.T) {
 
 - Item 3`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	// Should have separators between all groups
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 2, count)
 }
 
-// Test preprocessMarkdownLists with asterisks
+// Test util.PreprocessMarkdownLists with asterisks
 func TestPreprocessMarkdownListsWithAsterisks(t *testing.T) {
 	content := `* Item 1
 * Item 2
 
 * Group 2 Item 1`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 1, count)
 }
 
-// Test preprocessMarkdownLists with mixed markers
+// Test util.PreprocessMarkdownLists with mixed markers
 func TestPreprocessMarkdownListsMixedMarkers(t *testing.T) {
 	content := `- Item 1
 * Item 2
@@ -825,7 +826,7 @@ func TestPreprocessMarkdownListsMixedMarkers(t *testing.T) {
 - Item 3
 * Item 4`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 1, count)
 }
@@ -935,13 +936,13 @@ func TestRenderMarkdownWithBlockquote(t *testing.T) {
 	assert.Contains(t, html, "<blockquote>")
 }
 
-// Test preprocessMarkdownLists preserves indentation
+// Test util.PreprocessMarkdownLists preserves indentation
 func TestPreprocessMarkdownListsPreservesIndentation(t *testing.T) {
 	content := `- Item 1
   - Nested item
 - Item 2`
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	// Should not add separators for nested items
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 0, count)
@@ -971,14 +972,14 @@ func TestMultipleSequentialOperations(t *testing.T) {
 	assert.NotNil(t, markdownResult)
 }
 
-// Test preprocessMarkdownLists with whitespace variations
+// Test util.PreprocessMarkdownLists with whitespace variations
 func TestPreprocessMarkdownListsWhitespaceVariations(t *testing.T) {
 	content := `  - Item 1  
   - Item 2  
   
   - Item 3  `
 
-	result := preprocessMarkdownLists(content)
+	result := util.PreprocessMarkdownLists(content)
 	count := countOccurrences(result, `<div class="list-group-gap"></div>`)
 	assert.Equal(t, 1, count)
 }

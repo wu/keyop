@@ -1,0 +1,329 @@
+.notes-container {
+    display: flex;
+    height: 100%;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.notes-sidebar {
+    width: 300px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background-color: var(--tab-content-bg);
+    overflow: hidden;
+}
+
+.notes-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.notes-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background-color: var(--header-bg);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.notes-search {
+    flex: 1;
+    min-width: 150px;
+    padding: 8px 12px;
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.notes-search:focus {
+    outline: none;
+    border-color: #0ea5e9;
+}
+
+.notes-btn {
+    padding: 8px 12px;
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.notes-btn:hover {
+    background-color: #3a3a3a;
+}
+
+.notes-new-btn {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.notes-new-btn:hover {
+    background-color: #9d6cdc;
+}
+
+.notes-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.notes-item {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.notes-item:hover {
+    background-color: #2a2a2a;
+}
+
+.notes-item.active {
+    background-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.notes-item-title {
+    font-weight: 400;
+    font-size: 14px;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-item-meta {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.notes-import {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.notes-import-zone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.notes-import-zone:hover {
+    border-color: var(--accent);
+    background-color: var(--tab-content-bg);
+}
+
+.notes-import-zone.dragover {
+    border-color: var(--accent);
+    background-color: var(--tab-content-bg);
+}
+
+.notes-view {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+.notes-view-empty {
+    text-align: center;
+    color: #666666;
+    padding: 40px 20px;
+}
+
+.notes-view-timestamp {
+    font-size: 12px;
+    color: #888888;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.notes-view h1 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 28px;
+    color: var(--accent);
+}
+
+.notes-view h2 {
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-size: 20px;
+    color: var(--accent);
+}
+
+.notes-view h3 {
+    margin-top: 16px;
+    margin-bottom: 12px;
+    font-size: 16px;
+    color: var(--accent);
+}
+
+.notes-view h4 {
+    margin-top: 12px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--accent);
+}
+
+.notes-view h5 {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.notes-view h6 {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--accent);
+}
+
+.notes-view p {
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+}
+
+.notes-view ul, .notes-view ol {
+    margin: 0 0 16px 0;
+    padding-left: 24px;
+}
+
+.notes-view li {
+    margin-bottom: 4px;
+    line-height: 1.6;
+}
+
+.notes-view code {
+    background-color: var(--tab-content-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    font-size: 13px;
+    color: var(--pre-text);
+}
+
+.notes-view pre {
+    background-color: var(--tab-content-bg);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+    border: 1px solid var(--border);
+}
+
+.notes-view pre code {
+    background-color: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.notes-view table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 16px 0;
+}
+
+.notes-view table th {
+    background-color: var(--tab-content-bg);
+    padding: 8px;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-weight: 600;
+}
+
+.notes-view table td {
+    padding: 8px;
+    border: 1px solid var(--border);
+}
+
+.notes-view blockquote {
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+    margin: 0 0 16px 0;
+    color: var(--pre-text);
+}
+
+.notes-view a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.notes-view a:hover {
+    text-decoration: underline;
+}
+
+.notes-edit {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.notes-input {
+    padding: 8px 12px;
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.notes-input:focus {
+    outline: none;
+    border-color: #0ea5e9;
+}
+
+.notes-textarea {
+    flex: 1;
+    padding: 12px;
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    resize: none;
+}
+
+.notes-textarea:focus {
+    outline: none;
+    border-color: #0ea5e9;
+}
+
+/* Syntax highlighting styles for code blocks */
+.notes-view .chroma {
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+}
+
+.notes-view pre .chroma {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+}

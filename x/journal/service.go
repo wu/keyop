@@ -1,18 +1,13 @@
 package journal
 
 import (
-	"bytes"
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	goldmark_html "github.com/yuin/goldmark/renderer/html"
 )
 
 // Service provides journaling functionality.
@@ -198,46 +193,6 @@ func (svc *Service) saveEntry(params map[string]any) (any, error) {
 	return map[string]any{"saved": true}, nil
 }
 
-// preprocessMarkdownLists ensures blank lines between list items create separate lists.
-// This preserves visual grouping from the source markdown in the rendered output.
-// Uses HTML divs as separators between list groups, with blank lines to break list context.
-func preprocessMarkdownLists(content string) string {
-	lines := strings.Split(content, "\n")
-	var result []string
-	var inList bool
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		isListItem := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
-		isBlank := trimmed == ""
-
-		// If we're in a list and encounter a blank line followed by another list item,
-		// insert a visual separator with blank lines to break the list context
-		if inList && isBlank && i+1 < len(lines) {
-			nextTrimmed := strings.TrimSpace(lines[i+1])
-			nextIsListItem := strings.HasPrefix(nextTrimmed, "- ") || strings.HasPrefix(nextTrimmed, "* ")
-			if nextIsListItem {
-				// Add separator: blank line, div with gap, blank line
-				result = append(result, "")
-				result = append(result, `<div class="list-group-gap"></div>`)
-				result = append(result, "")
-				continue
-			}
-		}
-
-		// Track if we're in a list
-		if isListItem {
-			inList = true
-		} else if !isBlank {
-			inList = false
-		}
-
-		result = append(result, line)
-	}
-
-	return strings.Join(result, "\n")
-}
-
 // renderMarkdown converts markdown to HTML using goldmark, preserving visual list grouping.
 func (svc *Service) renderMarkdown(params map[string]any) (any, error) {
 	content, ok := params["content"].(string)
@@ -245,20 +200,10 @@ func (svc *Service) renderMarkdown(params map[string]any) (any, error) {
 		return nil, fmt.Errorf("missing content parameter")
 	}
 
-	// Preprocess to preserve list grouping
-	content = preprocessMarkdownLists(content)
-
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.Table),
-		goldmark.WithRendererOptions(
-			goldmark_html.WithUnsafe(),
-		),
-	)
-
-	var buf bytes.Buffer
-	if err := md.Convert([]byte(content), &buf); err != nil {
-		return nil, fmt.Errorf("failed to render markdown: %w", err)
+	html, err := util.RenderMarkdown(content)
+	if err != nil {
+		return nil, err
 	}
 
-	return map[string]any{"html": buf.String()}, nil
+	return map[string]any{"html": html}, nil
 }
