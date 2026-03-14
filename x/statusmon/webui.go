@@ -67,7 +67,11 @@ func (svc *Service) fetchStatus() (any, error) {
 			// If query fails, return empty list (sqlite table may not exist yet)
 			return map[string]any{"statuses": statuses}, nil
 		}
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				svc.Deps.MustGetLogger().Warn("statusmon: failed to close rows", "error", err)
+			}
+		}()
 
 		for rows.Next() {
 			var name, hostname, status, level, details string

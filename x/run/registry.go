@@ -38,7 +38,7 @@ import (
 	"keyop/x/tides"
 	"keyop/x/txtmsg"
 	"keyop/x/versionControlGit"
-	"keyop/x/weatherWs2902c"
+	"keyop/x/weatherstation"
 	"keyop/x/webSocketClient"
 	"keyop/x/webSocketServer"
 	"keyop/x/webui"
@@ -159,8 +159,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"webSocketServer": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return webSocketServer.NewService(deps, cfg)
 	},
-	"weatherWs2902c": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return weatherWs2902c.NewService(deps, cfg)
+	"weatherstation": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return weatherstation.NewService(deps, cfg)
 	},
 	"webui": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return webui.NewService(deps, cfg)

@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"keyop/core"
+	"keyop/x/heartbeat"
 	"keyop/x/webSocketClient"
 	"log"
 	"log/slog"
@@ -62,7 +62,7 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 	var wsPort int
 	var wsHost string
 	var hbChannel string
-	var statusChannel string
+	var tempChannel string
 	var errorChannel string
 	var alertChannel string
 
@@ -70,21 +70,21 @@ func NewMonitorCmd(deps core.Dependencies) *cobra.Command {
 		Use:   "tui",
 		Short: "TUI monitor for heartbeats, temperatures, errors, and alerts",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runMonitor(deps, wsHost, wsPort, hbChannel, statusChannel, errorChannel, alertChannel)
+			return runMonitor(deps, wsHost, wsPort, hbChannel, tempChannel, errorChannel, alertChannel)
 		},
 	}
 
 	cmd.Flags().IntVarP(&wsPort, "port", "p", 8080, "WebSocket server port")
 	cmd.Flags().StringVarP(&wsHost, "host", "H", "localhost", "WebSocket server host")
 	cmd.Flags().StringVarP(&hbChannel, "heartbeat-channel", "c", "heartbeat-shared", "Heartbeat channel to subscribe to")
-	cmd.Flags().StringVarP(&statusChannel, "status-channel", "s", "status-shared", "Status channel to subscribe to")
+	cmd.Flags().StringVarP(&tempChannel, "temp-channel", "t", "temp-shared", "Temperature channel to subscribe to")
 	cmd.Flags().StringVarP(&errorChannel, "error-channel", "e", "errors-shared", "Error channel to subscribe to")
 	cmd.Flags().StringVarP(&alertChannel, "alert-channel", "a", "alerts-shared", "Alert channel to subscribe to")
 
 	return cmd
 }
 
-func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, statusChannel, errorChannel, alertChannel string) error {
+func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, tempChannel, errorChannel, alertChannel string) error {
 	messenger := deps.MustGetMessenger()
 
 	osProvider := deps.MustGetOsProvider()
@@ -138,7 +138,7 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 		Type: "webSocketClient",
 		Subs: map[string]core.ChannelInfo{
 			"heartbeatSub": {Name: hbChannel},
-			"tempSub":      {Name: statusChannel},
+			"tempSub":      {Name: tempChannel},
 			"errorSub":     {Name: errorChannel},
 			"alertSub":     {Name: alertChannel},
 			"taskmgrSub":   {Name: "taskmgr-out"},
@@ -325,8 +325,8 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	if err := messenger.SeekToEnd(hbChannel, "monitorTUI_HB"); err != nil {
 		logger.Warn("tui: failed to seek to end", "channel", hbChannel, "err", err)
 	}
-	if err := messenger.SeekToEnd(statusChannel, "monitorTUI_Temp"); err != nil {
-		logger.Warn("tui: failed to seek to end", "channel", statusChannel, "err", err)
+	if err := messenger.SeekToEnd(tempChannel, "monitorTUI_Temp"); err != nil {
+		logger.Warn("tui: failed to seek to end", "channel", tempChannel, "err", err)
 	}
 	if err := messenger.SeekToEnd(errorChannel, "monitorTUI_Error"); err != nil {
 		logger.Warn("tui: failed to seek to end", "channel", errorChannel, "err", err)
@@ -340,35 +340,25 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 
 	// Subscribe to heartbeats
 	err = messenger.Subscribe(ctx, "monitorTUI_HB", hbChannel, "monitor", "monitor", 0, func(msg core.Message) error {
-		if msg.ServiceType == "heartbeat" {
+		if msg.DataType == "service.heartbeat.v1" {
+
+			// Extract heartbeat.HeartbeatEvent from payload using DataType field
 			var uptime string
 			var uptimeSeconds int64
 
-			if msg.Data != nil {
-				switch d := msg.Data.(type) {
-				case map[string]interface{}:
-					// support both lowercase and capitalized keys
-					if s, ok := d["uptime"].(string); ok {
-						uptime = s
-					} else if s, ok := d["Uptime"].(string); ok {
-						uptime = s
-					}
-					if f, ok := d["uptimeSeconds"].(float64); ok {
-						uptimeSeconds = int64(f)
-					} else if f, ok := d["UptimeSeconds"].(float64); ok {
-						uptimeSeconds = int64(f)
-					}
-				default:
-					// Try to marshal typed payloads into a known shape
-					var parsed struct {
-						Uptime        string `json:"uptime"`
-						UptimeSeconds int64  `json:"uptimeSeconds"`
-					}
-					if b, err := json.Marshal(d); err == nil {
-						_ = json.Unmarshal(b, &parsed)
-						uptime = parsed.Uptime
-						uptimeSeconds = parsed.UptimeSeconds
-					}
+			if hbEvent, ok := core.AsType[*heartbeat.HeartbeatEvent](msg.Data); ok && hbEvent != nil {
+				uptime = hbEvent.Uptime
+				uptimeSeconds = hbEvent.UptimeSeconds
+			} else if hbEvent, ok := core.AsType[heartbeat.HeartbeatEvent](msg.Data); ok {
+				uptime = hbEvent.Uptime
+				uptimeSeconds = hbEvent.UptimeSeconds
+			} else if dataMap, ok := msg.Data.(map[string]interface{}); ok {
+				// Handle deserialized JSON from websocket
+				if s, ok := dataMap["uptime"].(string); ok {
+					uptime = s
+				}
+				if f, ok := dataMap["uptimeSeconds"].(float64); ok {
+					uptimeSeconds = int64(f)
 				}
 			}
 
@@ -403,17 +393,31 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, st
 	}
 
 	// Subscribe to temperatures
-	err = messenger.Subscribe(ctx, "monitorTUI_Temp", statusChannel, "monitor", "monitor", 0, func(msg core.Message) error {
-		if strings.HasPrefix(msg.MetricName, "temp") && !strings.Contains(msg.ServiceName, "anomaly") {
+	err = messenger.Subscribe(ctx, "monitorTUI_Temp", tempChannel, "monitor", "monitor", 0, func(msg core.Message) error {
+		if msg.DataType == "core.temp.v1" {
+			// Extract core.TempEvent from payload using DataType field
+			fmt.Printf("test foo")
+			var tempF float32
+			var hostname string
+
+			if msg.DataType == "core.temp.v1" {
+				if tempEvent, ok := core.AsType[*core.TempEvent](msg.Data); ok && tempEvent != nil {
+					tempF = tempEvent.TempF
+					hostname = tempEvent.Hostname
+				} else if tempEvent, ok := core.AsType[core.TempEvent](msg.Data); ok {
+					tempF = tempEvent.TempF
+					hostname = tempEvent.Hostname
+				}
+			}
 
 			mu.Lock()
 			if t, ok := temps[msg.MetricName]; ok {
-				t.TempF = float32(msg.Metric)
+				t.TempF = tempF
 				t.LastSeen = msg.Timestamp
 			} else {
 				temps[msg.MetricName] = &tempStatus{
-					Hostname:   msg.Hostname,
-					TempF:      float32(msg.Metric),
+					Hostname:   hostname,
+					TempF:      tempF,
 					LastSeen:   msg.Timestamp,
 					MetricName: msg.MetricName,
 				}

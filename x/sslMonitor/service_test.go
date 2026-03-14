@@ -98,8 +98,8 @@ func TestCheck(t *testing.T) {
 	}
 
 	msg := messenger.SentMessages[0]
-	if msg.Status != "WARNING" {
-		t.Errorf("Expected status WARNING (expires in 10 days, warning is 30), got %s", msg.Status)
+	if msg.Status != "warning" {
+		t.Errorf("Expected status warning (expires in 10 days, warning is 30), got %s", msg.Status)
 	}
 
 	expectedText1 := fmt.Sprintf("SSL certificate for %s expires in 9 days", addr)
@@ -185,8 +185,8 @@ func TestCheck_Critical(t *testing.T) {
 
 	// 4. Verify results
 	msg := messenger.SentMessages[0]
-	if msg.Status != "CRITICAL" {
-		t.Errorf("Expected status CRITICAL (expires in 5 days, critical is 7), got %s", msg.Status)
+	if msg.Status != "critical" {
+		t.Errorf("Expected status critical (expires in 5 days, critical is 7), got %s", msg.Status)
 	}
 }
 
@@ -266,8 +266,8 @@ func TestCheck_OK(t *testing.T) {
 
 	// 4. Verify results
 	msg := messenger.SentMessages[0]
-	if msg.Status != "OK" {
-		t.Errorf("Expected status OK (expires in 60 days, warning is 30), got %s", msg.Status)
+	if msg.Status != "ok" {
+		t.Errorf("Expected status ok (expires in 60 days, warning is 30), got %s", msg.Status)
 	}
 }
 

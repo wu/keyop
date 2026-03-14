@@ -1,11 +1,5 @@
 // Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
 //
-// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
-//
-// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
-//
-// Package messengerStats implements the messengerStats service for keyop and provides ValidateConfig, Initialize and Check hooks.
-//
 //nolint:revive
 package messengerStats
 
@@ -18,6 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Service represents the messengerstats service which tracks message statistics.
 type Service struct {
 	Deps core.Dependencies
 	Cfg  core.ServiceConfig

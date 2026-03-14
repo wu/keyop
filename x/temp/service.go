@@ -86,6 +86,34 @@ func (svc Service) Check() error {
 	return err
 }
 
+func (svc Service) sendError(msg string, level string) error {
+	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
+
+	if level == "error" {
+		logger.Error("temp", "error", msg)
+	} else {
+		logger.Debug("temp", "error", msg)
+	}
+
+	errorEvent := core.ErrorEvent{
+		Summary: msg,
+		Text:    msg,
+		Level:   level,
+	}
+	if err := messenger.Send(core.Message{
+		Correlation: uuid.New().String(),
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "temp_error",
+		Data:        errorEvent,
+	}); err != nil {
+		logger.Error("temp", "error sending error event", err)
+	}
+	return errors.New(msg)
+}
+
 func (svc Service) temp() (Event, error) {
 	logger := svc.Deps.MustGetLogger()
 	logger.Debug("temp check called")
@@ -96,17 +124,15 @@ func (svc Service) temp() (Event, error) {
 
 	contentBytes, err := os.ReadFile(svc.DevicePath) //nolint:gosec // devicePath is operator-configured (not user input)
 	if err != nil {
-		temp.Error = fmt.Sprintf("could not read from %s: %s", svc.DevicePath, err.Error())
-		logger.Error("temp", "data", temp)
-		return temp, err
+		errorMsg := fmt.Sprintf("could not read from %s: %s", svc.DevicePath, err.Error())
+		return temp, svc.sendError(errorMsg, "error")
 	}
 
 	content := string(contentBytes)
 
 	if len(content) == 0 {
-		temp.Error = fmt.Sprintf("no content retrieved from temp device %s", svc.DevicePath)
-		logger.Error("temp", "data", temp)
-		return temp, errors.New(temp.Error)
+		errorMsg := fmt.Sprintf("no content retrieved from temp device %s", svc.DevicePath)
+		return temp, svc.sendError(errorMsg, "error")
 	}
 
 	idx := strings.Index(content, "t=")
@@ -116,18 +142,16 @@ func (svc Service) temp() (Event, error) {
 
 	tempInt, err := strconv.Atoi(temp.Raw)
 	if err != nil {
-		temp.Error = fmt.Sprintf("unable to convert temp string to int: %s: %s", temp.Raw, err.Error())
-		logger.Error("temp", "data", temp)
-		return temp, errors.New(temp.Error)
+		errorMsg := fmt.Sprintf("unable to convert temp string to int: %s: %s", temp.Raw, err.Error())
+		return temp, svc.sendError(errorMsg, "error")
 	}
 
 	temp.TempC = float32(tempInt) / 1000
 	temp.TempF = temp.TempC*9/5 + 32.0
 
 	if svc.MaxTemp != nil && float64(temp.TempF) > *svc.MaxTemp {
-		err := fmt.Errorf("temperature %.3f exceeds max %.3f", temp.TempF, *svc.MaxTemp)
-		logger.Debug("temp", "error", err)
-		return temp, err
+		errorMsg := fmt.Sprintf("temperature %.3f exceeds max %.3f", temp.TempF, *svc.MaxTemp)
+		return temp, svc.sendError(errorMsg, "warning")
 	}
 
 	logger.Debug("temp", "data", temp)
@@ -141,10 +165,13 @@ func (svc Service) temp() (Event, error) {
 	// generate correlation id for this check to tie together the events and metrics in the backend
 	correlationID := uuid.New().String()
 
-	// Create typed TempEvent payload
+	// Create typed TempEvent payload (only sent on successful reads)
 	tempEvent := core.TempEvent{
-		TempC: temp.TempC,
-		TempF: temp.TempF,
+		TempC:      temp.TempC,
+		TempF:      temp.TempF,
+		Raw:        temp.Raw,
+		Hostname:   svc.Cfg.Name, // Using service name as hostname context
+		SensorName: svc.DevicePath,
 	}
 
 	eventErr := messenger.Send(core.Message{

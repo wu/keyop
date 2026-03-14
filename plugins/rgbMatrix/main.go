@@ -151,7 +151,15 @@ func (p *RGBMatrixPlugin) Check() error {
 
 		logger.Debug("Got temp update", "serviceName", msg.ServiceName, "metricName", msg.MetricName, "metric", msg.Metric, "status", msg.Status)
 
-		p.temps[msg.MetricName] = msg.Metric
+		// Extract core.TempEvent from payload
+		var tempF float64
+		if tempEvent, ok := core.AsType[*core.TempEvent](msg.Data); ok && tempEvent != nil {
+			tempF = float64(tempEvent.TempF)
+		} else if tempEvent, ok := core.AsType[core.TempEvent](msg.Data); ok {
+			tempF = float64(tempEvent.TempF)
+		}
+
+		p.temps[msg.MetricName] = tempF
 		p.statuses[msg.MetricName] = msg.Status
 
 		// Update sorted names

@@ -261,13 +261,47 @@ type StatusEvent struct {
 func (s StatusEvent) PayloadType() string { return "core.status.v1" }
 
 // TempEvent represents a temperature reading event that services can emit.
-// It carries temperature readings in both Celsius and Fahrenheit.
+// It carries temperature readings in both Celsius and Fahrenheit, plus metadata about the sensor.
+// TempEvent is only sent for successful readings; errors are reported as ErrorEvent.
 type TempEvent struct {
-	TempC float32 `json:"tempC"` // Temperature in Celsius
-	TempF float32 `json:"tempF"` // Temperature in Fahrenheit
+	TempC      float32 `json:"tempC"`         // Temperature in Celsius
+	TempF      float32 `json:"tempF"`         // Temperature in Fahrenheit
+	Hostname   string  `json:"hostname"`      // Hostname where the temperature was measured
+	SensorName string  `json:"sensorName"`    // Name/identifier of the temperature sensor
+	Raw        string  `json:"raw,omitempty"` // Raw sensor reading (if available)
 }
 
 func (t TempEvent) PayloadType() string { return "core.temp.v1" }
+
+// WeatherStationEvent represents weather data from a weather station.
+type WeatherStationEvent struct {
+	Barometer      float64 `json:"barometer"`      // Absolute atmospheric pressure
+	BarometerRel   float64 `json:"barometerRel"`   // Relative atmospheric pressure
+	DailyRain      float64 `json:"dailyRain"`      // Daily rainfall in inches
+	DateUTC        string  `json:"dateUtc"`        // UTC timestamp from weather station
+	EventRain      float64 `json:"eventRain"`      // Event rainfall in inches
+	Frequency      string  `json:"frequency"`      // Station transmission frequency
+	HourlyRain     float64 `json:"hourlyRain"`     // Hourly rainfall in inches
+	OutHumidity    int     `json:"outHumidity"`    // Outdoor humidity percentage
+	InHumidity     int     `json:"inHumidity"`     // Indoor humidity percentage
+	MaxDailyGust   float64 `json:"maxDailyGust"`   // Maximum daily wind gust in mph
+	Model          string  `json:"model"`          // Weather station model
+	MonthlyRain    float64 `json:"monthlyRain"`    // Monthly rainfall in inches
+	RainRate       float64 `json:"rainRate"`       // Current rain rate in inches/hour
+	SolarRadiation float64 `json:"solarRadiation"` // Solar radiation in W/m²
+	StationType    string  `json:"stationType"`    // Weather station type
+	OutTemp        float64 `json:"outTemp"`        // Outdoor temperature in Fahrenheit
+	InTemp         float64 `json:"inTemp"`         // Indoor temperature in Fahrenheit
+	TotalRain      float64 `json:"totalRain"`      // Total rainfall in inches
+	UV             int     `json:"uv"`             // UV index
+	WeeklyRain     float64 `json:"weeklyRain"`     // Weekly rainfall in inches
+	Wh65Batt       int     `json:"wh65Batt"`       // WH65 sensor battery level
+	WindDir        int     `json:"windDir"`        // Wind direction in degrees
+	WindGust       float64 `json:"windGust"`       // Wind gust in mph
+	WindSpeed      float64 `json:"windSpeed"`      // Wind speed in mph
+}
+
+func (w WeatherStationEvent) PayloadType() string { return "weatherstation.event.v1" }
 
 // ExtractAlertEvent attempts to retrieve a core.AlertEvent from the provided data.
 // It supports direct AlertEvent typed values/pointers and structs that embed AlertEvent.

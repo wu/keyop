@@ -1,5 +1,5 @@
 //nolint:revive
-package weatherWs2902c
+package weatherstation
 
 import (
 	"keyop/core"
@@ -52,18 +52,18 @@ func TestHandleWeather(t *testing.T) {
 	}
 
 	// Find the main weatherData message
-	var receivedData *WeatherData
+	var receivedData *core.WeatherStationEvent
 	for _, m := range mockMessenger.SentMessages {
 		if m.Data != nil {
-			if data, ok := m.Data.(*WeatherData); ok {
-				receivedData = data
+			if data, ok := m.Data.(core.WeatherStationEvent); ok {
+				receivedData = &data
 				break
 			}
 		}
 	}
 
 	if receivedData == nil {
-		t.Fatal("expected to find weatherData message")
+		t.Fatal("expected to find WeatherStationEvent message")
 	}
 
 	if receivedData.OutTemp != 72.5 {

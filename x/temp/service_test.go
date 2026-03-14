@@ -83,9 +83,9 @@ func Test_temp_read_error(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	got, err := svc.temp()
+	_, err := svc.temp()
 	assert.Error(t, err)
-	assert.Contains(t, got.Error, "could not read from")
+	assert.Contains(t, err.Error(), "does-not-exist")
 }
 
 func Test_temp_empty_content(t *testing.T) {
@@ -100,9 +100,9 @@ func Test_temp_empty_content(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	got, err := svc.temp()
+	_, err := svc.temp()
 	assert.Error(t, err)
-	assert.Contains(t, got.Error, "no content retrieved from temp device")
+	assert.Contains(t, err.Error(), "no content retrieved from temp device")
 }
 
 func Test_temp_bad_integer(t *testing.T) {
@@ -117,9 +117,9 @@ func Test_temp_bad_integer(t *testing.T) {
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
-	got, err := svc.temp()
+	_, err := svc.temp()
 	assert.Error(t, err)
-	assert.Contains(t, got.Error, "unable to convert temp string to int")
+	assert.Contains(t, err.Error(), "unable to convert temp string to int")
 }
 
 func Test_temp_max_temp_exceeded(t *testing.T) {
