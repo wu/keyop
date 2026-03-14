@@ -1039,6 +1039,51 @@ input[type="date"]:focus {
     white-space: nowrap;
 }
 
+.status-ack {
+    text-align: right;
+    width: 10%;
+}
+
+.ack-button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ack-button.ack-btn {
+    background-color: var(--primary-color, #3b82f6);
+    color: white;
+}
+
+.ack-button.ack-btn:hover {
+    background-color: var(--primary-color-dark, #1d4ed8);
+    opacity: 0.9;
+}
+
+.ack-button.unacked-btn {
+    background-color: #10b981;
+    color: white;
+}
+
+.ack-button.unacked-btn:hover {
+    background-color: #059669;
+    opacity: 0.9;
+}
+
+/* Acknowledged status rows appear dimmed */
+.status-row.acknowledged {
+    opacity: 0.6;
+    background-color: rgba(100, 100, 100, 0.05);
+}
+
+.status-row.acknowledged:hover {
+    opacity: 0.75;
+    background-color: rgba(100, 100, 100, 0.1);
+}
+
 .no-status {
     padding: 2rem 1rem;
     text-align: center;

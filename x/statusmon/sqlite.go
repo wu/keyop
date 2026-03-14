@@ -3,7 +3,6 @@ package statusmon
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"keyop/core"
 	"strings"
 )
@@ -48,6 +47,18 @@ func (svc *Service) Migrate() error {
 		logger.Debug("statusmon: status_hostname column already exists")
 	}
 
+	// Ensure name column exists
+	_, err = db.Exec(`ALTER TABLE status ADD COLUMN name TEXT DEFAULT ''`)
+	if err != nil {
+		errMsg := err.Error()
+		// Ignore "column already exists" errors
+		if !strings.Contains(errMsg, "duplicate column") && !strings.Contains(errMsg, "already exists") {
+			logger.Error("statusmon: failed to add name column", "error", err)
+			return err
+		}
+		logger.Debug("statusmon: name column already exists")
+	}
+
 	return nil
 }
 
@@ -72,9 +83,6 @@ func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 		status = se.Status
 		level = se.Level
 		details = se.Details
-		logger.Debug("statusmon: inserting status event", "name", name, "hostname", statusHostname, "status", status, "level", level)
-	} else {
-		logger.Debug("statusmon: message data is not a StatusEvent", "dataType", msg.DataType, "dataKind", fmt.Sprintf("%T", msg.Data))
 	}
 
 	return `INSERT INTO status (timestamp, service_name, service_type, hostname, event, name, status_hostname, status, level, details, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

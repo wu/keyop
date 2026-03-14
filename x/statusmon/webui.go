@@ -28,10 +28,24 @@ func (svc *Service) WebUITab() webui.TabInfo {
 }
 
 // HandleWebUIAction handles actions from the WebUI.
-func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, error) {
+func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
 	switch action {
 	case "fetch-status":
 		return svc.fetchStatus()
+	case "acknowledge-status":
+		if params != nil {
+			if statusName, ok := params["statusName"].(string); ok {
+				return svc.acknowledgeStatus(statusName)
+			}
+		}
+		return map[string]any{"error": "missing statusName parameter"}, nil
+	case "unacknowledge-status":
+		if params != nil {
+			if statusName, ok := params["statusName"].(string); ok {
+				return svc.unacknowledgeStatus(statusName)
+			}
+		}
+		return map[string]any{"error": "missing statusName parameter"}, nil
 	default:
 		return nil, nil
 	}
@@ -40,18 +54,23 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 // fetchStatus returns the current status of all monitored items.
 func (svc *Service) fetchStatus() (any, error) {
 	type StatusItem struct {
-		Name     string `json:"name"`
-		Hostname string `json:"hostname"`
-		Status   string `json:"status"`
-		Details  string `json:"details"`
-		Level    string `json:"level"`
-		LastSeen string `json:"lastSeen"`
+		Name         string `json:"name"`
+		Hostname     string `json:"hostname"`
+		Status       string `json:"status"`
+		Details      string `json:"details"`
+		Level        string `json:"level"`
+		LastSeen     string `json:"lastSeen"`
+		Acknowledged bool   `json:"acknowledged"`
 	}
 
 	var statuses []StatusItem
 
 	// Query sqlite for the latest status of each unique name
 	if svc.db != nil && *svc.db != nil {
+		// Lock while we read from svc.states to get acknowledgement status
+		svc.statesMutex.RLock()
+		defer svc.statesMutex.RUnlock()
+
 		db := *svc.db
 		rows, err := db.Query(`
 			SELECT name, status_hostname, status, level, details, timestamp
@@ -92,13 +111,20 @@ func (svc *Service) fetchStatus() (any, error) {
 				}
 			}
 
+			// Look up acknowledged status from in-memory state
+			acknowledged := false
+			if state, exists := svc.states[name]; exists {
+				acknowledged = state.Acknowledged
+			}
+
 			statuses = append(statuses, StatusItem{
-				Name:     name,
-				Hostname: hostname,
-				Status:   status,
-				Details:  details,
-				Level:    level,
-				LastSeen: timestamp.Format(time.RFC3339),
+				Name:         name,
+				Hostname:     hostname,
+				Status:       status,
+				Details:      details,
+				Level:        level,
+				LastSeen:     timestamp.Format(time.RFC3339),
+				Acknowledged: acknowledged,
 			})
 		}
 		return map[string]any{"statuses": statuses}, nil
@@ -127,14 +153,47 @@ func (svc *Service) fetchStatus() (any, error) {
 		}
 
 		statuses = append(statuses, StatusItem{
-			Name:     name,
-			Hostname: "",
-			Status:   state.Status,
-			Details:  state.Details,
-			Level:    level,
-			LastSeen: lastSeen,
+			Name:         name,
+			Hostname:     "",
+			Status:       state.Status,
+			Details:      state.Details,
+			Level:        level,
+			LastSeen:     lastSeen,
+			Acknowledged: state.Acknowledged,
 		})
 	}
 
 	return map[string]any{"statuses": statuses}, nil
+}
+
+// acknowledgeStatus marks a status problem as acknowledged.
+func (svc *Service) acknowledgeStatus(statusName string) (any, error) {
+	svc.statesMutex.Lock()
+	defer svc.statesMutex.Unlock()
+
+	state, exists := svc.states[statusName]
+	if !exists {
+		state = serviceState{}
+	}
+
+	state.Acknowledged = true
+	svc.states[statusName] = state
+	svc.saveState()
+	return map[string]any{"acknowledged": true}, nil
+}
+
+// unacknowledgeStatus marks a status problem as not acknowledged.
+func (svc *Service) unacknowledgeStatus(statusName string) (any, error) {
+	svc.statesMutex.Lock()
+	defer svc.statesMutex.Unlock()
+
+	state, exists := svc.states[statusName]
+	if !exists {
+		state = serviceState{}
+	}
+
+	state.Acknowledged = false
+	svc.states[statusName] = state
+	svc.saveState()
+	return map[string]any{"acknowledged": false}, nil
 }

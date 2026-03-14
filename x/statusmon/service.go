@@ -19,6 +19,7 @@ type serviceState struct {
 	AlertSent     bool      `json:"alertSent,omitempty"`
 	LastAlertTime time.Time `json:"lastAlertTime,omitempty"`
 	AlertCount    int       `json:"alertCount,omitempty"`
+	Acknowledged  bool      `json:"acknowledged,omitempty"`
 }
 
 // Service collects per-service status events and computes an aggregate health score for dashboards and alerts.
@@ -248,6 +249,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			state.ProblemSince = now
 			state.AlertSent = false
 			state.AlertCount = 0
+			state.Acknowledged = false
 			if svc.notificationDelay == 0 {
 				shouldAlert = true
 				state.AlertSent = true
@@ -260,6 +262,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			// Stayed in problem state (possibly changed warning <-> critical)
 			oldStatus := state.Status
 			state.Status = msg.Status
+
+			// Clear acknowledgement if severity increased (warning -> critical)
+			if oldStatus == "warning" && msg.Status == "critical" {
+				state.Acknowledged = false
+			}
 
 			if !state.AlertSent {
 				if now.Sub(state.ProblemSince) >= svc.notificationDelay {
@@ -320,6 +327,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		state.AlertSent = false
 		state.AlertCount = 0
 		state.LastAlertTime = time.Time{}
+		state.Acknowledged = false
 	}
 
 	svc.states[key] = state

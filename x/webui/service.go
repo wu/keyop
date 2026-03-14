@@ -213,6 +213,7 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
+	logger := svc.Deps.MustGetLogger()
 	tabID := r.PathValue("id")
 	action := r.PathValue("action")
 
@@ -227,12 +228,14 @@ func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
 	svc.providersMu.RUnlock()
 
 	if provider == nil {
+		logger.Warn("Tab not found", "tabID", tabID)
 		http.Error(w, "Tab not found", http.StatusNotFound)
 		return
 	}
 
 	actionProvider, ok := provider.(ActionProvider)
 	if !ok {
+		logger.Warn("Tab does not support actions", "tabID", tabID)
 		http.Error(w, "Tab does not support actions", http.StatusNotImplemented)
 		return
 	}
@@ -240,6 +243,7 @@ func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
 	var params map[string]any
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			logger.Warn("Failed to decode JSON", "error", err)
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -247,6 +251,7 @@ func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
 
 	result, err := actionProvider.HandleWebUIAction(action, params)
 	if err != nil {
+		logger.Error("HandleWebUIAction error", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
