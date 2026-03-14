@@ -297,12 +297,22 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 
 	// Build hourly activity
 	// We determine how many hours are in the range [start, end)
-	numHours := int(end.Sub(start).Hours()) + 1
+	// Start from the first hour boundary at or after 'start'
+	firstHourStart := start.Truncate(time.Hour)
+	if firstHourStart.Before(start) {
+		firstHourStart = firstHourStart.Add(time.Hour)
+	}
+
+	numHours := 0
+	for hourCheck := firstHourStart; hourCheck.Before(end); hourCheck = hourCheck.Add(time.Hour) {
+		numHours++
+	}
+
 	hourlyData := make([]HourData, 0, numHours)
 	hourStarts := make([]time.Time, 0, numHours) // Keep track of original times for markdown
 
 	for h := 0; h < numHours; h++ {
-		hourStart := start.Truncate(time.Hour).Add(time.Duration(h) * time.Hour)
+		hourStart := firstHourStart.Add(time.Duration(h) * time.Hour)
 		hourStarts = append(hourStarts, hourStart)
 		// initialize 60-minute line with unknown markers (space)
 		mins := make([]rune, 60)

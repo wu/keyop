@@ -66,10 +66,14 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		messenger := svc.Deps.MustGetMessenger()
 		var start, end time.Time
 		if s, ok := params["start"].(string); ok {
-			start, _ = time.Parse(time.RFC3339, s)
+			utcTime, _ := time.Parse(time.RFC3339, s)
+			// Convert UTC time to local time to match database storage format
+			start = utcTime.In(time.Local)
 		}
 		if e, ok := params["end"].(string); ok {
-			end, _ = time.Parse(time.RFC3339, e)
+			utcTime, _ := time.Parse(time.RFC3339, e)
+			// Convert UTC time to local time to match database storage format
+			end = utcTime.In(time.Local)
 		}
 
 		_, report, err := svc.generateIdleReport(messenger, time.Now(), start, end, true)
