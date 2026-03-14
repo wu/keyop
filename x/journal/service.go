@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"keyop/core"
-	"keyop/x/webui"
-	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	goldmark_html "github.com/yuin/goldmark/renderer/html"
 )
 
 // Service provides journaling functionality.
@@ -105,251 +105,6 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	return nil
 }
 
-// WebUITab implements webui.TabProvider.
-func (svc *Service) WebUITab() webui.TabInfo {
-	content := `<div id="journal-container" class="journal-container">
-    <div class="journal-sidebar">
-        <h3>Dates</h3>
-        <div id="journal-date-list" class="journal-date-list"></div>
-    </div>
-    
-    <div class="journal-main">
-        <div class="journal-toolbar">
-            <button id="journal-edit-btn" class="journal-btn journal-edit-btn">Edit</button>
-            <button id="journal-save-btn" class="journal-btn journal-save-btn">Save</button>
-            <button id="journal-cancel-btn" class="journal-btn journal-cancel-btn">Cancel</button>
-        </div>
-        
-        <div id="journal-view" class="journal-view"></div>
-        <div id="journal-edit" class="journal-edit" style="display: none;">
-            <textarea id="journal-textarea" placeholder="Edit your journal entry here..."></textarea>
-        </div>
-    </div>
-</div>
-
-<style>
-.journal-container {
-    display: flex;
-    height: calc(100vh - 180px);
-    gap: 0;
-    padding: 0;
-    background: #1a1a1a;
-    overflow: hidden;
-}
-
-.journal-sidebar {
-    width: 150px;
-    flex-shrink: 0;
-    border-right: 1px solid #333;
-    padding: 1rem 0;
-    overflow-y: auto;
-    max-height: 100%;
-}
-
-.journal-sidebar h3 {
-    margin-top: 0;
-    font-size: 14px;
-    color: #aaa;
-    text-transform: uppercase;
-    font-weight: bold;
-    padding: 0.5rem 1rem;
-}
-
-.journal-date-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.journal-date-btn {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    background: transparent;
-    color: #ccc;
-    border: none;
-    border-left: 3px solid transparent;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-    margin: 0;
-}
-
-.journal-date-btn:hover {
-    background: #222;
-    color: #fff;
-    border-left-color: #666;
-}
-
-.journal-date-btn.active {
-    background: #222;
-    color: #00d4ff;
-    border-left-color: #00d4ff;
-}
-
-.journal-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding: 15px;
-    background: #1a1a1a;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.journal-toolbar {
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-    margin-bottom: 10px;
-}
-
-.journal-btn {
-    padding: 8px 16px;
-    background: #0088cc;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s ease;
-}
-
-.journal-btn:hover {
-    background: #006699;
-}
-
-.journal-edit-btn {
-    background: #0088cc;
-}
-
-.journal-edit-btn:hover {
-    background: #006699;
-}
-
-.journal-save-btn,
-.journal-cancel-btn {
-    background: #28a745;
-    display: none;
-}
-
-.journal-save-btn:hover {
-    background: #218838;
-}
-
-.journal-cancel-btn {
-    background: #dc3545;
-}
-
-.journal-cancel-btn:hover {
-    background: #c82333;
-}
-
-.journal-view {
-    flex: 1;
-    background: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 15px;
-    overflow-y: auto;
-    line-height: 1.6;
-    color: #ccc;
-    min-height: 0;
-}
-
-.journal-view h1,
-.journal-view h2,
-.journal-view h3,
-.journal-view h4,
-.journal-view h5,
-.journal-view h6 {
-    margin: 15px 0 10px 0;
-    color: #00d4ff;
-}
-
-.journal-view h1 { font-size: 24px; }
-.journal-view h2 { font-size: 20px; }
-.journal-view h3 { font-size: 18px; }
-.journal-view h4 { font-size: 16px; }
-.journal-view h5 { font-size: 14px; }
-.journal-view h6 { font-size: 12px; }
-
-.journal-view p {
-    margin: 10px 0;
-    color: #ccc;
-}
-
-.journal-view ul {
-    margin: 10px 0;
-    padding-left: 20px;
-}
-
-.journal-view li {
-    margin: 5px 0;
-    color: #ccc;
-}
-
-.journal-edit {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-.journal-edit textarea {
-    flex: 1;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    padding: 10px;
-    border: 1px solid #444;
-    border-radius: 4px;
-    background: #2a2a2a;
-    color: #ccc;
-    font-family: 'Monaco', 'Courier New', monospace;
-    font-size: 14px;
-    resize: none;
-    box-sizing: border-box;
-}
-
-.journal-edit textarea:focus {
-    outline: none;
-    border-color: #0088cc;
-    box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.25);
-}
-</style>`
-
-	return webui.TabInfo{
-		ID:      "journal",
-		Title:   "Journal",
-		Icon:    "📝",
-		Content: content,
-		JSPath:  "/api/assets/journal/journal.js",
-	}
-}
-
-// WebUIAssets returns the static assets for the journal service.
-func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/journal/resources")
-}
-
-// HandleWebUIAction implements webui.ActionProvider.
-func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
-	switch action {
-	case "get-entry":
-		return svc.getEntry(params)
-	case "get-dates":
-		return svc.getDates()
-	case "save-entry":
-		return svc.saveEntry(params)
-	case "render-markdown":
-		return svc.renderMarkdown(params)
-	default:
-		return nil, fmt.Errorf("unknown action: %s", action)
-	}
-}
-
-// getEntry retrieves a journal entry for a specific date.
 // getEntry retrieves a journal entry for a specific date.
 func (svc *Service) getEntry(params map[string]any) (any, error) {
 	svc.mu.Lock()
@@ -443,15 +198,61 @@ func (svc *Service) saveEntry(params map[string]any) (any, error) {
 	return map[string]any{"saved": true}, nil
 }
 
-// renderMarkdown converts markdown to HTML using goldmark.
+// preprocessMarkdownLists ensures blank lines between list items create separate lists.
+// This preserves visual grouping from the source markdown in the rendered output.
+// Uses HTML divs as separators between list groups, with blank lines to break list context.
+func preprocessMarkdownLists(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	var inList bool
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		isListItem := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
+		isBlank := trimmed == ""
+
+		// If we're in a list and encounter a blank line followed by another list item,
+		// insert a visual separator with blank lines to break the list context
+		if inList && isBlank && i+1 < len(lines) {
+			nextTrimmed := strings.TrimSpace(lines[i+1])
+			nextIsListItem := strings.HasPrefix(nextTrimmed, "- ") || strings.HasPrefix(nextTrimmed, "* ")
+			if nextIsListItem {
+				// Add separator: blank line, div with gap, blank line
+				result = append(result, "")
+				result = append(result, `<div class="list-group-gap"></div>`)
+				result = append(result, "")
+				continue
+			}
+		}
+
+		// Track if we're in a list
+		if isListItem {
+			inList = true
+		} else if !isBlank {
+			inList = false
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// renderMarkdown converts markdown to HTML using goldmark, preserving visual list grouping.
 func (svc *Service) renderMarkdown(params map[string]any) (any, error) {
 	content, ok := params["content"].(string)
 	if !ok {
 		return nil, fmt.Errorf("missing content parameter")
 	}
 
+	// Preprocess to preserve list grouping
+	content = preprocessMarkdownLists(content)
+
 	md := goldmark.New(
 		goldmark.WithExtensions(extension.Table),
+		goldmark.WithRendererOptions(
+			goldmark_html.WithUnsafe(),
+		),
 	)
 
 	var buf bytes.Buffer

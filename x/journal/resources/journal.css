@@ -1,67 +1,82 @@
 .journal-container {
     display: flex;
-    height: 100%;
-    gap: 20px;
-    padding: 20px;
+    height: calc(100vh - 180px);
+    gap: 0;
+    padding: 0;
+    background: #1a1a1a;
+    overflow: hidden;
 }
 
 .journal-sidebar {
-    width: 200px;
-    border-right: 1px solid #e0e0e0;
-    padding-right: 20px;
+    width: 150px;
+    flex-shrink: 0;
+    border-right: 1px solid #333;
+    padding: 1rem 0;
     overflow-y: auto;
-    max-height: 600px;
+    max-height: 100%;
 }
 
 .journal-sidebar h3 {
     margin-top: 0;
-    font-size: 16px;
-    color: #333;
+    font-size: 14px;
+    color: #aaa;
+    text-transform: uppercase;
+    font-weight: bold;
+    padding: 0.5rem 1rem;
 }
 
 .journal-date-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
 }
 
 .journal-date-btn {
-    padding: 8px 12px;
+    padding: 0.75rem 1rem;
     text-align: left;
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    background: transparent;
+    color: #ccc;
+    border: none;
+    border-left: 3px solid transparent;
     cursor: pointer;
     font-size: 14px;
     transition: all 0.2s ease;
+    margin: 0;
 }
 
 .journal-date-btn:hover {
-    background: #f5f5f5;
-    border-color: #999;
+    background: #222;
+    color: #fff;
+    border-left-color: #666;
 }
 
 .journal-date-btn.active {
-    background: #007bff;
-    color: white;
-    border-color: #0056b3;
+    background: #222;
+    color: #00d4ff;
+    border-left-color: #00d4ff;
 }
 
 .journal-main {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 0;
+    padding: 15px;
+    background: #1a1a1a;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .journal-toolbar {
     display: flex;
     gap: 10px;
+    flex-shrink: 0;
+    margin-bottom: 10px;
 }
 
 .journal-btn {
     padding: 8px 16px;
-    background: #007bff;
+    background: #0088cc;
     color: white;
     border: none;
     border-radius: 4px;
@@ -71,15 +86,15 @@
 }
 
 .journal-btn:hover {
-    background: #0056b3;
+    background: #006699;
 }
 
 .journal-edit-btn {
-    background: #17a2b8;
+    background: #0088cc;
 }
 
 .journal-edit-btn:hover {
-    background: #138496;
+    background: #006699;
 }
 
 .journal-save-btn,
@@ -102,12 +117,14 @@
 
 .journal-view {
     flex: 1;
-    background: white;
-    border: 1px solid #ddd;
+    background: #222;
+    border: 1px solid #333;
     border-radius: 4px;
-    padding: 20px;
+    padding: 15px;
     overflow-y: auto;
     line-height: 1.6;
+    color: #ccc;
+    min-height: 0;
 }
 
 .journal-view h1,
@@ -117,7 +134,7 @@
 .journal-view h5,
 .journal-view h6 {
     margin: 15px 0 10px 0;
-    color: #333;
+    color: #00d4ff;
 }
 
 .journal-view h1 {
@@ -146,35 +163,49 @@
 
 .journal-view p {
     margin: 10px 0;
+    color: #ccc;
 }
 
 .journal-view ul {
-    margin: 10px 0;
+    margin: 5px 0;
     padding-left: 20px;
 }
 
 .journal-view li {
-    margin: 5px 0;
+    margin: 0;
+    color: #ccc;
+}
+
+.list-group-gap {
+    height: 10px;
+    background: transparent;
 }
 
 .journal-edit {
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .journal-edit textarea {
     flex: 1;
-    padding: 12px;
-    border: 1px solid #ddd;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 10px;
+    border: 1px solid #444;
     border-radius: 4px;
+    background: #2a2a2a;
+    color: #ccc;
     font-family: 'Monaco', 'Courier New', monospace;
     font-size: 14px;
     resize: none;
+    box-sizing: border-box;
 }
 
 .journal-edit textarea:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+    border-color: #0088cc;
+    box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.25);
 }
