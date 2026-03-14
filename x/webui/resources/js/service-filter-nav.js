@@ -18,7 +18,6 @@
 
 export class ServiceFilterNav {
     constructor(config) {
-        console.log('[ServiceFilterNav] Constructor called');
         this.config = config;
         this.container = config.container;
 
@@ -33,7 +32,6 @@ export class ServiceFilterNav {
             return;
         }
 
-        console.log('[ServiceFilterNav] Calling setupKeyboardNavigation');
         this.setupKeyboardNavigation();
     }
 
@@ -128,8 +126,6 @@ export class ServiceFilterNav {
     }
 
     setupKeyboardNavigation() {
-        console.log('[ServiceFilterNav] setupKeyboardNavigation called');
-        console.log('[ServiceFilterNav] container:', this.container);
         
         const handleKeyDown = (e) => {
             // Only handle if this tab is active
@@ -152,17 +148,12 @@ export class ServiceFilterNav {
     }
 
     setupClickHandlers() {
-        console.log('[ServiceFilterNav] setupClickHandlers called');
-        console.log('[ServiceFilterNav] container:', this.container);
-        console.log('[ServiceFilterNav] serviceSelector:', this.config.serviceSelector);
 
         // Delegate click handling on service items
         this.container.addEventListener('click', (e) => {
-            console.log('[ServiceFilterNav] Click event on container:', e.target, e.target.classList);
 
             const serviceItem = e.target.closest(this.config.serviceSelector);
             if (serviceItem) {
-                console.log('[ServiceFilterNav] Clicked service item:', serviceItem.dataset.service);
                 this.handleServiceItemClick(serviceItem);
                 return;
             }
@@ -170,17 +161,14 @@ export class ServiceFilterNav {
             // Check if clicking on an item
             const item = e.target.closest(this.config.itemSelector);
             if (item) {
-                console.log('[ServiceFilterNav] Clicked item');
                 this.handleItemClick(item);
             }
         });
 
-        console.log('[ServiceFilterNav] Click handler attached');
     }
 
     handleServiceItemClick(serviceItem) {
         const service = serviceItem.dataset.service;
-        console.log('[ServiceFilterNav] handleServiceItemClick:', service);
         if (!service) {
             console.warn('[ServiceFilterNav] No service data attribute found');
             return;
@@ -195,14 +183,12 @@ export class ServiceFilterNav {
         const services = this.getServiceItems();
         services.forEach(s => s.classList.remove('active'));
         serviceItem.classList.add('active');
-        console.log('[ServiceFilterNav] Selected service:', service);
         this.updateState();
     }
 
     handleItemClick(item) {
         const items = this.getVisibleItems();
         const index = items.indexOf(item);
-        console.log('[ServiceFilterNav] handleItemClick at index:', index);
         if (index >= 0) {
             this.selectItem(index);
         }

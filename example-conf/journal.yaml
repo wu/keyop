@@ -1,0 +1,9 @@
+x: journal
+freq: 1h
+
+config: { }
+
+subs:
+  journal:
+    name: journal
+    description: Subscribe to journal channel

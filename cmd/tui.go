@@ -396,7 +396,6 @@ func runMonitor(deps core.Dependencies, wsHost string, wsPort int, hbChannel, te
 	err = messenger.Subscribe(ctx, "monitorTUI_Temp", tempChannel, "monitor", "monitor", 0, func(msg core.Message) error {
 		if msg.DataType == "core.temp.v1" {
 			// Extract core.TempEvent from payload using DataType field
-			fmt.Printf("test foo")
 			var tempF float32
 			var hostname string
 

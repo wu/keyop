@@ -1,0 +1,24 @@
+<div class="journal-container" id="journal-container">
+    <div class="journal-sidebar">
+        <h3>Dates</h3>
+        <div class="journal-date-list" id="journal-date-list"></div>
+    </div>
+
+    <div class="journal-main">
+        <div class="journal-toolbar">
+            <button class="journal-btn journal-edit-btn" id="journal-edit-btn">Edit</button>
+            <button class="journal-btn journal-save-btn" id="journal-save-btn" onclick="saveJournalEntry()">Save
+            </button>
+            <button class="journal-btn journal-cancel-btn" id="journal-cancel-btn" onclick="cancelEdit()">Cancel
+            </button>
+        </div>
+
+        <div class="journal-view" id="journal-view"></div>
+        <div class="journal-edit" id="journal-edit" style="display: none;">
+            <textarea id="journal-textarea" placeholder="Edit your journal entry here..." rows="20"></textarea>
+        </div>
+    </div>
+</div>
+
+<link href="/js/journal/resources/journal.css" rel="stylesheet">
+<script src="/js/journal/resources/journal.js"></script>
