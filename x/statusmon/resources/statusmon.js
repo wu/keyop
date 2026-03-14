@@ -171,23 +171,27 @@ function renderStatusList() {
 }
 
 function updateStatusTabBadge(criticalCount, warningCount) {
-    const alertCount = criticalCount + warningCount;
     const tabLink = document.querySelector('[data-tab-id="statusmon"]');
     if (!tabLink) return;
 
-    // Remove existing badge if any
-    const existingBadge = tabLink.querySelector('.tab-badge');
-    if (existingBadge) {
-        existingBadge.remove();
+    // Remove existing badges if any
+    const existingBadges = tabLink.querySelectorAll('.tab-badge');
+    existingBadges.forEach(badge => badge.remove());
+
+    // Add badges for critical and warning separately
+    if (criticalCount > 0) {
+        const criticalBadge = document.createElement('span');
+        criticalBadge.className = 'tab-badge';
+        criticalBadge.textContent = criticalCount;
+        criticalBadge.setAttribute('data-badge-style', 'critical');
+        tabLink.appendChild(criticalBadge);
     }
 
-    // Add new badge if there are warnings/critical
-    if (alertCount > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'tab-badge';
-        badge.textContent = alertCount;
-        const badgeStyle = criticalCount > 0 ? 'critical' : 'warning';
-        badge.setAttribute('data-badge-style', badgeStyle);
-        tabLink.appendChild(badge);
+    if (warningCount > 0) {
+        const warningBadge = document.createElement('span');
+        warningBadge.className = 'tab-badge';
+        warningBadge.textContent = warningCount;
+        warningBadge.setAttribute('data-badge-style', 'warning');
+        tabLink.appendChild(warningBadge);
     }
 }
