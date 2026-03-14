@@ -1,0 +1,15 @@
+x: moon
+freq: 1m
+
+config:
+
+  pub_preprocess:
+    - when: 'event eq "moon_phase"'
+      updates:
+        channelName: astral
+
+    - when: 'event eq "moon_alert"'
+      updates:
+        channelName: alerts
+
+

@@ -194,15 +194,20 @@ func (svc *Service) Check() error {
 
 	// Send alert if the phase name has changed
 	if phaseName != lastPhaseName {
+		ae := core.AlertEvent{
+			Summary: fmt.Sprintf("Moon phase: %s", phaseName),
+			Text:    fmt.Sprintf("The moon is now in the %s phase. Next %s in %s.", phaseName, nextMajorName, formatDuration(nextIn)),
+			Level:   "info",
+		}
 		alertMsg := core.Message{
 			Correlation: correlationID,
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
-			Event:       "moon_phase_change",
+			Event:       "moon_alert",
 			Text:        fmt.Sprintf("The moon is now in the %s phase. Next %s in %s.", phaseName, nextMajorName, formatDuration(nextIn)),
 			Summary:     fmt.Sprintf("Moon phase: %s", phaseName),
-			Data:        me,
+			Data:        ae,
 		}
 		return messenger.Send(alertMsg)
 	}

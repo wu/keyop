@@ -114,8 +114,7 @@ function addAlertToList(msg) {
     const alertData = msg.data;
     const severity = (alertData.level || 'info').toLowerCase();
     const timestamp = formatElapsedTime(msg.timestamp);
-    const summary = alertData.summary || msg.event || 'No summary';
-    const text = alertData.text || '';
+    const text = alertData.text;
     const serviceName = msg.serviceName || 'Unknown';
     const serviceType = msg.serviceType || 'Unknown';
 
@@ -129,7 +128,7 @@ function addAlertToList(msg) {
                 <input type="checkbox" class="alert-checkbox-input" />
             </div>
             <div class="alert-content">
-                <div class="alert-text-main">${text || summary}</div>
+                <div class="alert-text-main">${text}</div>
                 <div class="alert-metadata">
                     <span class="alert-timestamp">${timestamp}</span>
                     <span class="alert-service-name">${serviceName}</span>

@@ -275,27 +275,21 @@ func (svc *Service) scheduleAlerts() {
 				n := name
 				dl := dayLength
 				nl := nightLength
-				// capture the events snapshot for this scheduled timer to avoid closure mutation
-				ev := events
 				timer := time.AfterFunc(duration, func() {
-					// Build a typed SunEvent payload to include with the scheduled event
-					se := SunEvent{
-						Now:         time.Now(),
-						Sunrise:     ev.Sunrise,
-						Sunset:      ev.Sunset,
-						CivilDawn:   ev.CivilDawn,
-						CivilDusk:   ev.CivilDusk,
-						DayLength:   dl,
-						NightLength: nl,
+					// Build a typed AlertEvent payload for the alert
+					ae := core.AlertEvent{
+						Summary: n,
+						Text:    fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
+						Level:   "info",
 					}
 					if err := messenger.Send(core.Message{
 						ChannelName: svc.Cfg.Name,
 						ServiceName: svc.Cfg.Name,
 						ServiceType: svc.Cfg.Type,
-						Event:       "sun_event",
+						Event:       "sun_alert",
 						Text:        fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
 						Summary:     n,
-						Data:        se,
+						Data:        ae,
 					}); err != nil {
 						logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
 					}

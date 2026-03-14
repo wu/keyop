@@ -80,7 +80,7 @@ func TestMoonService(t *testing.T) {
 			switch m.Event {
 			case "moon_phase":
 				eventMsg = &msgs[i]
-			case "moon_phase_change":
+			case "moon_alert":
 				alertMsg = &msgs[i]
 			}
 		}

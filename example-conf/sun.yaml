@@ -1,0 +1,24 @@
+x: sun
+freq: 1m
+
+config:
+
+  alt: 100
+  lat: 45.00000
+  lon: -120.00000
+
+  pub_preprocess:
+
+    - when: 'event eq "sun_check"'
+      updates:
+        channelName: astral
+
+    - when: 'event eq "sun_alert"'
+      updates:
+        channelName: alerts
+
+subs:
+  gps:
+    name: gps
+    description: subscribe to gps updates
+
