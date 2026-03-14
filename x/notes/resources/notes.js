@@ -97,6 +97,31 @@
             markdownContainer.className = 'notes-view-content';
             markdownContainer.innerHTML = result.html || '<div class="notes-view-empty">No content</div>';
             elements.view.appendChild(markdownContainer);
+
+            // Add click handlers for wiki links
+            const wikiLinks = markdownContainer.querySelectorAll('a[href="#wiki-link"]');
+            wikiLinks.forEach(link => {
+                link.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const pageName = link.getAttribute('title');
+                    if (!pageName) return;
+
+                    // Search for note with this title
+                    const searchResult = await callAction('get-notes', {search: pageName, limit: 100});
+                    if (searchResult && searchResult.notes) {
+                        // Find exact title match
+                        const matchingNote = searchResult.notes.find(n => n.title === pageName);
+                        if (matchingNote) {
+                            selectNote(matchingNote.id);
+                        } else if (searchResult.notes.length > 0) {
+                            // Fall back to first search result
+                            selectNote(searchResult.notes[0].id);
+                        }
+                    }
+                });
+                // Style wiki links differently
+                link.classList.add('wiki-link');
+            });
         }
     }
 

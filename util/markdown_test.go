@@ -209,3 +209,205 @@ func TestRenderMarkdownWithImages(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, html, "<img")
 }
+
+func TestPreprocessWikiLinks(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "single wiki link",
+			input:    "See [[other page]] for more info",
+			expected: `See [other page](#wiki-link "other page") for more info`,
+		},
+		{
+			name:     "multiple wiki links",
+			input:    "[[First Page]] and [[Second Page]]",
+			expected: `[First Page](#wiki-link "First Page") and [Second Page](#wiki-link "Second Page")`,
+		},
+		{
+			name:     "wiki link with spaces",
+			input:    "Check out [[My Important Note]]",
+			expected: `Check out [My Important Note](#wiki-link "My Important Note")`,
+		},
+		{
+			name:     "no wiki links",
+			input:    "Just regular text [with link](https://example.com)",
+			expected: "Just regular text [with link](https://example.com)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PreprocessWikiLinks(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRenderMarkdownWithWikiLinks(t *testing.T) {
+	html, err := RenderMarkdown("See [[Other Note]] for more info")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "#wiki-link")
+	assert.Contains(t, html, "Other Note")
+}
+
+func TestRenderMarkdownWithExternalLinks(t *testing.T) {
+	html, err := RenderMarkdown("Visit [Google](https://www.google.com)")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "https://www.google.com")
+	assert.Contains(t, html, "Google")
+}
+
+func TestPreprocessPlainLinks(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "single plain https URL",
+			input:    "Check out https://github.com/dustin/go-humanize for details",
+			expected: "Check out [https://github.com/dustin/go-humanize](https://github.com/dustin/go-humanize) for details",
+		},
+		{
+			name:     "single plain http URL",
+			input:    "Visit http://example.com today",
+			expected: "Visit [http://example.com](http://example.com) today",
+		},
+		{
+			name:     "URL with query parameters",
+			input:    "See https://www.blu-ray.com/deals/?sortby=time&category=bluray here",
+			expected: "See [https://www.blu-ray.com/deals/?sortby=time&category=bluray](https://www.blu-ray.com/deals/?sortby=time&category=bluray) here",
+		},
+		{
+			name:     "multiple plain URLs",
+			input:    "Visit https://example.com and https://github.com",
+			expected: "Visit [https://example.com](https://example.com) and [https://github.com](https://github.com)",
+		},
+		{
+			name:     "markdown link with URL as text",
+			input:    "[https://www.blu-ray.com/deals/?sortby=time&category=bluray](https://www.blu-ray.com/deals/?sortby=time&category=bluray)",
+			expected: "[https://www.blu-ray.com/deals/?sortby=time&category=bluray](https://www.blu-ray.com/deals/?sortby=time&category=bluray)",
+		},
+		{
+			name:     "already markdown linked URL",
+			input:    "[GitHub](https://github.com)",
+			expected: "[GitHub](https://github.com)",
+		},
+		{
+			name:     "mixed plain and markdown links",
+			input:    "[GitHub](https://github.com) and https://example.com",
+			expected: "[GitHub](https://github.com) and [https://example.com](https://example.com)",
+		},
+		{
+			name:     "no URLs",
+			input:    "Just regular text without links",
+			expected: "Just regular text without links",
+		},
+		{
+			name:     "markdown link with custom text",
+			input:    "[Click here](https://www.blu-ray.com/deals/?sortby=time) for deals",
+			expected: "[Click here](https://www.blu-ray.com/deals/?sortby=time) for deals",
+		},
+		{
+			name:     "plain URL followed by punctuation",
+			input:    "See https://github.com. It's great!",
+			expected: "See [https://github.com](https://github.com). It's great!",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PreprocessPlainLinks(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRenderMarkdownWithPlainLinks(t *testing.T) {
+	html, err := RenderMarkdown("Check out https://github.com/dustin/go-humanize for details")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "https://github.com/dustin/go-humanize")
+	assert.Contains(t, html, "<a href")
+}
+
+func TestPreprocessWikiLinksWithEmoji(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "emoji in wiki link text",
+			input:    "See [[Important Note 🎯]] for details",
+			expected: `See [Important Note 🎯](#wiki-link "Important Note 🎯") for details`,
+		},
+		{
+			name:     "emoji before wiki link",
+			input:    "Check this out 🔗 [[Reference]]",
+			expected: `Check this out 🔗 [Reference](#wiki-link "Reference")`,
+		},
+		{
+			name:     "emoji after wiki link",
+			input:    "[[Note]] 📝 is important",
+			expected: `[Note](#wiki-link "Note") 📝 is important`,
+		},
+		{
+			name:     "emoji mixed with text and wiki link",
+			input:    "Status: ✓ See [[My Tasks]] 💪",
+			expected: `Status: ✓ See [My Tasks](#wiki-link "My Tasks") 💪`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PreprocessWikiLinks(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRenderMarkdownWithEmoji(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "emoji in plain text",
+			input:    "This is a test 🎉 with emoji 😀",
+			expected: "🎉",
+		},
+		{
+			name:     "emoji with plain link",
+			input:    "Check this 🔗 https://example.com",
+			expected: "🔗",
+		},
+		{
+			name:     "emoji with wiki link",
+			input:    "Status 📝 [[Notes]] here",
+			expected: "📝",
+		},
+		{
+			name:     "complex emoji (multi-byte)",
+			input:    "Heart ❤️ and flag 🇺🇸 and more",
+			expected: "❤️",
+		},
+		{
+			name:     "skin tone emoji",
+			input:    "Wave 👋🏻 hello",
+			expected: "👋🏻",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			html, err := RenderMarkdown(tt.input)
+			assert.NoError(t, err)
+			// Verify emoji is preserved in the output (not corrupted to replacement chars)
+			assert.Contains(t, html, tt.expected, "Emoji should be preserved in rendered output")
+		})
+	}
+}

@@ -85,6 +85,7 @@
 - Extract reusable code into domain-specific files (e.g., "aurora.go" for aurora-related functionality).
 - Store package-level docs in "doc.go" with a package comment.
 - Store payload definitions in "payloads.go"
+- Store html and css in package subdirectory 'resources'
 
 ## Policy
 

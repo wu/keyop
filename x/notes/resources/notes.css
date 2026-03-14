@@ -270,6 +270,15 @@
     text-decoration: underline;
 }
 
+.notes-view a.wiki-link {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.notes-view a.wiki-link:hover {
+    opacity: 1;
+}
+
 .notes-edit {
     flex: 1;
     display: flex;
