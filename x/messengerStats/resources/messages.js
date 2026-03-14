@@ -111,19 +111,35 @@ function render() {
     const channels = new Set();
     history.forEach(pt => Object.keys(pt.counts).forEach(ch => channels.add(ch)));
 
-    // Derive per-channel rates (msgs/min) between consecutive history points.
-    // rates[i] corresponds to the interval ending at history[i] (i >= 1).
-    const rates = history.map((pt, i) => {
-        if (i === 0) return {time: pt.time, r: {}};
-        const prev = history[i - 1];
-        const deltaMin = (pt.time - prev.time) / 60000;
+    // Derive per-channel rates using a rolling 60-second window.
+    // For each history point, look back 60 seconds and calculate the rate.
+    const WINDOW_MS = 60000; // 60 seconds
+    const rates = history.map((pt) => {
+        const windowStart = pt.time.getTime() - WINDOW_MS;
+
+        // Find the earliest point in the window (or use the earliest point if window is outside history)
+        let windowStartIdx = 0;
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].time.getTime() <= windowStart) {
+                windowStartIdx = i;
+                break;
+            }
+        }
+        
         const r = {};
         channels.forEach(ch => {
-            const delta = (pt.counts[ch] || 0) - (prev.counts[ch] || 0);
-            r[ch] = deltaMin > 0 ? Math.max(0, delta / deltaMin) : 0;
+            const startCount = history[windowStartIdx].counts[ch] || 0;
+            const endCount = pt.counts[ch] || 0;
+            const delta = endCount - startCount;
+
+            // Calculate actual time window in minutes
+            const actualWindowMin = (pt.time - history[windowStartIdx].time) / 60000;
+
+            // Rate is delta over the actual window time, normalized to per-minute
+            r[ch] = actualWindowMin > 0 ? Math.max(0, delta / actualWindowMin) : 0;
         });
         return {time: pt.time, r};
-    }).slice(1); // drop the first placeholder
+    });
 
     // Sort channels by most recent rate descending
     const lastRate = rates[rates.length - 1]?.r || {};
