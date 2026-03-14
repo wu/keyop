@@ -105,11 +105,11 @@ func (svc *Service) Check() error {
 	now := time.Now()
 	expiresIn := cert.NotAfter.Sub(now)
 
-	status := "OK"
+	status := "ok"
 	if expiresIn < svc.criticalPeriod {
-		status = "CRITICAL"
+		status = "critical"
 	} else if expiresIn < svc.warningPeriod {
-		status = "WARNING"
+		status = "warning"
 	}
 
 	daysRemaining := int(expiresIn.Hours() / 24)

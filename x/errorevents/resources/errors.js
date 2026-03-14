@@ -1,4 +1,5 @@
 import {ServiceFilterNav} from '/js/service-filter-nav.js';
+import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
 
 let errorsContainer = null;
 let unreadErrorCount = 0;
@@ -8,6 +9,7 @@ export async function init(container) {
     errorsContainer = container;
     await refreshErrors();
     setupNavigation();
+    startElapsedTimeUpdates();
 }
 
 export function focusItems() {
@@ -81,8 +83,8 @@ function addErrorToList(msg) {
     }
 
     const errorData = msg.data;
-    const severity = errorData.level || 'info';
-    const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : new Date().toLocaleString();
+    const severity = (errorData.level || 'info').toLowerCase();
+    const timestamp = formatElapsedTime(msg.timestamp);
     const summary = errorData.summary || msg.event || 'No summary';
     const text = errorData.text || '';
     const serviceName = msg.serviceName || 'Unknown';
@@ -216,7 +218,7 @@ async function refreshErrors() {
                 <div class="error-content">
                     <div class="error-header">
                         <span class="error-severity error-severity-${error.severity?.toLowerCase() || 'info'}">${error.severity || 'INFO'}</span>
-                        <span class="error-timestamp">${new Date(error.timestamp).toLocaleString()}</span>
+                        <span class="error-timestamp">${formatElapsedTime(error.timestamp)}</span>
                     </div>
                     <div class="error-service">
                         <strong>${error.serviceName}</strong> (${error.serviceType})

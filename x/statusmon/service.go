@@ -3,6 +3,7 @@
 package statusmon
 
 import (
+	"database/sql"
 	"fmt"
 	"keyop/core"
 	"sync"
@@ -11,6 +12,9 @@ import (
 
 type serviceState struct {
 	Status        string    `json:"status"`
+	Details       string    `json:"details,omitempty"`
+	Level         string    `json:"level,omitempty"`
+	LastSeen      time.Time `json:"lastSeen,omitempty"`
 	ProblemSince  time.Time `json:"problemSince,omitempty"`
 	AlertSent     bool      `json:"alertSent,omitempty"`
 	LastAlertTime time.Time `json:"lastAlertTime,omitempty"`
@@ -28,6 +32,8 @@ type Service struct {
 	initialInterval   time.Duration
 	multiplier        float64
 	maxInterval       time.Duration
+	db                **sql.DB
+	dbPath            string
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -75,6 +81,11 @@ func (svc *Service) ValidateConfig() []error {
 		errs = append(errs, fmt.Errorf("statusMonitor service requires at least one subscription in 'subs'"))
 	}
 	return errs
+}
+
+// PayloadTypes returns the list of payload types that this service can handle.
+func (svc *Service) PayloadTypes() []string {
+	return []string{"core.status.v1"}
 }
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
@@ -135,17 +146,79 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
-func (svc *Service) messageHandler(msg core.Message) error {
-	logger := svc.Deps.MustGetLogger()
-
-	if msg.Status == "" {
+func (svc *Service) handleStatusEvent(statusEvent *core.StatusEvent) error {
+	if statusEvent.Name == "" {
 		return nil
 	}
 
 	svc.statesMutex.Lock()
 	defer svc.statesMutex.Unlock()
 
-	key := fmt.Sprintf("%s:%s", msg.ServiceType, msg.ServiceName)
+	state := svc.states[statusEvent.Name]
+	state.Status = statusEvent.Status
+	state.Details = statusEvent.Details
+	state.Level = statusEvent.Level
+	state.LastSeen = time.Now()
+	svc.states[statusEvent.Name] = state
+
+	// Persist the updated state
+	svc.saveState()
+
+	return nil
+}
+
+func (svc *Service) messageHandler(msg core.Message) error {
+	logger := svc.Deps.MustGetLogger()
+
+	// Handle StatusEvent data
+	if msg.Data != nil {
+		if statusEvent, ok := msg.Data.(*core.StatusEvent); ok {
+			return svc.handleStatusEvent(statusEvent)
+		}
+	}
+
+	if msg.Status == "" {
+		return nil
+	}
+
+	// For legacy status messages (Status field set), create a StatusEvent
+	// and forward it so sqlite can capture it
+	name := fmt.Sprintf("%s:%s", msg.ServiceType, msg.ServiceName)
+	statusEvent := &core.StatusEvent{
+		Name:    name,
+		Status:  msg.Status,
+		Details: msg.Text,
+		Level:   msg.Status, // Derive level from status
+	}
+
+	// Send the status event back so sqlite can capture it
+	messenger := svc.Deps.MustGetMessenger()
+	channelName := msg.ChannelName
+	if channelName == "" {
+		channelName = "status"
+	}
+	forwardMsg := core.Message{
+		Timestamp:   msg.Timestamp,
+		Uuid:        msg.Uuid,
+		Correlation: msg.Correlation,
+		Hostname:    msg.Hostname,
+		ChannelName: channelName,
+		ServiceType: msg.ServiceType,
+		ServiceName: msg.ServiceName,
+		Event:       msg.Event,
+		Status:      msg.Status,
+		Text:        msg.Text,
+		Data:        statusEvent,
+	}
+	if err := messenger.Send(forwardMsg); err != nil {
+		logger.Warn("failed to forward status event", "error", err, "name", name)
+	}
+
+	// Also handle it locally for alerts
+	svc.statesMutex.Lock()
+	defer svc.statesMutex.Unlock()
+
+	key := name
 	state, exists := svc.states[key]
 
 	isProblem := func(s string) bool {

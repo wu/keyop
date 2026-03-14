@@ -1,0 +1,21 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/status.sql
+
+  payloadTypes:
+    - core.status.v1
+    - status
+
+subs:
+
+  status:
+    name: status
+    description: process incoming events
+
+  status-shared:
+    name: status-shared
+    description: process incoming events
+
+

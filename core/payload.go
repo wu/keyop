@@ -142,6 +142,14 @@ func init() {
 		panic(fmt.Sprintf("failed to register error: %v", err))
 	}
 
+	// Register core status payload
+	if err := reg.Register("core.status.v1", func() any { return &StatusEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.status.v1: %v", err))
+	}
+	if err := reg.Register("status", func() any { return &StatusEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register status: %v", err))
+	}
+
 	// Register core temp payload
 	if err := reg.Register("core.temp.v1", func() any { return &TempEvent{} }); err != nil {
 		panic(fmt.Sprintf("failed to register core.temp.v1: %v", err))
@@ -237,6 +245,20 @@ type ErrorEvent struct {
 }
 
 func (e ErrorEvent) PayloadType() string { return "core.error.v1" }
+
+// StatusEvent represents a status update event that services can emit.
+// It carries current status information for a named component or service.
+// Name identifies the component, Status is the current state, Details provides
+// additional information, and Level indicates the severity (e.g., "ok", "warning", "critical").
+type StatusEvent struct {
+	Name     string `json:"name"`               // Unique identifier for this status
+	Hostname string `json:"hostname,omitempty"` // Hostname where status originated
+	Status   string `json:"status"`             // Current status value
+	Details  string `json:"details"`            // Additional status information
+	Level    string `json:"level,omitempty"`    // Severity level (e.g., "ok", "warning", "critical")
+}
+
+func (s StatusEvent) PayloadType() string { return "core.status.v1" }
 
 // TempEvent represents a temperature reading event that services can emit.
 // It carries temperature readings in both Celsius and Fahrenheit.

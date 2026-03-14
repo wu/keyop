@@ -25,6 +25,9 @@ func (svc *Service) WebUITab() webui.TabInfo {
     </div>
   </div>
   <div class="alerts-content">
+    <div class="alerts-header">
+      <button id="mark-all-seen-btn" class="mark-all-seen-btn">Mark All Seen</button>
+    </div>
     <div id="alerts-list">Loading alerts...</div>
   </div>
 </div>
@@ -43,6 +46,11 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return svc.markAlertSeen(int64(alertID))
 		}
 		return nil, fmt.Errorf("invalid alertID")
+	case "mark-all-seen":
+		if serviceFilter, ok := params["serviceFilter"].(string); ok {
+			return svc.markAllAlertsSeen(serviceFilter)
+		}
+		return nil, fmt.Errorf("invalid serviceFilter")
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
@@ -85,6 +93,8 @@ func (svc *Service) fetchAlerts() (any, error) {
 	}
 
 	var alerts []AlertRow
+	serviceCounts := make(map[string]int)
+
 	for rows.Next() {
 		var alert AlertRow
 		if err := rows.Scan(
@@ -95,13 +105,14 @@ func (svc *Service) fetchAlerts() (any, error) {
 			return nil, err
 		}
 		alerts = append(alerts, alert)
+		serviceCounts[alert.ServiceName]++
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return map[string]any{"alerts": alerts}, nil
+	return map[string]any{"alerts": alerts, "serviceCounts": serviceCounts}, nil
 }
 
 // markAlertSeen updates the seen flag for an alert.
@@ -114,6 +125,31 @@ func (svc *Service) markAlertSeen(alertID int64) (any, error) {
 		"UPDATE alerts SET seen = 1 WHERE id = ?",
 		alertID,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{"status": "ok"}, nil
+}
+
+// markAllAlertsSeen marks all unseen alerts as seen, optionally filtered by service.
+func (svc *Service) markAllAlertsSeen(serviceFilter string) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("alerts database not available")
+	}
+
+	var err error
+	if serviceFilter == "all" || serviceFilter == "" {
+		// Mark all unseen alerts
+		_, err = (*svc.db).Exec("UPDATE alerts SET seen = 1 WHERE seen = 0")
+	} else {
+		// Mark unseen alerts for the specific service
+		_, err = (*svc.db).Exec(
+			"UPDATE alerts SET seen = 1 WHERE seen = 0 AND service_name = ?",
+			serviceFilter,
+		)
+	}
+
 	if err != nil {
 		return nil, err
 	}

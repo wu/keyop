@@ -1,9 +1,11 @@
 import {ServiceFilterNav} from '/js/service-filter-nav.js';
+import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
 
 let alertsContainer = null;
 let unreadAlertCount = 0;
 let highestSeverity = 'info';
 let navController = null;
+let serviceCounts = {}; // Track alert counts per service
 
 // Severity levels in order of priority
 const SEVERITY_LEVELS = {info: 0, warning: 1, error: 2, critical: 3};
@@ -35,6 +37,8 @@ export async function init(container) {
     alertsContainer = container;
     await refreshAlerts();
     setupNavigation();
+    setupMarkAllSeenButton();
+    startElapsedTimeUpdates();
 }
 
 export function focusItems() {
@@ -108,8 +112,8 @@ function addAlertToList(msg) {
     }
 
     const alertData = msg.data;
-    const severity = alertData.level || 'info';
-    const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : new Date().toLocaleString();
+    const severity = (alertData.level || 'info').toLowerCase();
+    const timestamp = formatElapsedTime(msg.timestamp);
     const summary = alertData.summary || msg.event || 'No summary';
     const text = alertData.text || '';
     const serviceName = msg.serviceName || 'Unknown';
@@ -125,14 +129,12 @@ function addAlertToList(msg) {
                 <input type="checkbox" class="alert-checkbox-input" />
             </div>
             <div class="alert-content">
-                <div class="alert-header">
-                    <span class="alert-severity alert-severity-${severity.toLowerCase()}">${severity.toUpperCase()}</span>
+                <div class="alert-text-main">${text || summary}</div>
+                <div class="alert-metadata">
                     <span class="alert-timestamp">${timestamp}</span>
+                    <span class="alert-service-name">${serviceName}</span>
+                    ${serviceType ? `<span class="alert-service-type"> – ${serviceType}</span>` : ''}
                 </div>
-                <div class="alert-service">
-                    <strong>${serviceName}</strong> (${serviceType})
-                </div>
-                ${text ? `<div class="alert-text">${text}</div>` : ''}
             </div>
         </div>
     `;
@@ -181,13 +183,15 @@ async function refreshAlerts() {
 
         const result = await response.json();
         const alerts = result.alerts || [];
+        serviceCounts = result.serviceCounts || {}; // Store service counts
 
         let list = alertsContainer.querySelector('#alerts-list');
 
         // If the layout doesn't exist yet, create it
         if (!list) {
-            alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item active" data-service="all">all</div></div></div><div class="alerts-content"><div id="alerts-list"></div></div></div>';
+            alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item active" data-service="all">all</div></div></div><div class="alerts-content"><div class="alerts-header"><button id="mark-all-seen-btn" class="mark-all-seen-btn">Mark All Seen</button></div><div id="alerts-list"></div></div></div>';
             list = alertsContainer.querySelector('#alerts-list');
+            setupMarkAllSeenButton(); // Re-setup button when layout is created
         }
 
         if (alerts.length === 0) {
@@ -242,14 +246,12 @@ async function refreshAlerts() {
                     <input type="checkbox" class="alert-checkbox-input" data-alert-id="${alert.id}" />
                 </div>
                 <div class="alert-content">
-                    <div class="alert-header">
-                        <span class="alert-severity alert-severity-${alert.severity?.toLowerCase() || 'info'}">${alert.severity || 'INFO'}</span>
-                        <span class="alert-timestamp">${new Date(alert.timestamp).toLocaleString()}</span>
+                    <div class="alert-text-main">${alert.text ? alert.text : (alert.summary || 'No details')}</div>
+                    <div class="alert-metadata">
+                        <span class="alert-timestamp">${formatElapsedTime(alert.timestamp)}</span>
+                        <span class="alert-service-name">${alert.serviceName}</span>
+                        ${alert.serviceType ? `<span class="alert-service-type"> – ${alert.serviceType}</span>` : ''}
                     </div>
-                    <div class="alert-service">
-                        <strong>${alert.serviceName}</strong> (${alert.serviceType})
-                    </div>
-                    ${alert.text ? `<div class="alert-text">${alert.text}</div>` : ''}
                 </div>
             </div>
         `).join('');
@@ -291,6 +293,9 @@ async function refreshAlerts() {
         });
 
         recalculateHighestSeverity();
+
+        // Rebuild service list to include counts
+        rebuildServiceList();
     } catch (err) {
         console.error('Failed to refresh alerts:', err);
         const list = alertsContainer.querySelector('#alerts-list');
@@ -340,13 +345,32 @@ function rebuildServiceList() {
 
     const sortedServices = Array.from(serviceNames).sort();
 
-    // Build new service list
+    // Recalculate counts based on actual visible items in the DOM
+    const countsFromDOM = {};
+    items.forEach(item => {
+        const isVisible = item.style.display !== 'none';
+        if (isVisible) {
+            const service = item.dataset.serviceName;
+            if (service) {
+                countsFromDOM[service] = (countsFromDOM[service] || 0) + 1;
+            }
+        }
+    });
+
+    // Calculate total count from visible items
+    const totalCount = Object.values(countsFromDOM).reduce((a, b) => a + b, 0);
+
+    // Build new service list with counts
     const serviceListHTML = `
         <div class="filter-title">Services</div>
         <div class="service-list">
-            <div class="service-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all">all</div>
+            <div class="service-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all">
+                all <span class="service-count">${totalCount}</span>
+            </div>
             ${sortedServices.map(service => `
-                <div class="service-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">${service}</div>
+                <div class="service-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">
+                    ${service} <span class="service-count">${countsFromDOM[service] || 0}</span>
+                </div>
             `).join('')}
         </div>
     `;
@@ -447,4 +471,39 @@ function setupNavigation() {
             // Can be used for debugging or updating UI
         }
     });
+    rebuildServiceList();
+}
+
+function setupMarkAllSeenButton() {
+    // Use a timeout to ensure the button is fully rendered
+    setTimeout(() => {
+        const markAllBtn = document.querySelector('#mark-all-seen-btn');
+        if (!markAllBtn) {
+            console.warn('[alerts] Mark all seen button not found');
+            return;
+        }
+
+        markAllBtn.addEventListener('click', async () => {
+            // Get the currently selected service filter
+            const currentService = navController?.selectedService || 'all';
+
+            try {
+                const response = await fetch('/api/tabs/alerts/action/mark-all-seen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({serviceFilter: currentService})
+                });
+
+                if (!response.ok) {
+                    console.error('[alerts] Mark all seen failed:', response.status, response.statusText);
+                    return;
+                }
+
+                // Refresh alerts to update the display
+                await refreshAlerts();
+            } catch (err) {
+                console.error('[alerts] Failed to mark all alerts as seen:', err);
+            }
+        });
+    }, 100);
 }

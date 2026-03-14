@@ -244,7 +244,13 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		Status:      currentStatus,
 		Text:        msg.Text,
 		Summary:     msg.Summary,
-		Data:        msg.Data,
+		Data: &core.StatusEvent{
+			Name:     msg.MetricName,
+			Hostname: msg.Hostname,
+			Status:   currentStatus,
+			Level:    currentStatus,
+			Details:  fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric),
+		},
 	}
 
 	// Set the status on the message and publish to status channel
@@ -252,10 +258,13 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		if triggeredThreshold.Status != "" {
 			newMessage.Text = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
 			newMessage.Summary = fmt.Sprintf("%s: %s", msg.Status, msg.Summary)
-			newMessage.Data = map[string]interface{}{
-				"threshold": *triggeredThreshold,
+			if se, ok := newMessage.Data.(*core.StatusEvent); ok {
+				se.Details = fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric)
 			}
 		} else if triggeredThreshold.Updates != nil {
+			// Save the StatusEvent before the JSON round-trip
+			statusEvent := newMessage.Data.(*core.StatusEvent)
+
 			// Apply updates to the message
 			// Convert message to map for generic access, similar to condition service
 			msgMap := make(map[string]any)
@@ -279,6 +288,9 @@ func (svc *Service) messageHandler(msg core.Message) error {
 			if err := json.Unmarshal(data, &newMessage); err != nil {
 				return fmt.Errorf("failed to unmarshal updated message: %w", err)
 			}
+
+			// Restore the StatusEvent after JSON round-trip
+			newMessage.Data = statusEvent
 		}
 	}
 
