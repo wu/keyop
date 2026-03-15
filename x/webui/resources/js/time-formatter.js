@@ -1,8 +1,8 @@
 /**
  * Format an ISO8601 timestamp as elapsed time with two significant units (plain text version)
- * Useful for tabs that don't need HTML wrapping
+ * Works for both past and future times
  * @param {string} isoString - ISO8601 formatted timestamp
- * @returns {string} Elapsed time string (e.g., "2h 30m", "3d 5h")
+ * @returns {string} Elapsed time string (e.g., "2h 30m ago", "3d 5h")
  */
 export function formatAge(isoString) {
     if (!isoString) {
@@ -12,13 +12,11 @@ export function formatAge(isoString) {
     const timestamp = new Date(isoString);
     const now = new Date();
     const elapsedMs = now - timestamp;
-
-    if (elapsedMs < 0) {
-        return 'in the future';
-    }
+    const isPast = elapsedMs >= 0;
+    const absElapsedMs = Math.abs(elapsedMs);
 
     // Calculate time units
-    const seconds = Math.floor(elapsedMs / 1000);
+    const seconds = Math.floor(absElapsedMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
@@ -27,25 +25,29 @@ export function formatAge(isoString) {
     const years = Math.floor(days / 365);
 
     // Build the two most significant time units, or just one if less than a minute
+    let timeStr;
     if (years > 0) {
-        return `${years}y ${months % 12}m ago`;
+        timeStr = `${years}y ${months % 12}m`;
     } else if (months > 0) {
-        return `${months}m ${days % 30}d ago`;
+        timeStr = `${months}m ${days % 30}d`;
     } else if (weeks > 0) {
-        return `${weeks}w ${days % 7}d ago`;
+        timeStr = `${weeks}w ${days % 7}d`;
     } else if (days > 0) {
-        return `${days}d ${hours % 24}h ago`;
+        timeStr = `${days}d ${hours % 24}h`;
     } else if (hours > 0) {
-        return `${hours}h ${minutes % 60}m ago`;
+        timeStr = `${hours}h ${minutes % 60}m`;
     } else if (minutes > 0) {
-        return `${minutes}m ago`;
+        timeStr = `${minutes}m`;
     } else {
-        return 'just now';
+        return isPast ? 'just now' : 'in seconds';
     }
+
+    return isPast ? `${timeStr} ago` : `in ${timeStr}`;
 }
 
 /**
  * Format an ISO8601 timestamp as elapsed time with two significant units
+ * Works for both past and future times
  * @param {string} isoString - ISO8601 formatted timestamp
  * @returns {string} HTML span with elapsed time and full date tooltip
  */
@@ -57,13 +59,11 @@ export function formatElapsedTime(isoString) {
     const timestamp = new Date(isoString);
     const now = new Date();
     const elapsedMs = now - timestamp;
-
-    if (elapsedMs < 0) {
-        return 'in the future';
-    }
+    const isPast = elapsedMs >= 0;
+    const absElapsedMs = Math.abs(elapsedMs);
 
     // Calculate time units
-    const seconds = Math.floor(elapsedMs / 1000);
+    const seconds = Math.floor(absElapsedMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
@@ -87,12 +87,13 @@ export function formatElapsedTime(isoString) {
     } else if (minutes > 0) {
         elapsedText = `${minutes}m`;
     } else {
-        elapsedText = '0m';
+        elapsedText = isPast ? '0m' : '0m';
     }
 
     const fullDate = timestamp.toLocaleString();
+    const suffix = isPast ? 'ago' : 'from now';
 
-    return `<span class="elapsed-time" title="${fullDate}" data-timestamp="${isoString}">${elapsedText}</span>`;
+    return `<span class="elapsed-time" title="${fullDate}" data-timestamp="${isoString}">${elapsedText} ${suffix}</span>`;
 }
 
 /**
@@ -109,14 +110,11 @@ export function startElapsedTimeUpdates() {
             const timestamp = new Date(isoString);
             const now = new Date();
             const elapsedMs = now - timestamp;
-
-            if (elapsedMs < 0) {
-                span.textContent = 'in the future';
-                return;
-            }
+            const isPast = elapsedMs >= 0;
+            const absElapsedMs = Math.abs(elapsedMs);
 
             // Calculate time units
-            const seconds = Math.floor(elapsedMs / 1000);
+            const seconds = Math.floor(absElapsedMs / 1000);
             const minutes = Math.floor(seconds / 60);
             const hours = Math.floor(minutes / 60);
             const days = Math.floor(hours / 24);
@@ -142,7 +140,8 @@ export function startElapsedTimeUpdates() {
                 elapsedText = '0m';
             }
 
-            span.textContent = elapsedText;
+            const suffix = isPast ? 'ago' : 'from now';
+            span.textContent = `${elapsedText} ${suffix}`;
         });
     }
 

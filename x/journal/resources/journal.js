@@ -38,7 +38,6 @@ async function refreshJournalDates() {
 function renderDateList(dates) {
     const dateList = document.getElementById('journal-date-list');
     if (!dateList) {
-        console.warn('[journal] Date list element not found');
         return;
     }
 
@@ -85,7 +84,6 @@ async function selectDate(date) {
 // Load a journal entry
 async function loadJournalEntry(date) {
     try {
-        console.log('[journal] Loading entry for date:', date);
         const response = await fetch('/api/tabs/journal/action/get-entry', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -98,7 +96,6 @@ async function loadJournalEntry(date) {
         }
 
         const data = await response.json();
-        console.log('[journal] Loaded entry content:', data.content.substring(0, 50));
         displayJournalEntry(data.content);
     } catch (err) {
         console.error('[journal] Failed to load entry:', err);
@@ -107,7 +104,6 @@ async function loadJournalEntry(date) {
 
 // Display the journal entry (rendered markdown)
 function displayJournalEntry(content) {
-    console.log('[journal] displayJournalEntry called, isEditing:', journalState.isEditing);
     const viewContainer = document.getElementById('journal-view');
     const editContainer = document.getElementById('journal-edit');
 
@@ -124,7 +120,6 @@ function displayJournalEntry(content) {
             renderMarkdownFromBackend(content, (html) => {
                 viewContainer.innerHTML = html;
                 journalState.originalContent = content;
-                console.log('[journal] Set originalContent, length:', content.length);
             });
         }
     }
@@ -172,7 +167,6 @@ function escapeHtml(text) {
 
 // Toggle edit mode
 function toggleEditMode() {
-    console.log('[journal] toggleEditMode called, isEditing:', journalState.isEditing);
     journalState.isEditing = !journalState.isEditing;
 
     const viewContainer = document.getElementById('journal-view');
@@ -217,9 +211,6 @@ async function saveJournalEntry() {
         const textarea = editContainer?.querySelector('textarea');
         const content = textarea?.value || '';
 
-        console.log('[journal] Saving entry for date:', journalState.currentDate);
-        console.log('[journal] Content length:', content.length);
-        console.log('[journal] Content preview:', content.substring(0, 100));
 
         const response = await fetch('/api/tabs/journal/action/save-entry', {
             method: 'POST',
@@ -237,7 +228,6 @@ async function saveJournalEntry() {
         }
 
         const result = await response.json();
-        console.log('[journal] Save successful:', result);
 
         // Update state AFTER toggling to ensure correct final state
         journalState.originalContent = content;
@@ -271,31 +261,22 @@ function updateDateButtons() {
 
 // Export init function for the web UI
 export async function init(container) {
-    console.log('[journal] Initializing journal tab');
-    console.log('[journal] Container:', container);
 
     // Set up event listeners for buttons
     const editBtn = document.getElementById('journal-edit-btn');
     const saveBtn = document.getElementById('journal-save-btn');
     const cancelBtn = document.getElementById('journal-cancel-btn');
 
-    console.log('[journal] editBtn:', editBtn);
-    console.log('[journal] saveBtn:', saveBtn);
-    console.log('[journal] cancelBtn:', cancelBtn);
 
     if (editBtn) {
-        console.log('[journal] Attaching click listener to editBtn');
         editBtn.addEventListener('click', () => {
-            console.log('[journal] Edit button clicked');
             toggleEditMode();
         });
     }
     if (saveBtn) {
-        console.log('[journal] Attaching click listener to saveBtn');
         saveBtn.addEventListener('click', saveJournalEntry);
     }
     if (cancelBtn) {
-        console.log('[journal] Attaching click listener to cancelBtn');
         cancelBtn.addEventListener('click', cancelEdit);
     }
 
@@ -311,7 +292,6 @@ export async function init(container) {
     }
 
     // Load initial data
-    console.log('[journal] Loading initial dates and entry');
     await refreshJournalDates();
     await loadJournalEntry(journalState.currentDate);
     updateDateButtons();

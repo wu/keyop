@@ -1,0 +1,118 @@
+<div id="tasks-container">
+    <div class="tasks-layout">
+        <div class="filter-sidebar">
+            <div class="filter-title">Tags</div>
+            <div class="tag-list">
+                <div class="tag-item active" data-tag="all">all</div>
+            </div>
+        </div>
+        <div class="tasks-content">
+            <div class="view-list">
+                <div class="view-item" data-view="recent">Recent</div>
+                <div class="view-item" data-view="past">Past</div>
+                <div class="view-item" data-view="yesterday">Yesterday</div>
+                <div class="view-item active" data-view="today">Today</div>
+                <div class="view-item" data-view="tomorrow">Tomorrow</div>
+                <div class="view-item" data-view="future">Future</div>
+                <div class="view-item" data-view="all">All</div>
+            </div>
+            <div id="new-task-container">
+                <input class="new-task-input" id="new-task-input" placeholder="Add a new task..." type="text">
+            </div>
+            <div id="search-container">
+                <input class="task-search-input" id="task-search" placeholder="Search tasks..." type="text">
+            </div>
+            <div id="tasks-list">Loading tasks...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Editor Dialog -->
+<div class="modal" id="task-editor-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Task</h2>
+            <button class="modal-close" id="task-editor-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Task Title -->
+            <div class="form-group">
+                <label for="task-title">Title</label>
+                <input class="form-input" id="task-title" type="text">
+            </div>
+
+            <!-- Task Color -->
+            <div class="form-group">
+                <label>Color</label>
+                <div class="color-input-group">
+                    <input class="form-color-picker-small" id="task-color" type="color">
+                    <input class="form-color-hex" id="task-color-hex" maxlength="7" placeholder="#CCCCCC" type="text">
+                </div>
+            </div>
+
+            <!-- Scheduled Date/Time -->
+            <div class="form-group">
+                <label for="task-scheduled-date">Scheduled Date</label>
+                <input class="form-input" id="task-scheduled-date" type="date">
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input class="form-checkbox" id="task-has-scheduled-time" type="checkbox">
+                    Has Specific Time
+                </label>
+            </div>
+
+            <div class="form-group" id="task-scheduled-time-group" style="display: none;">
+                <label for="task-scheduled-time">Scheduled Time</label>
+                <input class="form-input" id="task-scheduled-time" type="time">
+            </div>
+
+            <!-- Recurrence -->
+            <div class="form-group">
+                <label for="task-recurrence-type">Recurrence</label>
+                <select class="form-select" id="task-recurrence-type">
+                    <option value="">None (one-time task)</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+
+            <!-- Weekly Days Selection -->
+            <div class="form-group" id="recurrence-weekly-days" style="display: none;">
+                <label>Days of Week</label>
+                <div class="days-selector">
+                    <label><input class="day-checkbox" type="checkbox" value="1"> Mon</label>
+                    <label><input class="day-checkbox" type="checkbox" value="2"> Tue</label>
+                    <label><input class="day-checkbox" type="checkbox" value="3"> Wed</label>
+                    <label><input class="day-checkbox" type="checkbox" value="4"> Thu</label>
+                    <label><input class="day-checkbox" type="checkbox" value="5"> Fri</label>
+                    <label><input class="day-checkbox" type="checkbox" value="6"> Sat</label>
+                    <label><input class="day-checkbox" type="checkbox" value="0"> Sun</label>
+                </div>
+            </div>
+
+            <!-- Interval -->
+            <div class="form-group">
+                <label for="task-recurrence-interval">Interval (repeat every N units)</label>
+                <input class="form-input" id="task-recurrence-interval" min="1" type="number" value="1">
+            </div>
+
+            <!-- Tags -->
+            <div class="form-group">
+                <label for="task-tags">Tags (comma-separated)</label>
+                <input class="form-input" id="task-tags" placeholder="tag1, tag2, tag3" type="text">
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="task-editor-cancel">Cancel</button>
+            <button class="btn btn-primary" id="task-editor-save">Save</button>
+        </div>
+    </div>
+</div>
+
+<link href="/api/assets/tasks/tasks.css" rel="stylesheet">
+<script src="/api/assets/tasks/tasks.js" type="module"></script>

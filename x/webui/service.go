@@ -122,6 +122,9 @@ func (svc *Service) Initialize() error {
 	mux.HandleFunc("GET /api/assets/{type}/{path...}", svc.handleGetAsset)
 	// Serve project images (e.g., /images/keyop.png)
 	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
+	// Add no-cache headers for JS and CSS files
+	mux.HandleFunc("GET /js/{path...}", svc.handleJSAsset)
+	mux.HandleFunc("GET /css/{path...}", svc.handleCSSAsset)
 	mux.Handle("/", http.FileServer(http.Dir("x/webui/resources")))
 
 	svc.server = &http.Server{
@@ -364,6 +367,34 @@ func (svc *Service) handleGetAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeContent(w, r, path, stat.ModTime(), file)
+}
+
+// handleJSAsset serves JS files with no-cache headers to prevent stale code
+func (svc *Service) handleJSAsset(w http.ResponseWriter, r *http.Request) {
+	path := r.PathValue("path")
+
+	// Set cache-busting headers for JS files
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	// Serve from x/webui/resources/js/
+	filePath := fmt.Sprintf("x/webui/resources/js/%s", path)
+	http.ServeFile(w, r, filePath)
+}
+
+// handleCSSAsset serves CSS files with no-cache headers to prevent stale styles
+func (svc *Service) handleCSSAsset(w http.ResponseWriter, r *http.Request) {
+	path := r.PathValue("path")
+
+	// Set cache-busting headers for CSS files
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	// Serve from x/webui/resources/css/
+	filePath := fmt.Sprintf("x/webui/resources/css/%s", path)
+	http.ServeFile(w, r, filePath)
 }
 
 // Check performs a basic health check of the web UI service.

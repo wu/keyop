@@ -119,7 +119,7 @@ function setupTabKeyboardNavigation() {
             }
         } else if (e.key === 'ArrowDown') {
             e.preventDefault();
-            if (focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors')) {
+            if (focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors' || activeTabId === 'tasks')) {
                 // Move focus from tabs to items - deselect tab visual
                 focusOnTabs = false;
                 updateTabVisualFocus(-1); // Clear any focused tab
@@ -131,7 +131,7 @@ function setupTabKeyboardNavigation() {
             }
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            if (!focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors')) {
+            if (!focusOnTabs && (activeTabId === 'alerts' || activeTabId === 'errors' || activeTabId === 'tasks')) {
                 // Move focus from items back to tabs (only if at top of items)
                 const tabModule = tabsModules[activeTabId];
                 if (tabModule && tabModule.canReturnToTabs && tabModule.canReturnToTabs()) {
