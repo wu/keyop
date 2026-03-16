@@ -1,3 +1,5 @@
+// migrate_tasks_data is a small utility to normalize timestamp and scheduled_date formats
+// in the tasks SQLite database. It should be run manually on a local copy of the DB.
 package main
 
 import (
@@ -26,13 +28,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("failed to close db: %v", err)
+		}
+	}()
 
 	rows, err := db.Query("SELECT id, scheduled_date, scheduled_time, created_at, updated_at, completed_at FROM tasks")
 	if err != nil {
 		log.Fatalf("Failed to query tasks: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	type taskUpdate struct {
 		id               int64
@@ -99,7 +109,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to prepare statement: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if err := stmt.Close(); err != nil {
+			log.Printf("failed to close stmt: %v", err)
+		}
+	}()
 
 	for _, u := range updates {
 		var compAt interface{}

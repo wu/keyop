@@ -142,10 +142,11 @@ func (c *Calculator) LogicalTodayEnd() time.Time {
 	return time.Date(now.Year(), now.Month(), now.Day(), c.endOfDayHour, c.endOfDayMin, c.endOfDaySec, 0, c.loc)
 }
 
-// Today returns the date representing today in the local timezone.
+// Today returns the date representing the logical day that includes now.
+// This accounts for the end-of-day cutoff: if it's before end-of-day, it returns yesterday;
+// if it's at or after end-of-day, it returns today.
 func (c *Calculator) Today() time.Time {
-	now := time.Now().In(c.loc)
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, c.loc)
+	return c.GetLogicalDay(time.Now(), true)
 }
 
 // Yesterday returns the date representing yesterday in the local timezone.

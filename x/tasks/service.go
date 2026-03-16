@@ -63,6 +63,8 @@ func (svc *Service) Initialize() error {
 		dbPath = filepath.Join(home, dbPath[2:])
 	}
 
+	svc.Deps.MustGetLogger().Info("tasks: initializing database", "dbPath", dbPath)
+
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open tasks database: %w", err)
@@ -81,8 +83,13 @@ func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	logger.Debug("tasks: using end-of-day time", "time", svc.endOfDayTime)
 
-	// Get local timezone
-	loc := time.Local
+	// Get local timezone - default to America/Los_Angeles, fallback to UTC
+	var loc *time.Location
+	loc, tzErr := time.LoadLocation("America/Los_Angeles")
+	if tzErr != nil {
+		logger.Warn("tasks: failed to load America/Los_Angeles timezone, falling back to UTC", "error", tzErr)
+		loc = time.UTC
+	}
 
 	// Create logical day calculator
 	svc.logicalCalc = logicalday.NewCalculator(svc.endOfDayTime, loc)
