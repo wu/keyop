@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -125,7 +126,17 @@ func (svc *Service) Initialize() error {
 	// Add no-cache headers for JS and CSS files
 	mux.HandleFunc("GET /js/{path...}", svc.handleJSAsset)
 	mux.HandleFunc("GET /css/{path...}", svc.handleCSSAsset)
-	mux.Handle("/", http.FileServer(http.Dir("x/webui/resources")))
+	fileServer := http.FileServer(http.Dir("x/webui/resources"))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If requesting HTML, JS, or CSS, set no-cache headers so browsers will revalidate.
+		path := r.URL.Path
+		if path == "/" || strings.HasSuffix(path, ".html") || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		}
+		fileServer.ServeHTTP(w, r)
+	}))
 
 	svc.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", svc.port),

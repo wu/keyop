@@ -77,6 +77,11 @@ func (svc *Service) Initialize() error {
 
 	svc.db = db
 
+	// Ensure in-progress columns exist in the tasks table (added automatically if missing)
+	if err := svc.ensureInProgressColumns(); err != nil {
+		svc.Deps.MustGetLogger().Warn("tasks: failed to ensure in-progress columns", "error", err)
+	}
+
 	// Get end-of-day time from global config if provided
 	// Note: We look for it in the Dependencies, not in ServiceConfig
 	// For now, use the default
@@ -101,6 +106,51 @@ func (svc *Service) Initialize() error {
 func (svc *Service) OnShutdown() error {
 	if svc.db != nil {
 		return svc.db.Close()
+	}
+	return nil
+}
+
+// ensureInProgressColumns checks the tasks table schema and adds in-progress columns if missing.
+func (svc *Service) ensureInProgressColumns() error {
+	if svc.db == nil {
+		return nil
+	}
+	cols := map[string]bool{}
+	if pr, err := svc.db.Query("PRAGMA table_info(tasks)"); err == nil {
+		defer func() {
+			if err := pr.Close(); err != nil {
+				svc.Deps.MustGetLogger().Warn("tasks: failed to close pragma rows", "error", err)
+			}
+		}()
+		for pr.Next() {
+			var cid int
+			var name string
+			var ctype string
+			var notnull int
+			var dflt interface{}
+			var pk int
+			if err := pr.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil {
+				cols[name] = true
+			}
+		}
+	} else {
+		return err
+	}
+
+	if !cols["in_progress"] {
+		if _, err := svc.db.Exec("ALTER TABLE tasks ADD COLUMN in_progress INTEGER DEFAULT 0"); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to add in_progress column", "error", err)
+		}
+	}
+	if !cols["in_progress_started_at"] {
+		if _, err := svc.db.Exec("ALTER TABLE tasks ADD COLUMN in_progress_started_at TEXT"); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to add in_progress_started_at column", "error", err)
+		}
+	}
+	if !cols["in_progress_total_seconds"] {
+		if _, err := svc.db.Exec("ALTER TABLE tasks ADD COLUMN in_progress_total_seconds INTEGER DEFAULT 0"); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to add in_progress_total_seconds column", "error", err)
+		}
 	}
 	return nil
 }

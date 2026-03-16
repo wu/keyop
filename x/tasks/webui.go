@@ -84,6 +84,17 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return svc.updateTask(int64(taskID), params)
 		}
 		return nil, fmt.Errorf("invalid taskId")
+	case "set-in-progress":
+		if taskID, ok := params["taskId"].(float64); ok {
+			start := true
+			if s, ok := params["start"].(bool); ok {
+				start = s
+			} else if sf, ok := params["start"].(float64); ok {
+				start = sf != 0
+			}
+			return svc.setInProgress(int64(taskID), start)
+		}
+		return nil, fmt.Errorf("invalid taskId")
 	case "create-task":
 		return svc.createTask(params)
 	case "delete-task":
@@ -101,6 +112,12 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return svc.fetchSubtasks(parentUUID)
 		}
 		return nil, fmt.Errorf("invalid parentUuid")
+	case "fetch-tags-view":
+		var tag string
+		if t, ok := params["tag"].(string); ok {
+			tag = t
+		}
+		return svc.fetchParentsByTag(tag)
 	case "reorder-subtask":
 		if taskID, ok := params["taskId"].(float64); ok {
 			var newPosition int64
@@ -112,6 +129,15 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 				parentUUID = uuid
 			}
 			return svc.reorderSubtask(int64(taskID), newPosition, parentUUID)
+		}
+		return nil, fmt.Errorf("invalid taskId")
+	case "reorder-parent":
+		if taskID, ok := params["taskId"].(float64); ok {
+			var newPosition int64
+			if pos, ok := params["newPosition"].(float64); ok {
+				newPosition = int64(pos)
+			}
+			return svc.reorderParent(int64(taskID), newPosition)
 		}
 		return nil, fmt.Errorf("invalid reorder params")
 	default:
@@ -131,23 +157,26 @@ type PatternData struct {
 
 // TaskRow represents a task for the Web UI.
 type TaskRow struct {
-	ID               int64        `json:"id"`
-	UUID             string       `json:"uuid,omitempty"`
-	ParentUUID       string       `json:"parentUuid,omitempty"`
-	Title            string       `json:"title"`
-	Done             bool         `json:"done"`
-	Tags             string       `json:"tags"`
-	HasScheduledTime bool         `json:"hasScheduledTime"`
-	ScheduledAt      string       `json:"scheduledAt"`
-	CompletedAt      string       `json:"completedAt"`
-	UpdatedAt        string       `json:"updatedAt"`
-	Category         string       `json:"category"` // For today view: "today" or "past"; for other views: empty
-	Color            string       `json:"color"`    // Hex color code
-	Recurring        bool         `json:"recurring"`
-	HasSubtasks      bool         `json:"hasSubtasks"`
-	RecurrenceID     int64        `json:"recurrenceId"`
-	Pattern          *PatternData `json:"pattern,omitempty"`
-	SortOrder        int64        `json:"sortOrder,omitempty"` // Manual sort order for subtasks
+	ID                     int64        `json:"id"`
+	UUID                   string       `json:"uuid,omitempty"`
+	ParentUUID             string       `json:"parentUuid,omitempty"`
+	Title                  string       `json:"title"`
+	Done                   bool         `json:"done"`
+	Tags                   string       `json:"tags"`
+	HasScheduledTime       bool         `json:"hasScheduledTime"`
+	ScheduledAt            string       `json:"scheduledAt"`
+	CompletedAt            string       `json:"completedAt"`
+	UpdatedAt              string       `json:"updatedAt"`
+	Category               string       `json:"category"` // For today view: "today" or "past"; for other views: empty
+	Color                  string       `json:"color"`    // Hex color code
+	Recurring              bool         `json:"recurring"`
+	HasSubtasks            bool         `json:"hasSubtasks"`
+	RecurrenceID           int64        `json:"recurrenceId"`
+	Pattern                *PatternData `json:"pattern,omitempty"`
+	SortOrder              int64        `json:"sortOrder,omitempty"` // Manual sort order for subtasks
+	InProgress             bool         `json:"inProgress,omitempty"`
+	InProgressStartedAt    string       `json:"inProgressStartedAt,omitempty"`
+	InProgressTotalSeconds int64        `json:"inProgressTotalSeconds,omitempty"`
 }
 
 // parsePatternData normalizes legacy recurrence fields and builds a PatternData.
@@ -255,6 +284,10 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 		isPastOrFuture = true
 		// Show tasks scheduled two or more days after logical today
 		targetDay = logicalToday.AddDate(0, 0, 2)
+	case "tags":
+		// Tags view: show parent tasks only, ignore dates
+		// Handled specially below
+		targetDay = time.Time{} // placeholder, not used for tags view
 	default:
 		// Default to "today"
 		targetDay = logicalToday
@@ -282,6 +315,15 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 	}
 
 	selectCols := "id, title, done, scheduled_date, completed_at, tags, scheduled_time, updated_at, color, recurrence, recurrence_days, recurrence_x"
+	if cols["in_progress"] {
+		selectCols += ", in_progress"
+	}
+	if cols["in_progress_started_at"] {
+		selectCols += ", in_progress_started_at"
+	}
+	if cols["in_progress_total_seconds"] {
+		selectCols += ", in_progress_total_seconds"
+	}
 	if cols["uuid"] {
 		selectCols += ", uuid"
 	}
@@ -320,6 +362,19 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 			&task.ID, &task.Title, &task.Done, &scheduledAtStr, &completedAtStr,
 			&task.Tags, &hasScheduledTime, &updatedAtStr, &task.Color, &recurrenceType, &recurrenceDays, &recurrenceInterval,
 		}
+		// Optional in-progress columns (added dynamically)
+		var inProgressInt sql.NullInt64
+		var inProgressStarted sql.NullString
+		var inProgressTotal sql.NullInt64
+		if cols["in_progress"] {
+			scanTargets = append(scanTargets, &inProgressInt)
+		}
+		if cols["in_progress_started_at"] {
+			scanTargets = append(scanTargets, &inProgressStarted)
+		}
+		if cols["in_progress_total_seconds"] {
+			scanTargets = append(scanTargets, &inProgressTotal)
+		}
 		if cols["uuid"] {
 			scanTargets = append(scanTargets, &task.UUID)
 		}
@@ -328,6 +383,17 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			continue
+		}
+
+		// Map in-progress column values into the TaskRow
+		if cols["in_progress"] && inProgressInt.Valid {
+			task.InProgress = inProgressInt.Int64 != 0
+		}
+		if cols["in_progress_started_at"] && inProgressStarted.Valid {
+			task.InProgressStartedAt = inProgressStarted.String
+		}
+		if cols["in_progress_total_seconds"] && inProgressTotal.Valid {
+			task.InProgressTotalSeconds = inProgressTotal.Int64
 		}
 
 		// Parse datetime strings
@@ -360,6 +426,10 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 
 		// Check if this task should be included based on logical day
 		shouldInclude := false
+		// Include in-progress tasks in 'today' view regardless of scheduled date
+		if view == "today" && task.InProgress {
+			shouldInclude = true
+		}
 
 		if !task.Done && !scheduledAt.IsZero() {
 			logicalDay := svc.logicalCalc.GetLogicalDay(scheduledAt, hasScheduledTime)
@@ -453,6 +523,15 @@ func (svc *Service) fetchTasks(view string) (any, error) {
 func (svc *Service) fetchRecentTasks() (any, error) {
 	cols := svc.detectedCols()
 	selectCols := "id, title, done, scheduled_date, completed_at, tags, scheduled_time, updated_at, color, recurrence, recurrence_days, recurrence_x"
+	if cols["in_progress"] {
+		selectCols += ", in_progress"
+	}
+	if cols["in_progress_started_at"] {
+		selectCols += ", in_progress_started_at"
+	}
+	if cols["in_progress_total_seconds"] {
+		selectCols += ", in_progress_total_seconds"
+	}
 	if cols["uuid"] {
 		selectCols += ", uuid"
 	}
@@ -803,6 +882,15 @@ func (svc *Service) fetchSubtasks(parentUUID string) (any, error) {
 	svc.Deps.MustGetLogger().Info("tasks: fetchSubtasks detected columns", "has_uuid", cols["uuid"], "has_subtask_parent_uuid", cols["subtask_parent_uuid"])
 
 	selectCols := "id, title, done, scheduled_date, completed_at, tags, scheduled_time, updated_at, color, recurrence, recurrence_days, recurrence_x, position"
+	if cols["in_progress"] {
+		selectCols += ", in_progress"
+	}
+	if cols["in_progress_started_at"] {
+		selectCols += ", in_progress_started_at"
+	}
+	if cols["in_progress_total_seconds"] {
+		selectCols += ", in_progress_total_seconds"
+	}
 	if cols["uuid"] {
 		selectCols += ", uuid"
 	}
@@ -840,10 +928,13 @@ func (svc *Service) fetchSubtasks(parentUUID string) (any, error) {
 		// Build dynamic scan target list to support optional uuid/subtask_parent_uuid columns
 		// Note: SQLite returns datetime as strings, so we scan into NullString and parse
 		// Position is always included now, so add it before the optional columns
+		var inProgressInt sql.NullInt64
+		var inProgressStarted sql.NullString
+		var inProgressTotal sql.NullInt64
 		scanTargets := []interface{}{
 			&task.ID, &task.Title, &task.Done, &scheduledAtStr, &completedAtStr,
 			&task.Tags, &hasScheduledTime, &updatedAtStr, &task.Color, &recurrenceType, &recurrenceDays, &recurrenceInterval,
-			&task.SortOrder,
+			&task.SortOrder, &inProgressInt, &inProgressStarted, &inProgressTotal,
 		}
 		if cols["uuid"] {
 			scanTargets = append(scanTargets, &task.UUID)
@@ -854,6 +945,16 @@ func (svc *Service) fetchSubtasks(parentUUID string) (any, error) {
 		if err := rows.Scan(scanTargets...); err != nil {
 			svc.Deps.MustGetLogger().Warn("tasks: fetchSubtasks scan error", "error", err)
 			continue
+		}
+		// Map in-progress fields from DB
+		if inProgressInt.Valid {
+			task.InProgress = inProgressInt.Int64 != 0
+		}
+		if inProgressStarted.Valid {
+			task.InProgressStartedAt = inProgressStarted.String
+		}
+		if inProgressTotal.Valid {
+			task.InProgressTotalSeconds = inProgressTotal.Int64
 		}
 
 		// Parse datetime strings
@@ -923,6 +1024,140 @@ func (svc *Service) fetchSubtasks(parentUUID string) (any, error) {
 	svc.annotateSubtaskInfo(tasks)
 
 	return map[string]any{"tasks": tasks, "tagCounts": tagCounts}, nil
+}
+
+// fetchParentsByTag fetches all parent tasks for a given tag, grouped by incomplete/completed.
+func (svc *Service) fetchParentsByTag(tag string) (any, error) {
+	if svc.db == nil {
+		return nil, fmt.Errorf("tasks database not available")
+	}
+
+	// Detect optional columns
+	cols := map[string]bool{}
+	if pr, err := svc.db.Query("PRAGMA table_info(tasks)"); err == nil {
+		defer func() {
+			if err := pr.Close(); err != nil {
+				svc.Deps.MustGetLogger().Warn("tasks: failed to close pragma rows", "error", err)
+			}
+		}()
+		for pr.Next() {
+			var cid int
+			var name string
+			var ctype string
+			var notnull int
+			var dflt interface{}
+			var pk int
+			if err := pr.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil {
+				cols[name] = true
+			}
+		}
+	}
+
+	selectCols := "id, title, done, scheduled_date, completed_at, tags, scheduled_time, updated_at, color, recurrence, recurrence_days, recurrence_x, position"
+	if cols["in_progress"] {
+		selectCols += ", in_progress"
+	}
+	if cols["in_progress_started_at"] {
+		selectCols += ", in_progress_started_at"
+	}
+	if cols["in_progress_total_seconds"] {
+		selectCols += ", in_progress_total_seconds"
+	}
+	if cols["uuid"] {
+		selectCols += ", uuid"
+	}
+	if cols["subtask_parent_uuid"] {
+		selectCols += ", subtask_parent_uuid"
+	}
+
+	// If no tag specified or tag is "all", get all parent tasks
+	var q string
+	var rows *sql.Rows
+	var err error
+
+	if tag == "" || tag == "all" {
+		q = "SELECT " + selectCols + " FROM tasks WHERE subtask_parent_uuid = '' ORDER BY done ASC, position ASC"
+		rows, err = svc.db.Query(q)
+	} else {
+		q = "SELECT " + selectCols + " FROM tasks WHERE subtask_parent_uuid = '' AND COALESCE(tags, '') = ? ORDER BY done ASC, position ASC"
+		rows, err = svc.db.Query(q, tag)
+	}
+
+	if err != nil {
+		svc.Deps.MustGetLogger().Warn("tasks: fetchParentsByTag query error", "error", err)
+		return nil, err
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to close rows", "error", err)
+		}
+	}()
+
+	var tasks []TaskRow
+	for rows.Next() {
+		var task TaskRow
+		var scheduledAtStr, completedAtStr, hasScheduledTime, updatedAtStr sql.NullString
+		var recurrenceType, recurrenceDays, recurrenceInterval sql.NullString
+
+		var inProgressInt sql.NullInt64
+		var inProgressStarted sql.NullString
+		var inProgressTotal sql.NullInt64
+		scanTargets := []interface{}{
+			&task.ID, &task.Title, &task.Done, &scheduledAtStr, &completedAtStr,
+			&task.Tags, &hasScheduledTime, &updatedAtStr, &task.Color, &recurrenceType, &recurrenceDays, &recurrenceInterval,
+			&task.SortOrder, &inProgressInt, &inProgressStarted, &inProgressTotal,
+		}
+		if cols["uuid"] {
+			scanTargets = append(scanTargets, &task.UUID)
+		}
+		if cols["subtask_parent_uuid"] {
+			scanTargets = append(scanTargets, &task.ParentUUID)
+		}
+		if err := rows.Scan(scanTargets...); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: fetchParentsByTag scan error", "error", err)
+			continue
+		}
+
+		// Map in-progress fields from DB
+		if inProgressInt.Valid {
+			task.InProgress = inProgressInt.Int64 != 0
+		}
+		if inProgressStarted.Valid {
+			task.InProgressStartedAt = inProgressStarted.String
+		}
+		if inProgressTotal.Valid {
+			task.InProgressTotalSeconds = inProgressTotal.Int64
+		}
+
+		// Assign string values directly (TaskRow expects strings for dates)
+		task.ScheduledAt = scheduledAtStr.String
+		task.CompletedAt = completedAtStr.String
+		task.UpdatedAt = updatedAtStr.String
+		task.HasScheduledTime = hasScheduledTime.Valid && hasScheduledTime.String == "true"
+
+		// Build pattern from recurrence fields
+		pattern := parsePatternData(recurrenceType.String, recurrenceDays.String, 0)
+		if recurrenceInterval.Valid {
+			if iv, err := strconv.Atoi(recurrenceInterval.String); err == nil && pattern != nil {
+				pattern.Interval = iv
+			}
+		}
+		task.Pattern = pattern
+		task.Recurring = pattern != nil
+
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	svc.Deps.MustGetLogger().Info("tasks: fetchParentsByTag returning tasks", "count", len(tasks), "tag", tag)
+
+	// Annotate which tasks have subtasks
+	svc.annotateSubtaskInfo(tasks)
+
+	return map[string]any{"tasks": tasks}, nil
 }
 
 // createTask creates a new task scheduled for today.
@@ -1201,10 +1436,61 @@ func (svc *Service) toggleTask(taskID int64) (any, error) {
 	if !done {
 		// Marking as done
 		newDone = true
-		_, err = svc.db.Exec(
-			"UPDATE tasks SET done = ?, completed_at = ?, updated_at = ? WHERE id = ?",
-			newDone, now, now, taskID,
-		)
+		tx, txErr := svc.db.Begin()
+		if txErr != nil {
+			return nil, txErr
+		}
+		defer func() {
+			if txErr != nil {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					svc.Deps.MustGetLogger().Warn("tasks: failed to rollback", "error", rbErr)
+				}
+			}
+		}()
+
+		// If in-progress columns exist, finalize accumulated time
+		cols := svc.detectedCols()
+		if cols["in_progress"] && cols["in_progress_started_at"] && cols["in_progress_total_seconds"] {
+			var started sql.NullString
+			var total sql.NullInt64
+			if err = tx.QueryRow("SELECT in_progress_started_at, in_progress_total_seconds FROM tasks WHERE id = ?", taskID).Scan(&started, &total); err != nil {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					svc.Deps.MustGetLogger().Warn("tasks: failed to rollback", "error", rbErr)
+				}
+				return nil, err
+			}
+			newTotal := int64(0)
+			if total.Valid {
+				newTotal = total.Int64
+			}
+			if started.Valid && started.String != "" {
+				if t, err2 := time.Parse(time.RFC3339Nano, started.String); err2 == nil {
+					delta := int64(time.Since(t).Seconds())
+					if delta < 0 {
+						delta = 0
+					}
+					newTotal += delta
+				}
+			}
+			_, txErr = tx.Exec("UPDATE tasks SET done = ?, completed_at = ?, updated_at = ?, in_progress = 0, in_progress_started_at = NULL, in_progress_total_seconds = ? WHERE id = ?", newDone, now, now, newTotal, taskID)
+			if txErr != nil {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					svc.Deps.MustGetLogger().Warn("tasks: failed to rollback", "error", rbErr)
+				}
+				return nil, txErr
+			}
+		} else {
+			_, txErr = tx.Exec("UPDATE tasks SET done = ?, completed_at = ?, updated_at = ? WHERE id = ?", newDone, now, now, taskID)
+			if txErr != nil {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					svc.Deps.MustGetLogger().Warn("tasks: failed to rollback", "error", rbErr)
+				}
+				return nil, txErr
+			}
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
 	} else {
 		// Marking as not done
 		newDone = false
@@ -1322,6 +1608,102 @@ func (svc *Service) toggleTask(taskID int64) (any, error) {
 	}
 
 	return map[string]any{"status": "ok", "done": newDone}, nil
+}
+
+// setInProgress starts or stops in-progress timing for a task.
+func (svc *Service) setInProgress(taskID int64, start bool) (any, error) {
+	if svc.db == nil {
+		return nil, fmt.Errorf("tasks database not available")
+	}
+	cols := svc.detectedCols()
+	if !cols["in_progress"] || !cols["in_progress_started_at"] || !cols["in_progress_total_seconds"] {
+		return nil, fmt.Errorf("in-progress fields not present in tasks database")
+	}
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+	if start {
+		_, err := svc.db.Exec("UPDATE tasks SET in_progress = 1, in_progress_started_at = ?, updated_at = ? WHERE id = ?", nowStr, nowStr, taskID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Emit SSE about in-progress start so other clients update
+		messenger := svc.Deps.MustGetMessenger()
+		if messenger != nil {
+			msg := core.Message{
+				Version:     "1.0",
+				Timestamp:   time.Now(),
+				ChannelName: "tasks",
+				ServiceType: "tasks",
+				ServiceName: "tasks",
+				Event:       "taskUpdated",
+				Status:      "updated",
+			}
+			taskDetails := map[string]any{
+				"taskId":              taskID,
+				"inProgress":          true,
+				"inProgressStartedAt": nowStr,
+			}
+			if body, err := json.Marshal(taskDetails); err == nil {
+				msg.Body = string(body)
+			}
+			if err := messenger.Send(msg); err != nil {
+				svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
+			}
+		}
+
+		return map[string]any{"status": "ok", "inProgress": true, "inProgressStartedAt": nowStr}, nil
+	}
+
+	// Stop - compute accumulated seconds
+	var started sql.NullString
+	var total sql.NullInt64
+	if err := svc.db.QueryRow("SELECT in_progress_started_at, in_progress_total_seconds FROM tasks WHERE id = ?", taskID).Scan(&started, &total); err != nil {
+		return nil, err
+	}
+	newTotal := int64(0)
+	if total.Valid {
+		newTotal = total.Int64
+	}
+	if started.Valid && started.String != "" {
+		if t, err2 := time.Parse(time.RFC3339Nano, started.String); err2 == nil {
+			delta := int64(now.Sub(t).Seconds())
+			if delta < 0 {
+				delta = 0
+			}
+			newTotal += delta
+		}
+	}
+	if _, err := svc.db.Exec("UPDATE tasks SET in_progress = 0, in_progress_started_at = NULL, in_progress_total_seconds = ?, updated_at = ? WHERE id = ?", newTotal, nowStr, taskID); err != nil {
+		return nil, err
+	}
+
+	// Emit SSE about in-progress stop so other clients update
+	messenger := svc.Deps.MustGetMessenger()
+	if messenger != nil {
+		msg := core.Message{
+			Version:     "1.0",
+			Timestamp:   time.Now(),
+			ChannelName: "tasks",
+			ServiceType: "tasks",
+			ServiceName: "tasks",
+			Event:       "taskUpdated",
+			Status:      "updated",
+		}
+		taskDetails := map[string]any{
+			"taskId":                 taskID,
+			"inProgress":             false,
+			"inProgressTotalSeconds": newTotal,
+		}
+		if body, err := json.Marshal(taskDetails); err == nil {
+			msg.Body = string(body)
+		}
+		if err := messenger.Send(msg); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
+		}
+	}
+
+	return map[string]any{"status": "ok", "inProgress": false, "inProgressTotalSeconds": newTotal}, nil
 }
 
 // reorderSubtask updates the sort order (position) of a subtask within its parent.
@@ -1443,6 +1825,125 @@ func (svc *Service) reorderSubtask(taskID int64, newPosition int64, parentUUID s
 	return map[string]any{"status": "ok", "subtasks": newList}, nil
 }
 
+// reorderParent reorders parent tasks within their tags group.
+func (svc *Service) reorderParent(taskID int64, newPosition int64) (any, error) {
+	if svc.db == nil {
+		return nil, fmt.Errorf("tasks database not available")
+	}
+
+	// Get the current task's tag and done status
+	var currentTag string
+	var currentDone bool
+	err := svc.db.QueryRow("SELECT COALESCE(tags, ''), done FROM tasks WHERE id = ? AND subtask_parent_uuid = ''", taskID).Scan(&currentTag, &currentDone)
+	if err != nil {
+		return nil, fmt.Errorf("parent task not found: %w", err)
+	}
+
+	// Get all parent tasks with the same tag, ordered by done and position
+	query := `
+		SELECT id, position, done FROM tasks 
+		WHERE subtask_parent_uuid = '' AND COALESCE(tags, '') = ?
+		ORDER BY done ASC, position ASC
+	`
+	rows, err := svc.db.Query(query, currentTag)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to close rows", "error", err)
+		}
+	}()
+
+	type parentInfo struct {
+		id       int64
+		position int64
+		done     bool
+	}
+
+	var parents []parentInfo
+	for rows.Next() {
+		var p parentInfo
+		if err := rows.Scan(&p.id, &p.position, &p.done); err != nil {
+			continue
+		}
+		parents = append(parents, p)
+	}
+
+	// Count incomplete vs completed parents
+	var incompleteCount, completeCount int
+	for _, p := range parents {
+		if p.done {
+			completeCount++
+		} else {
+			incompleteCount++
+		}
+	}
+
+	// Determine the boundary between incomplete and complete
+	incompleteBoundary := int64(incompleteCount)
+	if incompleteBoundary > 0 {
+		incompleteBoundary-- // positions are 0-indexed
+	}
+
+	// Validate the new position based on current task's done status
+	// Incomplete tasks can only move within the incomplete section
+	// Completed tasks can only move within the completed section
+	if !currentDone && newPosition > incompleteBoundary {
+		return nil, fmt.Errorf("cannot drag incomplete parent below completed parents")
+	}
+	if currentDone && newPosition < int64(incompleteCount) {
+		return nil, fmt.Errorf("cannot drag completed parent above incomplete parents")
+	}
+
+	// Build new sort order
+	// Remove the current task from its old position and insert at new position
+	var reorderedParents []parentInfo
+	for _, p := range parents {
+		if p.id != taskID {
+			reorderedParents = append(reorderedParents, p)
+		}
+	}
+
+	// Insert at new position
+	if newPosition > int64(len(reorderedParents)) {
+		newPosition = int64(len(reorderedParents))
+	}
+	if newPosition < 0 {
+		newPosition = 0
+	}
+
+	newList := make([]parentInfo, len(reorderedParents)+1)
+	copy(newList[:newPosition], reorderedParents[:newPosition])
+	newList[newPosition] = parentInfo{id: taskID, position: newPosition, done: currentDone}
+	copy(newList[newPosition+1:], reorderedParents[newPosition:])
+
+	// Update all positions in database
+	tx, err := svc.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && err.Error() != "sql: transaction has already been committed or rolled back" {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to rollback transaction", "error", err)
+		}
+	}()
+
+	for i, p := range newList {
+		_, err := tx.Exec("UPDATE tasks SET position = ? WHERE id = ?", i, p.id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	// Return updated parents
+	return map[string]any{"status": "ok", "parents": newList}, nil
+}
+
 // updateTask updates task details (title, tags, color, recurrence).
 func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error) {
 	if svc.db == nil {
@@ -1555,12 +2056,29 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		}
 	}
 
-	// Handle scheduledAt ISO string if provided
-	if scheduledAt, ok := params["scheduledAt"].(string); ok && scheduledAt != "" {
-		t, err := time.Parse(time.RFC3339, scheduledAt)
-		if err == nil {
+	// Handle scheduledAt ISO string if provided (supports clearing when key present but empty/null)
+	if _, hasScheduledAtKey := params["scheduledAt"]; hasScheduledAtKey {
+		// scheduledAt key was explicitly provided. Support clearing when empty string or null.
+		switch v := params["scheduledAt"].(type) {
+		case nil:
+			// Explicit null -> clear scheduled_date
 			updateFields = append(updateFields, "scheduled_date = ?")
-			updateArgs = append(updateArgs, t.UTC().Format(time.RFC3339Nano))
+			updateArgs = append(updateArgs, nil)
+		case string:
+			if v == "" {
+				// Empty string -> clear scheduled_date
+				updateFields = append(updateFields, "scheduled_date = ?")
+				updateArgs = append(updateArgs, nil)
+			} else {
+				// Parse provided ISO datetime
+				t, err := time.Parse(time.RFC3339, v)
+				if err == nil {
+					updateFields = append(updateFields, "scheduled_date = ?")
+					updateArgs = append(updateArgs, t.UTC().Format(time.RFC3339Nano))
+				}
+			}
+		default:
+			// Unsupported type: ignore and fallback to legacy handling below
 		}
 	} else if scheduledDateStr != "" {
 		var t time.Time

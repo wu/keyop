@@ -37,13 +37,152 @@ let state = {
     collapsedSections: {}, // Track which sections are collapsed
     searchQuery: '', // Track current search query
     currentEditingTask: null, // Task currently being edited
-    expandedParents: new Set() // Track which parent task UUIDs are expanded
+    expandedParents: new Set(), // Track which parent task UUIDs are expanded
+    tagsViewFilter: 'all', // Track the selected tag filter in tags view
+    inProgress: {} // Map of taskId -> { startedAt: number|null, accumulatedMs: number, running: boolean }
 };
 
 let navController = null;
 
+// Formatting helpers for in-progress timers
+function formatDurationMs(ms) {
+    ms = ms || 0;
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function loadInProgressState() {
+    try {
+        const raw = localStorage.getItem('tasks-inprogress');
+        if (raw) {
+            state.inProgress = JSON.parse(raw) || {};
+            // Normalize numeric keys to strings
+            const normalized = {};
+            Object.keys(state.inProgress).forEach(k => {
+                normalized[String(k)] = state.inProgress[k];
+            });
+            state.inProgress = normalized;
+        }
+    } catch (err) {
+        console.error('[tasks] Failed to load in-progress state:', err);
+    }
+}
+
+function saveInProgressState() {
+    try {
+        localStorage.setItem('tasks-inprogress', JSON.stringify(state.inProgress || {}));
+    } catch (err) {
+        console.error('[tasks] Failed to save in-progress state:', err);
+    }
+}
+
+function anyRunningInProgress() {
+    return Object.values(state.inProgress || {}).some(v => v && v.running);
+}
+
+let inProgressTimerId = null;
+function ensureInProgressTimer() {
+    if (inProgressTimerId) return;
+    if (!anyRunningInProgress()) return;
+    inProgressTimerId = setInterval(updateAllInProgressDisplays, 1000);
+    updateAllInProgressDisplays();
+}
+
+function stopInProgressTimer() {
+    if (inProgressTimerId) {
+        clearInterval(inProgressTimerId);
+        inProgressTimerId = null;
+    }
+}
+
+function updateAllInProgressDisplays() {
+    const els = document.querySelectorAll('.task-inprogress-time');
+    els.forEach(el => {
+        const id = el.dataset.taskId;
+        const info = state.inProgress && state.inProgress[id];
+        if (!info) { el.textContent = ''; return; }
+        const accum = info.accumulatedMs || 0;
+        const extra = (info.running && info.startedAt) ? (Date.now() - info.startedAt) : 0;
+        el.textContent = formatDurationMs(accum + extra);
+    });
+    // Update icons
+    const btns = document.querySelectorAll('.task-inprogress-btn');
+    btns.forEach(b => {
+        const id = b.dataset.taskId;
+        const info = state.inProgress && state.inProgress[id];
+        b.textContent = (info && info.running) ? '⏸' : '▶';
+    });
+    if (!anyRunningInProgress()) stopInProgressTimer();
+}
+
+async function toggleInProgress(taskId) {
+	const id = String(taskId);
+	const cur = state.inProgress && state.inProgress[id];
+	const start = !(cur && cur.running);
+	try {
+		const response = await fetch('/api/tabs/tasks/action/set-in-progress', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({ taskId: parseInt(taskId), start })
+		});
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		const res = await response.json();
+		if (res.error) throw new Error(res.error);
+		if (start) {
+			state.inProgress[id] = state.inProgress[id] || {startedAt: null, accumulatedMs: 0, running: false};
+			state.inProgress[id].startedAt = Date.parse(res.inProgressStartedAt);
+			state.inProgress[id].running = true;
+		} else {
+			state.inProgress[id] = state.inProgress[id] || {startedAt: null, accumulatedMs: 0, running: false};
+			state.inProgress[id].accumulatedMs = (res.inProgressTotalSeconds || 0) * 1000;
+			state.inProgress[id].startedAt = null;
+			state.inProgress[id].running = false;
+		}
+		saveInProgressState();
+		ensureInProgressTimer();
+		if (state.currentView === 'tags') { displayTagsView(); } else { displayTasks(); }
+	} catch (err) {
+		console.error('[tasks] toggleInProgress error:', err);
+	}
+}
+
+async function stopInProgress(taskId) {
+	const id = String(taskId);
+	try {
+		const response = await fetch('/api/tabs/tasks/action/set-in-progress', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({ taskId: parseInt(taskId), start: false })
+		});
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		const res = await response.json();
+		if (res.error) throw new Error(res.error);
+		state.inProgress[id] = state.inProgress[id] || {startedAt: null, accumulatedMs: 0, running: false};
+		state.inProgress[id].accumulatedMs = (res.inProgressTotalSeconds || 0) * 1000;
+		state.inProgress[id].startedAt = null;
+		state.inProgress[id].running = false;
+		saveInProgressState();
+		try { updateAllInProgressDisplays(); } catch (err) { console.error('[tasks] updateAllInProgressDisplays error:', err); }
+		if (state.currentView === 'tags') { displayTagsView(); } else { displayTasks(); }
+	} catch (err) {
+		console.error('[tasks] stopInProgress error:', err);
+	}
+}
+
 async function loadTasks() {
     try {
+        // If tags view is selected, load tags view instead
+        if (state.currentView === 'tags') {
+
+            await loadTagsView();
+            return;
+        }
+
+
         const response = await fetch('/api/tabs/tasks/action/fetch-tasks', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -60,9 +199,25 @@ async function loadTasks() {
         }
 
         state.tasks = result.tasks || [];
-        state.tagCounts = result.tagCounts || {};
+state.tagCounts = result.tagCounts || {};
 
-        // Update tag filter list
+	// Seed in-progress state from server-provided fields (if present)
+	if (!state.inProgress) state.inProgress = {};
+	if (Array.isArray(state.tasks)) {
+		for (const t of state.tasks) {
+			if (t.inProgress || t.inProgressStartedAt || t.inProgressTotalSeconds) {
+				const id = String(t.id);
+				const prev = state.inProgress[id] || { startedAt: null, accumulatedMs: 0, running: false };
+				prev.accumulatedMs = (t.inProgressTotalSeconds || 0) * 1000;
+				prev.startedAt = t.inProgressStartedAt ? Date.parse(t.inProgressStartedAt) : null;
+				prev.running = !!t.inProgress;
+				state.inProgress[id] = prev;
+			}
+		}
+		saveInProgressState();
+	}
+
+        // Update tag filter list (hide 'all' filter in tags view)
         updateTagList();
 
         // Display tasks
@@ -79,6 +234,569 @@ async function loadTasks() {
         console.error('[tasks] Exception in loadTasks:', err);
         elements.tasksList.innerHTML = `<div class="error">Failed to load tasks: ${escapeHtml(err.message)}</div>`;
     }
+}
+
+async function loadTagsView() {
+    try {
+
+        
+        // Always fetch with empty tag filter to get ALL tasks for the tags view
+        // Only filter by tag if the user has explicitly selected a tag
+        let tagFilter = '';
+        if (state.currentFilter && state.currentFilter !== 'all') {
+            tagFilter = state.currentFilter;
+        }
+        
+
+        
+        const response = await fetch('/api/tabs/tasks/action/fetch-tags-view', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tag: tagFilter})
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        
+
+
+        if (result.error) {
+            console.error('[tasks] Error loading tags view:', result.error);
+            elements.tasksList.innerHTML = `<div class="error">Error: ${escapeHtml(result.error)}</div>`;
+            return;
+        }
+
+        state.tagsViewTasks = result.tasks || [];
+
+        
+        displayTagsView();
+        
+        // Update tag list only when showing all tasks (no filter)
+        // When filtering by tag, keep the tag list showing all tags
+        if (!tagFilter) {
+            state.tagsViewAllTasks = state.tagsViewTasks;
+        }
+
+        // Update the tag list so counts reflect the tags view (use cached all-tasks if available)
+        updateTagList();
+        
+        // Highlight the selected tag
+        const tagItems = document.querySelectorAll('.tag-item');
+        tagItems.forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.tag === state.currentFilter) {
+                item.classList.add('active');
+            }
+        });
+        
+        setupTagsDragAndDrop();
+
+        // Setup navigation after DOM is ready
+        if (!navController) {
+            setupNavigation();
+        }
+        
+        // Restore expanded parent tasks
+        restoreExpandedTagsViewParents();
+    } catch (err) {
+        console.error('[tasks] Exception in loadTagsView:', err);
+        elements.tasksList.innerHTML = `<div class="error">Failed to load tags view: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function restoreExpandedTagsViewParents() {
+    // Re-expand parent tasks that were previously expanded
+    if (state.expandedParents.size === 0) return;
+    
+    const container = document.querySelector('.tags-view-container');
+    if (!container) return;
+    
+    state.expandedParents.forEach(parentUuid => {
+        // Find the parent task element by UUID in tags view
+        const parentEl = container.querySelector(`.task-item[data-task-uuid="${parentUuid}"]`);
+        if (parentEl) {
+
+            loadSubtasksForParent(parentUuid, parentEl);
+        }
+    });
+}
+
+function displayTagsView() {
+    if (!state.tagsViewTasks || state.tagsViewTasks.length === 0) {
+        elements.tasksList.innerHTML = '<div class="no-tasks">No parent tasks</div>';
+        return;
+    }
+
+    // Separate incomplete and completed tasks
+    const incomplete = state.tagsViewTasks.filter(t => !t.done);
+    const completed = state.tagsViewTasks.filter(t => t.done);
+    
+    // Sort completed tasks by completion time (most recent first)
+    completed.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+
+    let html = '<div class="tags-view-container">';
+    
+    // Incomplete section
+    if (incomplete.length > 0) {
+        html += '<div class="tags-incomplete-section">';
+        html += incomplete.map(task => createParentTaskElement(task)).join('');
+        html += '</div>';
+    }
+
+    // Completed section
+    if (completed.length > 0) {
+        html += '<div class="tags-completed-section">';
+        html += '<div class="tags-completed-section-header">Completed</div>';
+        html += completed.map(task => createParentTaskElement(task)).join('');
+        html += '</div>';
+    }
+
+    html += '</div>';
+    elements.tasksList.innerHTML = html;
+    
+    // Enhance parent tasks with subtask toggle
+    enhanceTagsViewTasksForSubtasks();
+    
+    // Setup event handlers for parent tasks in tags view
+    setupTagsViewEventHandlers();
+    
+    // Also attach standard listeners to parent tasks for better compatibility
+    const container = document.querySelector('.tags-view-container');
+    if (container) {
+        attachTaskItemListenersForTagsView(container);
+    }
+}
+
+function enhanceTagsViewTasksForSubtasks() {
+    const container = document.querySelector('.tags-view-container');
+    if (!container) return;
+    
+    // For each parent task that has subtasks, add a toggle
+    for (const task of state.tagsViewTasks) {
+        if (!task.hasSubtasks || !task.uuid) continue;
+        
+        const el = container.querySelector(`.task-item[data-task-id="${task.id}"]`);
+        if (!el) continue;
+        
+        // If a real toggle already exists, skip
+        if (el.querySelector('.subtask-toggle')) continue;
+        
+        // Create toggle span
+        const checkbox = el.querySelector('.task-checkbox');
+        const toggle = document.createElement('span');
+        toggle.className = 'subtask-toggle';
+        toggle.dataset.uuid = task.uuid;
+        toggle.textContent = '▶';
+        toggle.style.cursor = 'pointer';
+        toggle.onclick = (e) => {
+            e.stopPropagation();
+            loadSubtasksForParent(task.uuid, el);
+        };
+        
+        // If there's a placeholder, replace it; otherwise insert before checkbox
+        const placeholder = el.querySelector('.subtask-toggle-placeholder');
+        if (placeholder && placeholder.parentNode) {
+            placeholder.parentNode.replaceChild(toggle, placeholder);
+        } else if (checkbox && checkbox.parentNode) {
+            checkbox.parentNode.insertBefore(toggle, checkbox);
+        } else {
+            el.insertBefore(toggle, el.firstChild);
+        }
+    }
+}
+
+function setupTagsViewEventHandlers() {
+    const container = document.querySelector('.tags-view-container');
+    if (!container) return;
+    
+    // Handle delete button
+    container.querySelectorAll('.task-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = parseInt(btn.dataset.taskId);
+            if (!taskId || !confirm('Are you sure you want to delete this task?')) return;
+            
+            try {
+                const response = await fetch('/api/tabs/tasks/action/delete-task', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({taskId})
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert(`Delete failed: ${result.error}`);
+                } else {
+                    await loadTagsView();
+                }
+            } catch (err) {
+                console.error('Delete error:', err);
+                alert('Failed to delete task');
+            }
+        });
+    });
+    
+    // Handle edit button
+    container.querySelectorAll('.task-edit-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = parseInt(btn.dataset.taskId);
+            const task = state.tagsViewTasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            // Load task editor with this task
+            editTask(task);
+        });
+    });
+    
+    // Handle checkbox for marking tasks done/incomplete
+    container.querySelectorAll('.task-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const taskId = parseInt(checkbox.dataset.taskId);
+            const task = state.tagsViewTasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            // Toggle done status
+            try {
+                const newDone = !task.done;
+                const response = await fetch('/api/tabs/tasks/action/toggle-task', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({taskId, done: newDone})
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                
+                if (result.error) {
+                    console.error('Toggle error:', result.error);
+                } else {
+                    if (newDone) stopInProgress(taskId);
+                    await loadTagsView();
+                }
+            } catch (err) {
+                console.error('Toggle error:', err);
+            }
+        });
+    });
+}
+
+function createParentTaskElement(task) {
+    const checkboxClass = task.done ? 'task-checkbox checked' : 'task-checkbox';
+    const taskClass = task.done ? 'task-item completed' : 'task-item';
+    const uuid = task.uuid || '';
+    const color = task.color || '#808080';
+    const colorStyle = task.color ? ` style="border-left: 4px solid ${color}; padding-left: 8px;"` : '';
+    
+    let recurring = '';
+    if (task.recurring || task.pattern) {
+        recurring = `<span class="task-recurring" title="This task recurs">↻</span>`;
+    }
+
+    // For tags view, just show the date if scheduled
+    let timeDisplay = '';
+    if (!task.done && task.scheduledAt) {
+        const datePart = task.scheduledAt.split('T')[0];
+        timeDisplay = `<div class="task-time">${datePart}</div>`;
+    }
+    
+    // Get task tags for display
+    const taskTags = task.tags ? task.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+    const tagsHtml = task.tags ? `<div class="task-tags">${task.tags.split(',').map(t => `<span class="tag-badge">${escapeHtml(t.trim())}</span>`).join('')}</div>` : '';
+
+    // Add subtask button for top-level tasks (those without a parentUuid)
+    const addSubtaskBtn = (task.uuid && !task.parentUuid) ? `<button class="task-add-subtask" title="Add subtask" data-task-uuid="${task.uuid}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>` : '';
+
+    return `<div class="${taskClass} draggable-parent" data-task-id="${task.id}" data-task-uuid="${uuid}"${colorStyle} draggable="true">
+            <span class="subtask-toggle-placeholder"></span>
+            <div class="${checkboxClass}" title="Toggle task completion" data-task-id="${task.id}"></div>
+            <div class="task-content">
+                <div class="task-title-row">
+                    <div class="task-title">${escapeHtml(task.title)}</div>
+                    ${tagsHtml}
+                </div>
+                ${timeDisplay}
+            </div>
+            ${recurring}
+            <div class="task-status">${task.done ? '✓' : ''}</div>
+            <div class="task-actions">
+                ${addSubtaskBtn}
+                <button class="task-inprogress-btn" data-task-id="${task.id}" title="Toggle in progress">${state.inProgress[task.id] && state.inProgress[task.id].running ? '⏸' : '▶'}</button>
+                <div class="task-inprogress-time" data-task-id="${task.id}">${state.inProgress && state.inProgress[task.id] ? formatDurationMs(state.inProgress[task.id].accumulatedMs + (state.inProgress[task.id].running ? (Date.now() - state.inProgress[task.id].startedAt) : 0)) : ''}</div>
+                <button class="task-edit-btn" data-task-id="${task.id}" title="Edit">✎</button>
+                <button class="task-delete" title="Delete task" data-task-id="${task.id}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+}
+
+function setupTagsDragAndDrop() {
+    const container = document.querySelector('.tags-view-container');
+    if (!container) return;
+
+    const incompleteSection = container.querySelector('.tags-incomplete-section');
+    const completedSection = container.querySelector('.tags-completed-section');
+
+    // Use arrays for faster iteration and to avoid repeated querySelectorAll calls during drag
+    const itemNodes = Array.from(container.querySelectorAll('.task-item.draggable-parent'));
+    let draggedItem = null;
+    let rafId = null;
+    let lastDragEvent = null;
+    let cachedIncItems = [];
+    let cachedCompItems = [];
+    let currentHighlight = null;
+
+    function clearHighlight() {
+        if (currentHighlight) {
+            currentHighlight.classList.remove('drag-over-top', 'drag-over-bottom');
+            currentHighlight = null;
+        }
+    }
+
+    itemNodes.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.classList.add('dragging');
+            // Cache lists for faster hit-testing during drag
+            cachedIncItems = incompleteSection ? Array.from(incompleteSection.querySelectorAll('.task-item.draggable-parent')) : [];
+            cachedCompItems = completedSection ? Array.from(completedSection.querySelectorAll('.task-item.draggable-parent')) : [];
+            lastDragEvent = null;
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', (e) => {
+            item.classList.remove('dragging');
+            clearHighlight();
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            cachedIncItems = [];
+            cachedCompItems = [];
+            draggedItem = null;
+        });
+
+        item.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            if (!draggedItem || draggedItem === item) return;
+
+            const draggedInIncomplete = cachedIncItems && cachedIncItems.includes(draggedItem);
+            const targetInIncomplete = cachedIncItems && cachedIncItems.includes(item);
+            if (draggedInIncomplete !== targetInIncomplete) {
+                alert('Cannot move incomplete tasks below completed tasks or vice versa');
+                clearHighlight();
+                return;
+            }
+
+            const rect = item.getBoundingClientRect();
+            const insertBefore = (e.clientY - rect.top) < (rect.height / 2);
+
+            // Move parent task and any associated subtasks container together in the DOM
+            const subtasksContainer = draggedItem.nextElementSibling;
+            const hasSubtasksContainer = subtasksContainer && subtasksContainer.classList.contains('subtasks-container');
+
+            if (insertBefore) {
+                item.parentNode.insertBefore(draggedItem, item);
+            } else {
+                item.parentNode.insertBefore(draggedItem, item.nextSibling);
+            }
+            if (hasSubtasksContainer) {
+                draggedItem.parentNode.insertBefore(subtasksContainer, draggedItem.nextSibling);
+            }
+
+            clearHighlight();
+
+            // Recompute the new position after DOM update
+            const newItemsArray = Array.from(container.querySelectorAll('.task-item.draggable-parent'));
+            const newPosition = newItemsArray.indexOf(draggedItem);
+
+            try {
+                const response = await fetch('/api/tabs/tasks/action/reorder-parent', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        taskId: parseInt(draggedItem.dataset.taskId),
+                        newPosition: newPosition
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(`Reorder failed: ${result.error}`);
+                    await loadTagsView();
+                }
+            } catch (err) {
+                console.error('Reorder error:', err);
+                alert('Failed to reorder tasks');
+                await loadTagsView();
+            }
+        });
+    });
+
+    // Container-level dragover/drop with requestAnimationFrame throttling for responsiveness
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+        lastDragEvent = e;
+        if (rafId) return; // already scheduled
+
+        rafId = requestAnimationFrame(() => {
+            rafId = null;
+            const ev = lastDragEvent;
+            lastDragEvent = null;
+            if (!ev) return;
+
+            const el = document.elementFromPoint(ev.clientX, ev.clientY);
+            if (!el) {
+                clearHighlight();
+                return;
+            }
+
+            let resolvedTarget = el.closest('.task-item.draggable-parent');
+            let insertBefore = true;
+
+            const overIncomplete = incompleteSection && incompleteSection.contains(el);
+            const overCompleted = completedSection && completedSection.contains(el);
+
+            if (!resolvedTarget) {
+                if (overIncomplete) {
+                    if (!cachedIncItems || cachedIncItems.length === 0) { clearHighlight(); return; }
+                    resolvedTarget = cachedIncItems[cachedIncItems.length - 1];
+                    insertBefore = false;
+                } else if (overCompleted) {
+                    if (!cachedCompItems || cachedCompItems.length === 0) { clearHighlight(); return; }
+                    resolvedTarget = cachedCompItems[cachedCompItems.length - 1];
+                    insertBefore = false;
+                } else {
+                    clearHighlight();
+                    return;
+                }
+            } else {
+                if (resolvedTarget === draggedItem) { clearHighlight(); return; }
+                const rect = resolvedTarget.getBoundingClientRect();
+                insertBefore = (ev.clientY - rect.top) < (rect.height / 2);
+            }
+
+            // Prevent cross-section dragging
+            const draggedInIncomplete = cachedIncItems && cachedIncItems.includes(draggedItem);
+            const targetInIncomplete = cachedIncItems && cachedIncItems.includes(resolvedTarget);
+            if (draggedInIncomplete !== targetInIncomplete) { clearHighlight(); return; }
+
+            if (currentHighlight && currentHighlight !== resolvedTarget) {
+                currentHighlight.classList.remove('drag-over-top', 'drag-over-bottom');
+            }
+
+            // Always remove any existing positional classes on the resolved target before adding the desired one
+            resolvedTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+            currentHighlight = resolvedTarget;
+            currentHighlight.classList.add(insertBefore ? 'drag-over-top' : 'drag-over-bottom');
+        });
+    });
+
+    container.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const itemAtPoint = el ? el.closest('.task-item.draggable-parent') : null;
+
+        // If an item handler will manage the drop (we dropped over an item), let it handle it
+        if (itemAtPoint) {
+            clearHighlight();
+            return;
+        }
+
+        if (currentHighlight) {
+            const insertBefore = currentHighlight.classList.contains('drag-over-top');
+            if (insertBefore) {
+                currentHighlight.parentNode.insertBefore(draggedItem, currentHighlight);
+            } else {
+                currentHighlight.parentNode.insertBefore(draggedItem, currentHighlight.nextSibling);
+            }
+        } else {
+            // Append to appropriate section under cursor using cached lists
+            const overIncomplete = incompleteSection && incompleteSection.contains(el);
+            const overCompleted = completedSection && completedSection.contains(el);
+            if (overIncomplete) {
+                const itemsInInc = cachedIncItems && cachedIncItems.length ? cachedIncItems : Array.from(incompleteSection.querySelectorAll('.task-item.draggable-parent'));
+                if (itemsInInc.length > 0) {
+                    const last = itemsInInc[itemsInInc.length - 1];
+                    last.parentNode.insertBefore(draggedItem, last.nextSibling);
+                } else {
+                    incompleteSection.appendChild(draggedItem);
+                }
+            } else if (overCompleted) {
+                const itemsInComp = cachedCompItems && cachedCompItems.length ? cachedCompItems : Array.from(completedSection.querySelectorAll('.task-item.draggable-parent'));
+                if (itemsInComp.length > 0) {
+                    const last = itemsInComp[itemsInComp.length - 1];
+                    last.parentNode.insertBefore(draggedItem, last.nextSibling);
+                } else {
+                    completedSection.appendChild(draggedItem);
+                }
+            } else {
+                clearHighlight();
+                return;
+            }
+        }
+
+        // Move any subtasks container that followed the dragged item
+        const subtasksContainer = draggedItem.nextElementSibling;
+        if (subtasksContainer && subtasksContainer.classList.contains('subtasks-container')) {
+            draggedItem.parentNode.insertBefore(subtasksContainer, draggedItem.nextSibling);
+        }
+
+        clearHighlight();
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        cachedIncItems = [];
+        cachedCompItems = [];
+
+        // Recompute the new position after DOM update
+        const newItemsArray = Array.from(container.querySelectorAll('.task-item.draggable-parent'));
+        const newPosition = newItemsArray.indexOf(draggedItem);
+
+        try {
+            const response = await fetch('/api/tabs/tasks/action/reorder-parent', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    taskId: parseInt(draggedItem.dataset.taskId),
+                    newPosition: newPosition
+                })
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+
+            if (result.error) {
+                alert(`Reorder failed: ${result.error}`);
+                await loadTagsView();
+            }
+        } catch (err) {
+            console.error('Reorder error:', err);
+            alert('Failed to reorder tasks');
+            await loadTagsView();
+        }
+    });
+
 }
 
 function setupNavigation() {
@@ -192,25 +910,73 @@ function setupNavigation() {
 }
 
 function updateTagList() {
-    // Preserve "all" item
+    // Hide "all" item when in tags view
     const allItem = elements.tagList.querySelector('[data-tag="all"]');
-    if (allItem) {
-        const count = state.tasks.length;
-        allItem.innerHTML = `all <span class="service-count">${count}</span>`;
+    if (state.currentView === 'tags') {
+        if (allItem) {
+            allItem.style.display = 'none';
+        }
+        // In tags view, show unique tags from parent tasks
+        updateTagsViewTagList();
+    } else {
+        if (allItem) {
+            allItem.style.display = '';
+            const count = state.tasks.length;
+            allItem.innerHTML = `all <span class="service-count">${count}</span>`;
+        }
+
+        // Remove existing tag items (keep "all")
+        const tagItems = elements.tagList.querySelectorAll('[data-tag]:not([data-tag="all"])');
+        tagItems.forEach(item => item.remove());
+
+        // Add tags sorted by count
+        const sortedTags = Object.entries(state.tagCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([tag, count]) => ({tag, count}));
+
+        for (const {tag, count} of sortedTags) {
+            const item = document.createElement('div');
+            item.className = 'tag-item';
+            item.dataset.tag = tag;
+            item.innerHTML = `${tag} <span class="service-count">${count}</span>`;
+            elements.tagList.appendChild(item);
+        }
+    }
+}
+
+function updateTagsViewTagList() {
+    // Build tag list from parent tasks only. Prefer the cached full tags view task list if available.
+    const tagCounts = {};
+    const sourceTasks = (state.tagsViewAllTasks && state.tagsViewAllTasks.length) ? state.tagsViewAllTasks : (state.tagsViewTasks || []);
+
+    if (sourceTasks && sourceTasks.length > 0) {
+        sourceTasks.forEach(task => {
+            const tags = task.tags ? task.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+            if (tags.length === 0) {
+                tagCounts['untagged'] = (tagCounts['untagged'] || 0) + 1;
+            } else {
+                tags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            }
+        });
     }
 
-    // Remove existing tag items (keep "all")
+    // Remove existing tag items
     const tagItems = elements.tagList.querySelectorAll('[data-tag]:not([data-tag="all"])');
     tagItems.forEach(item => item.remove());
 
     // Add tags sorted by count
-    const sortedTags = Object.entries(state.tagCounts)
+    const sortedTags = Object.entries(tagCounts)
         .sort((a, b) => b[1] - a[1])
         .map(([tag, count]) => ({tag, count}));
 
     for (const {tag, count} of sortedTags) {
         const item = document.createElement('div');
         item.className = 'tag-item';
+        if (state.currentFilter === tag) {
+            item.classList.add('active');
+        }
         item.dataset.tag = tag;
         item.innerHTML = `${tag} <span class="service-count">${count}</span>`;
         elements.tagList.appendChild(item);
@@ -263,19 +1029,45 @@ function displayTasks() {
         elements.tasksList.innerHTML = tasksToShow.map(task => createTaskElement(task)).join('');
     } else {
         // Now group by completion status and category
-        const todayIncomplete = tasksToShow.filter(t => !t.done && (!t.category || t.category === 'today'));
-        const pastIncomplete = tasksToShow.filter(t => !t.done && t.category === 'past');
+        // Determine in-progress tasks from local state (only currently running tasks)
+        const inProgressIds = new Set(Object.keys(state.inProgress || {}).filter(k => {
+            const v = state.inProgress[k];
+            return v && v.running;
+        }).map(k => String(k)));
+
+        let inProgressTasks = [];
+        if (state.currentView === 'today') {
+            // Show all in-progress tasks regardless of schedule/tag
+            inProgressTasks = (state.tasks || []).filter(t => inProgressIds.has(String(t.id)));
+        } else {
+            inProgressTasks = tasksToShow.filter(t => inProgressIds.has(String(t.id)));
+        }
+
+        const todayIncomplete = tasksToShow.filter(t => !t.done && (!t.category || t.category === 'today') && !inProgressIds.has(String(t.id)));
+        const pastIncomplete = tasksToShow.filter(t => !t.done && t.category === 'past' && !inProgressIds.has(String(t.id)));
         const completed = tasksToShow.filter(t => t.done);
 
         // Sort incomplete by scheduled date (earliest first)
         todayIncomplete.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
-        pastIncomplete.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+        pastIncomplete.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
 
         // Sort completed by completed date (most recent first)
         completed.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
 
         // Build HTML with completion status groups and collapsible headers
         let html = '';
+
+        // If we have in-progress tasks and are on the 'today' view, render them at the top
+        if (inProgressTasks.length > 0 && state.currentView === 'today') {
+            html += `<div class="task-group">
+                    <div class="task-group-header">
+                        In Progress (${inProgressTasks.length})
+                    </div>
+                    <div class="task-group-items">
+                        ${inProgressTasks.map(task => createTaskElement(task)).join('')}
+                    </div>
+                </div>`;
+        }
 
         // Incomplete tasks section (for today)
         if (todayIncomplete.length > 0) {
@@ -415,8 +1207,8 @@ function createTaskElement(task) {
     // Add inline style for task color if available
     const colorStyle = task.color ? ` style="border-left: 4px solid ${task.color}; padding-left: 8px;"` : '';
 
-    // Add new subtask button if this task has subtasks (i.e., it's a parent)
-    const addSubtaskBtn = task.hasSubtasks && task.uuid ? `<button class="task-add-subtask" title="Add subtask" data-task-uuid="${task.uuid}">
+    // Add new subtask button if this is a top-level task with a UUID
+    const addSubtaskBtn = (task.uuid && !task.parentUuid) ? `<button class="task-add-subtask" title="Add subtask" data-task-uuid="${task.uuid}">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -424,6 +1216,7 @@ function createTaskElement(task) {
             </button>` : '';
 
     return `<div class="${taskClass}${flagClass}" data-task-id="${task.id}" data-task-uuid="${task.uuid || ''}" data-tag="${primaryTag}" data-all-tags="${escapeHtml(taskTags.join(',') || 'untagged')}"${colorStyle}>
+            <span class="subtask-toggle-placeholder"></span>
             <div class="${checkboxClass}" title="Toggle task completion"></div>
             <div class="task-content">
                 <div class="task-title">${escapeHtml(task.title)}</div>
@@ -433,15 +1226,20 @@ function createTaskElement(task) {
             ${recurring}
             ${priority}
             <div class="task-status">${task.done ? '✓' : ''}</div>
-            ${addSubtaskBtn}
-            <button class="task-delete" title="Delete task" data-task-id="${task.id}">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
-            </button>
+            <div class="task-actions">
+                ${addSubtaskBtn}
+                <button class="task-inprogress-btn" data-task-id="${task.id}" title="Toggle in progress">${state.inProgress[task.id] && state.inProgress[task.id].running ? '⏸' : '▶'}</button>
+                <div class="task-inprogress-time" data-task-id="${task.id}">${state.inProgress && state.inProgress[task.id] ? formatDurationMs(state.inProgress[task.id].accumulatedMs + (state.inProgress[task.id].running ? (Date.now() - state.inProgress[task.id].startedAt) : 0)) : ''}</div>
+                <button class="task-edit-btn" title="Edit task" data-task-id="${task.id}">✎</button>
+                <button class="task-delete" title="Delete task" data-task-id="${task.id}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                </button>
+            </div>
         </div>`;
 }
 
@@ -464,7 +1262,7 @@ async function loadSubtasksForParent(uuid, parentEl) {
     }
 
     try {
-        console.log('[tasks] Fetching subtasks for parent UUID:', uuid);
+
         const resp = await fetch('/api/tabs/tasks/action/fetch-subtasks', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -475,30 +1273,90 @@ async function loadSubtasksForParent(uuid, parentEl) {
             return;
         }
         const result = await resp.json();
-        console.log('[tasks] fetch-subtasks response:', result);
+
         if (result.error) {
             console.error('[tasks] fetch-subtasks error', result.error);
             return;
         }
         const childTasks = result.tasks || [];
-        console.log('[tasks] Received', childTasks.length, 'subtasks');
+
         if (childTasks.length === 0) {
             console.warn('[tasks] No subtasks returned from server');
         }
+
+        // Merge child tasks into global state.tasks for editing and lookups
+        if (!Array.isArray(state.tasks)) state.tasks = [];
+        for (const ct of childTasks) {
+            const ctId = parseInt(ct.id);
+            const existingIdx = state.tasks.findIndex(t => parseInt(t.id) === ctId);
+            if (existingIdx === -1) {
+                state.tasks.push(ct);
+            } else {
+                state.tasks[existingIdx] = {...state.tasks[existingIdx], ...ct};
+            }
+        }
+        
+        // Separate incomplete and completed subtasks
+        const incomplete = childTasks.filter(t => !t.done);
+        const completed = childTasks.filter(t => t.done);
+        
+        // Sort completed by completion time (most recent first)
+        completed.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+        
         const container = document.createElement('div');
         container.className = 'subtasks-container';
         container.dataset.parentId = parentEl.dataset.taskId;
+        
         try {
-            container.innerHTML = childTasks.map((t, idx) => {
-                console.log('[tasks] Creating element for subtask', idx, t);
-                return createTaskElement(t);
-            }).join('');
+            let html = '';
+            
+            // Incomplete subtasks section (sortable)
+            if (incomplete.length > 0) {
+                html += '<div class="subtasks-incomplete-group">';
+                html += incomplete.map((t, idx) => {
+
+                    return createTaskElement(t);
+                }).join('');
+                html += '</div>';
+            }
+            
+            // Completed subtasks section (collapsed by default)
+            if (completed.length > 0) {
+                html += `
+                    <div class="subtasks-completed-group">
+                        <div class="subtasks-completed-header collapsible" data-parent="${uuid}">
+                            <span class="collapse-icon">▶</span> Completed (${completed.length})
+                        </div>
+                        <div class="subtasks-completed-items collapsed">
+                `;
+                html += completed.map((t, idx) => {
+                    return createTaskElement(t);
+                }).join('');
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
         } catch (renderErr) {
             console.error('[tasks] Error rendering subtasks:', renderErr);
             return;
         }
         parentEl.parentNode.insertBefore(container, parentEl.nextSibling);
-        console.log('[tasks] Inserted subtasks container with', childTasks.length, 'tasks');
+
+        // Collapse completed subtasks by default; add header toggle handler
+        const completedHeader = container.querySelector('.subtasks-completed-header');
+        if (completedHeader) {
+            completedHeader.addEventListener('click', (e) => {
+                const itemsDiv = container.querySelector('.subtasks-completed-items');
+                if (!itemsDiv) return;
+                const collapsed = itemsDiv.classList.toggle('collapsed');
+                const icon = completedHeader.querySelector('.collapse-icon');
+                if (icon) icon.textContent = collapsed ? '▶' : '▼';
+            });
+        }
+
         const icon = parentEl.querySelector('.subtask-toggle');
         if (icon) icon.textContent = '▼';
         // Mark this parent as expanded in state
@@ -521,7 +1379,7 @@ function restoreExpandedSubtasks() {
         });
 
         if (parentEl) {
-            console.log('[tasks] Restoring expanded state for parent:', parentUuid);
+
             loadSubtasksForParent(parentUuid, parentEl);
         }
     });
@@ -563,10 +1421,135 @@ function attachTaskItemListeners(container) {
                 if (uuid) await createNewSubtask(uuid);
             };
         }
+
+        const inProgressBtn = item.querySelector('.task-inprogress-btn');
+        if (inProgressBtn) {
+            inProgressBtn.onclick = (e) => {
+                e.stopPropagation();
+                const taskID = inProgressBtn.dataset.taskId;
+                toggleInProgress(taskID);
+            };
+        }
+
+        const editBtn = item.querySelector('.task-edit-btn');
+        if (editBtn) {
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                const taskID = parseInt(editBtn.dataset.taskId);
+                // Try to find the task in the usual places
+                let task = (state.tasks || []).find(t => parseInt(t.id) === taskID);
+                if (!task && state.tagsViewTasks) task = state.tagsViewTasks.find(t => parseInt(t.id) === taskID);
+                if (task) {
+                    openTaskEditor(task);
+                } else {
+                    // Fallback: try to fetch task details from server (best-effort)
+                    (async () => {
+                        try {
+                            const resp = await fetch('/api/tabs/tasks/action/get-task', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({taskId: taskID})
+                            });
+                            if (resp.ok) {
+                                const res = await resp.json();
+                                if (res.task) openTaskEditor(res.task);
+                            }
+                        } catch (err) {
+                            console.error('[tasks] Failed to fetch task for editing:', err);
+                        }
+                    })();
+                }
+            };
+        }
+
         item.onclick = (e) => {
-            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete') || e.target.closest('.task-add-subtask')) return;
+            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete') || e.target.closest('.task-add-subtask') || e.target.closest('.task-edit-btn')) return;
             const taskID = parseInt(item.dataset.taskId);
-            const task = state.tasks.find(t => t.id === taskID);
+            const task = (state.tasks || []).find(t => parseInt(t.id) === taskID);
+            if (task) openTaskEditor(task);
+        };
+    });
+}
+
+function attachTaskItemListenersForTagsView(container) {
+    container = container || document;
+    container.querySelectorAll('.task-item').forEach(item => {
+        const checkbox = item.querySelector('.task-checkbox');
+        if (checkbox) {
+            checkbox.onclick = async (e) => {
+                e.stopPropagation();
+                const taskID = parseInt(item.dataset.taskId);
+                await toggleTaskInTagsView(taskID);
+            };
+        }
+        const toggle = item.querySelector('.subtask-toggle');
+        if (toggle) {
+            toggle.onclick = (e) => {
+                e.stopPropagation();
+                const uuid = toggle.dataset.uuid;
+                if (!uuid) return;
+                loadSubtasksForParent(uuid, item);
+            };
+        }
+        const deleteBtn = item.querySelector('.task-delete');
+        if (deleteBtn) {
+            deleteBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const taskID = parseInt(deleteBtn.dataset.taskId);
+                await deleteTask(taskID);
+            };
+        }
+        const addSubtaskBtn = item.querySelector('.task-add-subtask');
+        if (addSubtaskBtn) {
+            addSubtaskBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const uuid = addSubtaskBtn.dataset.taskUuid;
+                if (uuid) await createNewSubtask(uuid);
+            };
+        }
+
+        const inProgressBtn = item.querySelector('.task-inprogress-btn');
+        if (inProgressBtn) {
+            inProgressBtn.onclick = (e) => {
+                e.stopPropagation();
+                const taskID = inProgressBtn.dataset.taskId;
+                toggleInProgress(taskID);
+            };
+        }
+
+        const editBtn = item.querySelector('.task-edit-btn');
+        if (editBtn) {
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                const taskID = parseInt(editBtn.dataset.taskId);
+                let task = state.tagsViewTasks.find(t => t.id === taskID);
+                if (!task && state.tasks) task = (state.tasks || []).find(t => parseInt(t.id) === taskID);
+                if (task) {
+                    openTaskEditor(task);
+                } else {
+                    (async () => {
+                        try {
+                            const resp = await fetch('/api/tabs/tasks/action/get-task', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({taskId: taskID})
+                            });
+                            if (resp.ok) {
+                                const res = await resp.json();
+                                if (res.task) openTaskEditor(res.task);
+                            }
+                        } catch (err) {
+                            console.error('[tasks] Failed to fetch task for editing:', err);
+                        }
+                    })();
+                }
+            };
+        }
+
+        item.onclick = (e) => {
+            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete')) return;
+            const taskID = parseInt(item.dataset.taskId);
+            const task = state.tagsViewTasks.find(t => t.id === taskID);
             if (task) openTaskEditor(task);
         };
     });
@@ -588,8 +1571,12 @@ function enhanceTaskItemsForSubtasks() {
             e.stopPropagation();
             loadSubtasksForParent(task.uuid, el);
         };
-        if (checkbox && checkbox.parentNode) {
-            checkbox.parentNode.insertBefore(toggle, checkbox.nextSibling);
+        // Replace placeholder if present, otherwise insert before checkbox
+        const placeholder = el.querySelector('.subtask-toggle-placeholder');
+        if (placeholder && placeholder.parentNode) {
+            placeholder.parentNode.replaceChild(toggle, placeholder);
+        } else if (checkbox && checkbox.parentNode) {
+            checkbox.parentNode.insertBefore(toggle, checkbox);
         } else {
             el.insertBefore(toggle, el.firstChild);
         }
@@ -600,34 +1587,13 @@ function setupSubtaskDragAndDrop(container, parentUuid) {
     let draggedItem = null;
     let draggedFromIndex = null;
 
-    const items = container.querySelectorAll('.task-item');
+    // Only get incomplete task items - completed tasks should not be draggable
+    const incompleteGroup = container.querySelector('.subtasks-incomplete-group');
+    const items = incompleteGroup ? incompleteGroup.querySelectorAll('.task-item') : [];
 
-    // Helper: Calculate boundary between incomplete and complete tasks dynamically
-    function getIncompleteBoundary() {
-        let boundary = 0;
-        container.querySelectorAll('.task-item').forEach((item, idx) => {
-            if (!item.classList.contains('completed')) {
-                boundary = idx + 1;
-            }
-        });
-        return boundary;
-    }
+    if (items.length === 0) {
 
-    // Helper: Update visual divider position
-    function updateDivider() {
-        container.querySelectorAll('.task-item').forEach(item => {
-            item.style.borderBottomWidth = '';
-            item.style.borderBottomStyle = '';
-            item.style.borderBottomColor = '';
-        });
-
-        const boundary = getIncompleteBoundary();
-        const allItems = container.querySelectorAll('.task-item');
-        if (boundary > 0 && boundary < allItems.length) {
-            allItems[boundary - 1].style.borderBottomWidth = '2px';
-            allItems[boundary - 1].style.borderBottomStyle = 'dashed';
-            allItems[boundary - 1].style.borderBottomColor = '#999';
-        }
+        return;
     }
 
     items.forEach(item => {
@@ -641,7 +1607,7 @@ function setupSubtaskDragAndDrop(container, parentUuid) {
             item.style.cursor = 'grabbing';
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/html', item.innerHTML);
-            console.log('[tasks] Started dragging subtask from index', draggedFromIndex);
+
         });
 
         item.addEventListener('dragend', (e) => {
@@ -649,57 +1615,48 @@ function setupSubtaskDragAndDrop(container, parentUuid) {
             item.style.cursor = 'grab';
             draggedItem = null;
             draggedFromIndex = null;
+            // Remove any visual drop indicators
+            items.forEach(it => it.classList.remove('drag-over-top', 'drag-over-bottom'));
         });
 
         item.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
 
-            // Visual feedback: highlight drop target
-            if (item !== draggedItem) {
-                item.style.borderTop = '2px solid #0066cc';
-            }
+            if (item === draggedItem) return;
+
+            // Clear positional indicators on sibling items
+            items.forEach(it => it.classList.remove('drag-over-top', 'drag-over-bottom'));
+
+            const rect = item.getBoundingClientRect();
+            const offsetY = e.clientY - rect.top;
+            const insertBefore = offsetY < (rect.height / 2);
+
+            item.classList.add(insertBefore ? 'drag-over-top' : 'drag-over-bottom');
         });
 
         item.addEventListener('dragleave', (e) => {
-            item.style.borderTop = '';
+            item.classList.remove('drag-over-top', 'drag-over-bottom');
         });
 
         item.addEventListener('drop', async (e) => {
             e.preventDefault();
-            item.style.borderTop = '';
+            item.classList.remove('drag-over-top', 'drag-over-bottom');
 
             if (!draggedItem || draggedItem === item) return;
 
-            const currentIndex = Array.from(container.querySelectorAll('.task-item')).indexOf(item);
-            const draggedDone = draggedItem.classList.contains('completed');
-            const targetDone = item.classList.contains('completed');
-            const incompleteBoundary = getIncompleteBoundary();
+            const rect = item.getBoundingClientRect();
+            const insertBefore = (e.clientY - rect.top) < (rect.height / 2);
 
-            // Validate constraints: can't drag incomplete below completed or vice versa
-            if (!draggedDone && currentIndex >= incompleteBoundary) {
-                console.warn('[tasks] Cannot drag incomplete task below completed tasks');
-                alert('Cannot drag incomplete tasks below completed tasks');
-                return;
-            }
-            if (draggedDone && currentIndex < incompleteBoundary) {
-                console.warn('[tasks] Cannot drag completed task above incomplete tasks');
-                alert('Cannot drag completed tasks above incomplete tasks');
-                return;
-            }
-
-            // Reorder in DOM
-            if (draggedFromIndex < currentIndex) {
-                item.parentNode.insertBefore(draggedItem, item.nextSibling);
-            } else {
+            if (insertBefore) {
                 item.parentNode.insertBefore(draggedItem, item);
+            } else {
+                item.parentNode.insertBefore(draggedItem, item.nextSibling);
             }
 
             // Get task ID and call API
             const taskId = parseInt(draggedItem.dataset.taskId);
-            const newIndex = Array.from(container.querySelectorAll('.task-item')).indexOf(draggedItem);
-
-            console.log('[tasks] Reordering subtask', taskId, 'to position', newIndex);
+            const newIndex = Array.from(incompleteGroup.querySelectorAll('.task-item')).indexOf(draggedItem);
 
             try {
                 const response = await fetch('/api/tabs/tasks/action/reorder-subtask', {
@@ -720,11 +1677,9 @@ function setupSubtaskDragAndDrop(container, parentUuid) {
                     alert('Reorder failed: ' + (result.error || 'Unknown error'));
                     // Reload subtasks to restore proper order
                     loadTasks();
-                    return;
+
                 }
 
-                console.log('[tasks] Reorder successful');
-                updateDivider();
             } catch (err) {
                 console.error('[tasks] Reorder error:', err);
                 alert('Failed to reorder: ' + err.message);
@@ -733,9 +1688,6 @@ function setupSubtaskDragAndDrop(container, parentUuid) {
             }
         });
     });
-
-    // Add initial visual divider
-    updateDivider();
 }
 
 async function toggleTask(taskID) {
@@ -756,7 +1708,13 @@ async function toggleTask(taskID) {
             return;
         }
 
-        // Update task state locally
+        // If in tags view, reload the tags view
+        if (state.currentView === 'tags') {
+            await loadTagsView();
+            return;
+        }
+
+        // Update task state locally for other views
         const taskIndex = state.tasks.findIndex(t => t.id === taskID);
         if (taskIndex === -1) {
             console.warn('[tasks] Task not found in state:', taskID);
@@ -780,13 +1738,50 @@ async function toggleTask(taskID) {
         }
 
         // Reorganize tasks list sections when completion status changes
+        if (task.done) {
+            stopInProgress(taskID);
+        }
         reorganizeTaskSections();
 
     } catch (err) {
         console.error('Failed to toggle task:', err);
         alert('Failed to toggle task: ' + err.message);
         // Reload on network errors
-        await loadTasks();
+        if (state.currentView === 'tags') {
+            await loadTagsView();
+        } else {
+            await loadTasks();
+        }
+    }
+}
+
+async function toggleTaskInTagsView(taskID) {
+    try {
+        const response = await fetch('/api/tabs/tasks/action/toggle-task', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({taskID})
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+
+        if (result.status === 'error' || result.error) {
+            const errorMsg = result.error || 'Error toggling task';
+            console.error('Error toggling task:', errorMsg);
+            alert(errorMsg);
+            return;
+        }
+
+        // Mark any in-progress tracking as stopped for this task
+        stopInProgress(taskID);
+        // Reload the tags view
+        await loadTagsView();
+
+    } catch (err) {
+        console.error('Failed to toggle task:', err);
+        alert('Failed to toggle task: ' + err.message);
+        await loadTagsView();
     }
 }
 
@@ -804,7 +1799,7 @@ function reorganizeTaskSections() {
 
         // Sort incomplete by scheduled date (earliest first)
         todayIncomplete.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
-        pastIncomplete.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+        pastIncomplete.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
 
         // Sort completed by completed date (most recent first)
         completed.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
@@ -929,7 +1924,7 @@ export function onMessage(msg) {
     // Listen for task-related messages
     if (msg.channelName !== 'tasks' && msg.serviceType !== 'tasks') return;
 
-    console.log('[tasks] SSE message received:', msg);
+
 
     // Parse task details from Body if it's JSON
     let taskDetails = {};
@@ -976,6 +1971,25 @@ function handleTaskUpdate(msg) {
     if (msg.color !== undefined) task.color = msg.color;
     if (msg.scheduledAt !== undefined) task.scheduledAt = msg.scheduledAt;
 
+    // Update in-progress state if provided in the message
+    if (msg.inProgress !== undefined) {
+        const id = String(msg.taskId);
+        if (!state.inProgress) state.inProgress = {};
+        const prev = state.inProgress[id] || {startedAt: null, accumulatedMs: 0, running: false};
+        if (msg.inProgress) {
+            prev.startedAt = msg.inProgressStartedAt ? Date.parse(msg.inProgressStartedAt) : Date.now();
+            prev.running = true;
+        } else {
+            prev.accumulatedMs = (msg.inProgressTotalSeconds || 0) * 1000;
+            prev.startedAt = null;
+            prev.running = false;
+        }
+        state.inProgress[id] = prev;
+        saveInProgressState();
+        ensureInProgressTimer();
+        try { updateAllInProgressDisplays(); } catch (err) { console.error('[tasks] updateAllInProgressDisplays error:', err); }
+    }
+
     // Find and update the DOM element
     const taskEl = document.querySelector(`.task-item[data-task-id="${msg.taskId}"]`);
     if (taskEl) {
@@ -1003,11 +2017,20 @@ function handleTaskUpdate(msg) {
             }
         }
 
-        console.log('[tasks] Updated task via SSE:', msg.taskId, 'done:', task.done);
+
 
         // If done status changed, reorder within subtasks container if applicable
         if (oldDone !== task.done && task.subtask_parent_uuid) {
             reorderSubtasksInContainer(taskEl);
+        }
+
+        // If task was marked done, clear in-progress state
+        if (msg.done === true) {
+            try {
+                stopInProgress(msg.taskId);
+            } catch (err) {
+                console.error('[tasks] Failed to stop in-progress on done:', err);
+            }
         }
     }
 }
@@ -1061,7 +2084,7 @@ function reorderSubtasksInContainer(taskEl) {
         container.appendChild(item);
     });
 
-    console.log('[tasks] Reordered subtasks in container');
+
 }
 
 function escapeHtml(text) {
@@ -1075,20 +2098,59 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, c => map[c]);
 }
 
+function setupTagsViewFiltering() {
+    // Listen for tag clicks and reload in tags view
+    document.addEventListener('click', async (e) => {
+        if (e.target.closest('.tag-item') && state.currentView === 'tags') {
+            e.preventDefault();
+            const tagItem = e.target.closest('.tag-item');
+            if (!tagItem) return;
+            
+            const tag = tagItem.dataset.tag;
+            if (!tag) return;
+            
+            // Update current filter and save it
+            state.currentFilter = tag;
+            state.tagsViewFilter = tag;
+            
+            // Update active state
+            const tagItems = document.querySelectorAll('.tag-item');
+            tagItems.forEach(t => t.classList.remove('active'));
+            tagItem.classList.add('active');
+            
+            // Reload tags view
+            await loadTagsView();
+        }
+    });
+}
+
 function setupViewSwitching() {
     const viewItems = document.querySelectorAll('.view-item');
     viewItems.forEach(item => {
         item.addEventListener('click', async (e) => {
             e.preventDefault();
             const newView = item.dataset.view;
+
             if (newView && newView !== state.currentView) {
+                // If leaving tags view, save its current filter and reset to 'all'
+                if (state.currentView === 'tags') {
+                    state.tagsViewFilter = state.currentFilter;
+                    state.currentFilter = 'all';
+                }
+
+                // Update the current view
                 state.currentView = newView;
+
+                // If entering tags view, restore previous tags filter
+                if (newView === 'tags') {
+                    state.currentFilter = state.tagsViewFilter || 'all';
+                }
 
                 // Update active state
                 viewItems.forEach(v => v.classList.remove('active'));
                 item.classList.add('active');
 
-                // Reload tasks
+                // Reload tasks for the newly selected view
                 await loadTasks();
             }
         });
@@ -1227,6 +2289,9 @@ elements.newTaskInput = document.getElementById('new-task-input');
 // Setup view switching
 setupViewSwitching();
 
+// Setup tag filtering for tags view
+setupTagsViewFiltering();
+
 // Setup search input
 setupSearchInput();
 
@@ -1235,6 +2300,10 @@ setupNewTaskInput();
 
 // Initialize task editor
 initializeTaskEditor();
+
+// Load persisted in-progress state and start timer if needed
+loadInProgressState();
+ensureInProgressTimer();
 
 // Load tasks on startup
 loadTasks();
