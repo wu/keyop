@@ -6,6 +6,7 @@
 
     const elements = {
         search: document.getElementById('notes-search'),
+        searchContent: document.getElementById('notes-search-content'),
         newBtn: document.getElementById('notes-new-btn'),
         list: document.getElementById('notes-list'),
         view: document.getElementById('notes-view'),
@@ -40,11 +41,21 @@
     }
 
     async function loadNotes() {
-        const result = await callAction('get-notes', {search: currentSearch, limit: 100});
+        const result = await callAction('get-notes', {
+            search: currentSearch,
+            limit: 100,
+            search_content: elements.searchContent ? elements.searchContent.checked : false,
+        });
         if (result && result.notes) {
             allNotes = result.notes;
             renderNotesList();
         }
+    }
+
+    if (elements.searchContent) {
+        elements.searchContent.addEventListener('change', (e) => {
+            loadNotes();
+        });
     }
 
     function renderNotesList() {

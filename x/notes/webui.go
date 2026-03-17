@@ -19,7 +19,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
     <div class="notes-sidebar">
         <div class="notes-toolbar">
             <input type="text" id="notes-search" class="notes-search" placeholder="Search notes...">
-            <button id="notes-new-btn" class="notes-btn notes-new-btn">+ New</button>
+            <label class="notes-search-extended-label"><input id="notes-search-content" type="checkbox"> full text</label>
         </div>
         <div id="notes-list" class="notes-list"></div>
         <div id="notes-import" class="notes-import">
@@ -28,6 +28,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
     </div>
     <div class="notes-main">
         <div class="notes-toolbar">
+            <button id="notes-new-btn" class="notes-btn notes-new-btn">+ New</button>
             <button id="notes-edit-btn" class="notes-btn notes-edit-btn">Edit</button>
             <button id="notes-save-btn" class="notes-btn notes-save-btn">Save</button>
             <button id="notes-delete-btn" class="notes-btn notes-delete-btn">Delete</button>

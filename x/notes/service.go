@@ -55,6 +55,13 @@ func (svc *Service) getNotes(params map[string]any) (any, error) {
 		search = ""
 	}
 
+	searchContent := false
+	if sc, ok := params["search_content"].(bool); ok {
+		searchContent = sc
+	} else if scf, ok := params["search_content"].(float64); ok {
+		searchContent = scf != 0
+	}
+
 	limit := 100
 	if l, ok := params["limit"].(float64); ok {
 		limit = int(l)
@@ -65,7 +72,7 @@ func (svc *Service) getNotes(params map[string]any) (any, error) {
 		offset = int(o)
 	}
 
-	return getNotesList(svc.dbPath, search, limit, offset)
+	return getNotesList(svc.dbPath, search, searchContent, limit, offset)
 }
 
 // getNote retrieves a single note by ID.

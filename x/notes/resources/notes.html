@@ -2,7 +2,8 @@
     <div class="notes-sidebar">
         <div class="notes-toolbar">
             <input class="notes-search" id="notes-search" placeholder="Search notes..." type="text">
-            <button class="notes-btn notes-new-btn" id="notes-new-btn">+ New</button>
+            <label class="notes-search-extended-label"><input id="notes-search-content" type="checkbox"> full
+                text</label>
         </div>
         <div class="notes-list" id="notes-list"></div>
         <div class="notes-import" id="notes-import">
@@ -11,6 +12,7 @@
     </div>
     <div class="notes-main">
         <div class="notes-toolbar">
+            <button class="notes-btn notes-new-btn" id="notes-new-btn">+ New</button>
             <button class="notes-btn notes-edit-btn" id="notes-edit-btn">Edit</button>
             <button class="notes-btn notes-save-btn" id="notes-save-btn" style="display:none;">Save</button>
             <button class="notes-btn notes-delete-btn" id="notes-delete-btn">Delete</button>

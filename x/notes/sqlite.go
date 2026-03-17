@@ -12,7 +12,7 @@ import (
 )
 
 // getNotesList retrieves notes with optional search filter.
-func getNotesList(dbPath string, search string, limit, offset int) (any, error) {
+func getNotesList(dbPath string, search string, searchContent bool, limit, offset int) (any, error) {
 	db, err := openNotesDB(dbPath)
 	if err != nil {
 		return nil, err
@@ -25,10 +25,16 @@ func getNotesList(dbPath string, search string, limit, offset int) (any, error) 
 	args := []any{}
 
 	if search != "" {
-		// Search in title, content, and tags
 		searchPattern := "%" + search + "%"
-		query += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
-		args = append(args, searchPattern, searchPattern, searchPattern)
+		if searchContent {
+			// Search in title, content, and tags
+			query += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
+			args = append(args, searchPattern, searchPattern, searchPattern)
+		} else {
+			// Only search in title by default
+			query += " AND title LIKE ?"
+			args = append(args, searchPattern)
+		}
 	}
 
 	query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"

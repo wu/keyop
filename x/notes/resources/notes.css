@@ -32,6 +32,42 @@
     align-items: center;
 }
 
+.notes-search-extended-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.notes-search-extended-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    -webkit-appearance: none;
+    appearance: none;
+    border: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+    border-radius: 3px;
+    position: relative;
+}
+
+.notes-search-extended-label input[type="checkbox"]:checked {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.notes-search-extended-label input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--accent-text);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
 .notes-search {
     flex: 1;
     min-width: 150px;
@@ -71,6 +107,10 @@
 
 .notes-new-btn:hover {
     background-color: #9d6cdc;
+}
+
+.notes-toolbar .notes-new-btn {
+    margin-right: 12px;
 }
 
 .notes-list {
