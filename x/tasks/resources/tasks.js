@@ -1250,6 +1250,7 @@ function createTaskElement(task) {
     const checkboxClass = task.done ? 'task-checkbox checked' : 'task-checkbox';
     const taskClass = task.done ? 'task-item completed' : 'task-item';
     const flagClass = task.flag ? ' flagged' : '';
+    const isInProgress = !!(task.inProgress || (state.inProgress && state.inProgress[task.id] && state.inProgress[task.id].running));
 
     let priority = '';
     if (task.importance > 0 || task.urgency > 0) {
@@ -1284,7 +1285,11 @@ function createTaskElement(task) {
                 const displayHours = hours % 12 || 12;
                 const localTime = `${displayHours}:${minutes}${ampm}`;
 
-                timeDisplay = `<div class="task-time ${timeClass}">${localTime} (${timeAgo})</div>`;
+                if (isPast) {
+                    timeDisplay = `<div class="task-time ${timeClass}"><span class="task-time-label">${localTime}</span><span class="task-time-age">${timeAgo}</span></div>`;
+                } else {
+                    timeDisplay = `<div class="task-time ${timeClass}">${localTime} (${timeAgo})</div>`;
+                }
             } else {
                 // Just a date without time - show the date or nothing
                 const datePart = task.scheduledAt.split('T')[0];
@@ -1310,6 +1315,13 @@ function createTaskElement(task) {
     // Get task tags for filtering
     const taskTags = task.tags ? task.tags.split(',').map(t => t.trim()).filter(t => t) : [];
     const primaryTag = taskTags.length > 0 ? taskTags[0] : 'untagged';
+    const tagsDisplay = task.tags ? `<div class="task-tags">${task.tags.split(',').map(t => `<span class="tag-badge">${escapeHtml(t.trim())}</span>`).join('')}</div>` : '';
+    const metadataPrimary = timeDisplay || recurring
+        ? `<div class="task-metadata-primary">${timeDisplay}${recurring}</div>`
+        : '<div class="task-metadata-primary"></div>';
+    const metadataDisplay = timeDisplay || recurring || tagsDisplay
+        ? `<div class="task-metadata">${metadataPrimary}${tagsDisplay}</div>`
+        : '';
 
     // Add inline style for task color if available
     const colorStyle = task.color ? ` style="border-left: 4px solid ${task.color}; padding-left: 8px;"` : '';
@@ -1321,16 +1333,15 @@ function createTaskElement(task) {
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
             </button>` : '';
+    const inProgressIndicator = isInProgress ? '<span class="task-progress-indicator" title="In progress" aria-label="In progress"></span>' : '';
 
     return `<div class="${taskClass}${flagClass}" data-task-id="${task.id}" data-task-uuid="${task.uuid || ''}" data-tag="${primaryTag}" data-all-tags="${escapeHtml(taskTags.join(',') || 'untagged')}"${colorStyle}>
             <span class="subtask-toggle-placeholder"></span>
             <div class="${checkboxClass}" title="Toggle task completion"></div>
             <div class="task-content">
-                <div class="task-title">${escapeHtml(task.title)}</div>
-                ${timeDisplay}
-                ${task.tags ? `<div class="task-tags">${task.tags.split(',').map(t => `<span class="tag-badge">${escapeHtml(t.trim())}</span>`).join('')}</div>` : ''}
+                <div class="task-title"><span class="task-title-text">${escapeHtml(task.title)}</span>${inProgressIndicator}</div>
+                ${metadataDisplay}
             </div>
-            ${recurring}
             ${priority}
             <div class="task-status">${task.done ? '✓' : ''}</div>
             <div class="task-actions">
