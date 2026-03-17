@@ -62,6 +62,7 @@ func parseTimeStringLocal(s string, base time.Time, loc *time.Location) (time.Ti
 // - "c <color>" or "color <color>" to set task color
 // - "r <expr>" or "reschedule <expr>" to change scheduled date/time
 // - "skip" to advance a recurring task to its next occurrence
+// - "x" to mark the task as done
 // The function returns an updated TaskRow (if available) or a small map with status and updated fields so callers (UI/TUI) can refresh.
 func (svc *Service) runTaskCommand(taskID int64, command string, view string) (any, error) {
 	if svc.db == nil {
@@ -110,6 +111,27 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 	}
 
 	switch cmd {
+	case "x":
+		var done bool
+		if err := svc.db.QueryRow("SELECT done FROM tasks WHERE id = ?", taskID).Scan(&done); err != nil {
+			return nil, err
+		}
+		if !done {
+			res, err := svc.toggleTask(taskID)
+			if err != nil {
+				return nil, err
+			}
+			if m, ok := res.(map[string]any); ok {
+				if status, _ := m["status"].(string); status == "error" {
+					return m, nil
+				}
+			}
+		}
+		if t, _ := findUpdatedTask(); t != nil {
+			return t, nil
+		}
+		return map[string]any{"status": "ok", "done": true}, nil
+
 	case "c", "color":
 		color := strings.TrimSpace(args)
 		if color == "" {

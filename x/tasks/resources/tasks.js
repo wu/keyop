@@ -43,6 +43,7 @@ let state = {
 };
 
 let navController = null;
+const refreshingParentSubtasks = new Set();
 
 // Formatting helpers for in-progress timers
 function formatDurationMs(ms) {
@@ -144,7 +145,11 @@ async function toggleInProgress(taskId) {
 		}
 		saveInProgressState();
 		ensureInProgressTimer();
-		if (state.currentView === 'tags') { displayTagsView(); } else { displayTasks(); }
+        if (state.currentView === 'tags') {
+            displayTagsView();
+        } else {
+            renderTasksView();
+        }
 	} catch (err) {
 		console.error('[tasks] toggleInProgress error:', err);
 	}
@@ -167,10 +172,32 @@ async function stopInProgress(taskId) {
 		state.inProgress[id].running = false;
 		saveInProgressState();
 		try { updateAllInProgressDisplays(); } catch (err) { console.error('[tasks] updateAllInProgressDisplays error:', err); }
-		if (state.currentView === 'tags') { displayTagsView(); } else { displayTasks(); }
+        if (state.currentView === 'tags') {
+            displayTagsView();
+        } else {
+            renderTasksView();
+        }
 	} catch (err) {
 		console.error('[tasks] stopInProgress error:', err);
 	}
+}
+
+function clearLocalInProgress(taskId, totalSeconds) {
+    const id = String(taskId);
+    if (!state.inProgress) state.inProgress = {};
+    const prev = state.inProgress[id] || {startedAt: null, accumulatedMs: 0, running: false};
+    if (typeof totalSeconds === 'number' && Number.isFinite(totalSeconds)) {
+        prev.accumulatedMs = totalSeconds * 1000;
+    }
+    prev.startedAt = null;
+    prev.running = false;
+    state.inProgress[id] = prev;
+    saveInProgressState();
+    try {
+        updateAllInProgressDisplays();
+    } catch (err) {
+        console.error('[tasks] updateAllInProgressDisplays error:', err);
+    }
 }
 
 async function loadTasks() {
@@ -221,10 +248,7 @@ state.tagCounts = result.tagCounts || {};
         updateTagList();
 
         // Display tasks
-        displayTasks();
-
-        // Re-expand subtasks that were previously expanded
-        restoreExpandedSubtasks();
+        renderTasksView();
 
         // Setup navigation after DOM is ready
         if (!navController) {
@@ -480,7 +504,7 @@ function setupTagsViewEventHandlers() {
                 if (result.error) {
                     console.error('Toggle error:', result.error);
                 } else {
-                    if (newDone) stopInProgress(taskId);
+                    if (newDone) clearLocalInProgress(taskId);
                     await loadTagsView();
                 }
             } catch (err) {
@@ -1032,16 +1056,50 @@ function updateTagsViewTagList() {
     }
 }
 
+function isTopLevelTask(task) {
+    return !(task && (task.subtask_parent_uuid || task.parentUuid));
+}
+
+function getTaskParentUuid(task) {
+    return (task && (task.subtask_parent_uuid || task.parentUuid)) || '';
+}
+
+function renderTasksView() {
+    displayTasks();
+    restoreExpandedSubtasks();
+}
+
+async function refreshParentSubtasks(parentUuid) {
+    if (!parentUuid || refreshingParentSubtasks.has(parentUuid)) return false;
+    const parentEl = document.querySelector(`.task-item[data-task-uuid="${parentUuid}"]`);
+    if (!parentEl) return false;
+
+    refreshingParentSubtasks.add(parentUuid);
+    try {
+        const container = parentEl.nextElementSibling;
+        if (container && container.classList && container.classList.contains('subtasks-container')) {
+            container.remove();
+        }
+        state.expandedParents.add(parentUuid);
+        await loadSubtasksForParent(parentUuid, parentEl);
+        return true;
+    } finally {
+        refreshingParentSubtasks.delete(parentUuid);
+    }
+}
+
 function displayTasks() {
     if (state.tasks.length === 0) {
         elements.tasksList.innerHTML = '<div class="no-tasks">No tasks scheduled or completed today</div>';
         return;
     }
 
+    const topLevelTasks = (state.tasks || []).filter(isTopLevelTask);
+
     // Group tasks by tag first
     const groupedByTag = {};
 
-    for (const task of state.tasks) {
+    for (const task of topLevelTasks) {
         // Get task tags
         const tags = task.tags ? task.tags.split(',').map(t => t.trim()).filter(t => t) : [];
         if (tags.length === 0) tags.push('untagged');
@@ -1058,7 +1116,7 @@ function displayTasks() {
     // Filter by current tag to get tasks to display
     let tasksToShow = [];
     if (state.currentFilter === 'all') {
-        tasksToShow = state.tasks;
+        tasksToShow = topLevelTasks;
     } else if (groupedByTag[state.currentFilter]) {
         tasksToShow = groupedByTag[state.currentFilter];
     }
@@ -1087,7 +1145,7 @@ function displayTasks() {
         let inProgressTasks = [];
         if (state.currentView === 'today') {
             // Show all in-progress tasks regardless of schedule/tag
-            inProgressTasks = (state.tasks || []).filter(t => inProgressIds.has(String(t.id)));
+            inProgressTasks = topLevelTasks.filter(t => inProgressIds.has(String(t.id)));
         } else {
             inProgressTasks = tasksToShow.filter(t => inProgressIds.has(String(t.id)));
         }
@@ -1821,7 +1879,7 @@ async function processCommand(taskId, commandText) {
             if (state.currentView === 'tags') {
                 displayTagsView();
             } else {
-                displayTasks();
+                renderTasksView();
             }
             // After re-rendering the view, attempt to re-focus the command input for this task (allow DOM to update)
             setTimeout(() => {
@@ -2052,9 +2110,14 @@ async function toggleTask(taskID) {
 
         // Reorganize tasks list sections when completion status changes
         if (task.done) {
-            stopInProgress(taskID);
+            clearLocalInProgress(taskID);
         }
-        reorganizeTaskSections();
+        const parentUuid = getTaskParentUuid(task);
+        if (parentUuid && state.expandedParents.has(parentUuid)) {
+            await refreshParentSubtasks(parentUuid);
+            return;
+        }
+        renderTasksView();
 
     } catch (err) {
         console.error('Failed to toggle task:', err);
@@ -2087,7 +2150,7 @@ async function toggleTaskInTagsView(taskID) {
         }
 
         // Mark any in-progress tracking as stopped for this task
-        stopInProgress(taskID);
+        clearLocalInProgress(taskID);
         // Reload the tags view
         await loadTagsView();
 
@@ -2100,7 +2163,7 @@ async function toggleTaskInTagsView(taskID) {
 
 function reorganizeTaskSections() {
     // Reorganize tasks into their proper sections based on done status
-    const tasksToShow = state.tasks.filter(t => !t.subtask_parent_uuid);
+    const tasksToShow = state.tasks.filter(isTopLevelTask);
 
     if (state.currentView === 'recent') {
         tasksToShow.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -2332,18 +2395,20 @@ function handleTaskUpdate(msg) {
 
 
 
-        // If done status changed, reorder within subtasks container if applicable
-        if (oldDone !== task.done && task.subtask_parent_uuid) {
-            reorderSubtasksInContainer(taskEl);
-        }
-
         // If task was marked done, clear in-progress state
         if (msg.done === true) {
             try {
-                stopInProgress(msg.taskId);
+                clearLocalInProgress(msg.taskId, msg.inProgressTotalSeconds);
             } catch (err) {
-                console.error('[tasks] Failed to stop in-progress on done:', err);
+                console.error('[tasks] Failed to clear local in-progress on done:', err);
             }
+        }
+
+        // If done status changed for a subtask, refresh only that parent's subtask block.
+        const parentUuid = getTaskParentUuid(task);
+        if (oldDone !== task.done && parentUuid && state.expandedParents.has(parentUuid)) {
+            refreshParentSubtasks(parentUuid);
+
         }
     }
 }

@@ -30,6 +30,8 @@ func newTestService(t *testing.T) *Service {
 	_, err = db.Exec(`CREATE TABLE tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uuid TEXT,
+		parent_uuid TEXT DEFAULT '',
+		subtask_parent_uuid TEXT DEFAULT '',
 		title TEXT,
 		done INTEGER DEFAULT 0,
 		scheduled_date TEXT,
@@ -43,7 +45,10 @@ func newTestService(t *testing.T) *Service {
 		color TEXT,
 		recurrence TEXT,
 		recurrence_days TEXT,
-		recurrence_x INTEGER
+		recurrence_x INTEGER,
+		user_id INTEGER DEFAULT 0,
+		importance INTEGER DEFAULT 0,
+		urgency INTEGER DEFAULT 0
 	)`)
 	if err != nil {
 		t.Fatal(err)
@@ -150,6 +155,36 @@ func TestRunTaskCommand_Skip(t *testing.T) {
 	expected := base.Add(24 * time.Hour)
 	if parsed.UTC().Year() != expected.Year() || parsed.UTC().Month() != expected.Month() || parsed.UTC().Day() != expected.Day() {
 		t.Fatalf("expected %v got %v", expected, parsed)
+	}
+}
+
+func TestRunTaskCommand_MarkDone(t *testing.T) {
+	svc := newTestService(t)
+	id := insertTask(t, svc, "task-done", "", false, "", "", 0, time.Now().UTC().Format(time.RFC3339Nano), "")
+
+	res, err := svc.runTaskCommand(id, "x", "recent")
+	if err != nil {
+		t.Fatalf("mark done failed: %v", err)
+	}
+
+	var done bool
+	var completedAt sql.NullString
+	if err := svc.db.QueryRow("SELECT done, completed_at FROM tasks WHERE id = ?", id).Scan(&done, &completedAt); err != nil {
+		t.Fatalf("select done/completed_at: %v", err)
+	}
+	if !done {
+		t.Fatalf("expected task to be marked done")
+	}
+	if !completedAt.Valid || completedAt.String == "" {
+		t.Fatalf("expected completed_at to be set")
+	}
+
+	task, ok := res.(*TaskRow)
+	if !ok {
+		t.Fatalf("expected *TaskRow response, got %T", res)
+	}
+	if !task.Done {
+		t.Fatalf("expected returned task to be done")
 	}
 }
 
