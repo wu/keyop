@@ -811,6 +811,21 @@ function setupNavigation() {
         }
     });
 
+    function isNavigableTaskItem(item) {
+        if (!item) return false;
+        if (item.style.display === 'none') return false;
+        if (item.closest('.task-group-items.collapsed, .subtasks-completed-items.collapsed')) return false;
+
+        let node = item;
+        while (node && node !== elements.container) {
+            if (!(node instanceof HTMLElement)) break;
+            if (node.style.display === 'none') return false;
+            node = node.parentElement;
+        }
+
+        return true;
+    }
+
     // Override the service filter to use tags
     navController.applyServiceFilter = function () {
         const allItems = this.getItems();
@@ -829,6 +844,7 @@ function setupNavigation() {
     // Override getVisibleItems to use data-all-tags instead of data-serviceName
     navController.getVisibleItems = function () {
         return this.getItems().filter(item => {
+            if (!isNavigableTaskItem(item)) return false;
             if (this.selectedService === 'all') return true;
             const allTags = item.dataset.allTags || '';
             return allTags.split(',').map(t => t.trim()).includes(this.selectedService);
@@ -883,6 +899,39 @@ function setupNavigation() {
                 state.currentFilter = tagName;
             }
         }
+    };
+
+    const originalHandleItemsKeydown = navController.handleItemsKeydown.bind(navController);
+    navController.handleItemsKeydown = function (e) {
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLElement && activeElement.matches('input, textarea, select, [contenteditable="true"]')) {
+            return;
+        }
+
+        const visibleItems = this.getVisibleItems();
+        const selectedItem = this.selectedIndex >= 0 && this.selectedIndex < visibleItems.length
+            ? visibleItems[this.selectedIndex]
+            : null;
+
+        if (selectedItem && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+            const parentUuid = selectedItem.dataset.taskUuid;
+            const hasToggle = !!selectedItem.querySelector('.subtask-toggle');
+            const isExpanded = !!(parentUuid && state.expandedParents.has(parentUuid));
+
+            if (e.key === 'ArrowRight' && parentUuid && hasToggle && !isExpanded) {
+                e.preventDefault();
+                loadSubtasksForParent(parentUuid, selectedItem);
+                return;
+            }
+
+            if (e.key === 'ArrowLeft' && parentUuid && hasToggle && isExpanded) {
+                e.preventDefault();
+                loadSubtasksForParent(parentUuid, selectedItem);
+                return;
+            }
+        }
+
+        originalHandleItemsKeydown(e);
     };
 
     // Override the handleServiceItemClick to filter tasks
@@ -2575,6 +2624,27 @@ loadTasks();
 // Delegate Enter key handling for command inputs to ensure dynamically created inputs work.
 // Use capture phase and a form submit fallback for cross-browser reliability.
 (function () {
+    function isEditableTarget(target) {
+        if (!target || !(target instanceof HTMLElement)) return false;
+        if (target.isContentEditable) return true;
+        if (target.matches('input, textarea, select')) return true;
+        return !!(target.closest && target.closest('input, textarea, select, [contenteditable="true"]'));
+    }
+
+    function isPrintableTaskCommandKey(e) {
+        if (e.defaultPrevented) return false;
+        if (e.ctrlKey || e.metaKey || e.altKey) return false;
+        if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') return false;
+        if (e.key.startsWith('Arrow')) return false;
+        return e.key.length === 1;
+    }
+
+    function getSelectedTaskCommandInput() {
+        const selectedTask = document.querySelector('.task-item.task-selected');
+        if (!selectedTask) return null;
+        return selectedTask.querySelector('.task-command-input');
+    }
+
     function handleCommandInputSubmit(inputEl) {
         return async function () {
             try {
@@ -2613,8 +2683,32 @@ loadTasks();
         try {
             const target = e.target;
             if (!target || !(target instanceof HTMLElement)) return;
+
+            if (!isEditableTarget(target) && isPrintableTaskCommandKey(e)) {
+                const selectedInput = getSelectedTaskCommandInput();
+                if (selectedInput) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        selectedInput.focus({preventScroll: true});
+                    } catch (err) {
+                        selectedInput.focus();
+                    }
+                    const start = selectedInput.selectionStart ?? selectedInput.value.length;
+                    const end = selectedInput.selectionEnd ?? selectedInput.value.length;
+                    selectedInput.setRangeText(e.key, start, end, 'end');
+                    return;
+                }
+            }
+
             const input = (target.matches && target.matches('.task-command-input')) ? target : (target.closest ? target.closest('.task-command-input') : null);
             if (!input) return;
+            if (e.key === 'Escape' || e.keyCode === 27 || e.which === 27) {
+                e.stopPropagation();
+                e.preventDefault();
+                input.blur();
+                return;
+            }
             const isEnter = (e.key === 'Enter' || e.keyCode === 13 || e.which === 13);
             if (!isEnter) return;
             e.stopPropagation();
