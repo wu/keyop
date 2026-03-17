@@ -5,13 +5,23 @@ import (
 	"database/sql"
 	"fmt"
 	"keyop/core"
+	"math"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
 )
+
+// timezoneAbbrevToIANA maps a tiny set of common NOAA timezone abbreviations
+// to DST-aware IANA timezone names. This is intentionally small and
+// explicit; configuration (timeZone) still overrides any mapping.
+var timezoneAbbrevToIANA = map[string]string{
+	"PST": "America/Los_Angeles",
+	"PDT": "America/Los_Angeles",
+}
 
 // alertedPeak records a peak that has already been announced so that
 // re-runs of Check() do not send duplicate high/low tide alerts.
@@ -41,6 +51,9 @@ type Service struct {
 	mu                sync.RWMutex
 
 	db **sql.DB
+
+	// station timezone, if known. When nil, server local timezone is used.
+	tz *time.Location
 }
 
 // NewService creates a new tides Service with default NOAA API endpoints.
@@ -54,12 +67,24 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 // ValidateConfig checks the tides service configuration and returns any validation errors.
+// timeZone is optional; if provided it must be a valid IANA timezone name.
 func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
 	stationID, ok := svc.Cfg.Config["stationId"].(string)
 	if !ok || stationID == "" {
 		errs = append(errs, fmt.Errorf("tides: required config parameter 'stationId' is missing or empty"))
+	}
+
+	// timeZone is optional but if present must be a valid IANA timezone name.
+	if tzRaw, hasTZ := svc.Cfg.Config["timeZone"]; hasTZ {
+		if tzName, ok := tzRaw.(string); !ok || tzName == "" {
+			errs = append(errs, fmt.Errorf("tides: 'timeZone' must be a non-empty string when provided (IANA timezone, e.g. \"America/Los_Angeles\")"))
+		} else {
+			if _, lerr := time.LoadLocation(tzName); lerr != nil {
+				errs = append(errs, fmt.Errorf("tides: 'timeZone' is invalid: %v", lerr))
+			}
+		}
 	}
 
 	// lat and lon are required when a tide report is configured.
@@ -82,6 +107,11 @@ func (svc *Service) ValidateConfig() []error {
 func (svc *Service) Initialize() error {
 	svc.stationID, _ = svc.Cfg.Config["stationId"].(string)
 
+	// Capture configured timezone (may be empty). We'll prefer NOAA metadata
+	// timezone when available; if metadata lacks a tz and a config tz is
+	// provided we'll use the configured value.
+	configTZ, _ := svc.Cfg.Config["timeZone"].(string)
+
 	if dir, ok := svc.Cfg.Config["dataDir"].(string); ok && dir != "" {
 		svc.dataDir = dir
 	} else {
@@ -98,18 +128,84 @@ func (svc *Service) Initialize() error {
 	svc.lon, _ = svc.Cfg.Config["lon"].(float64)
 	svc.alt, _ = svc.Cfg.Config["alt"].(float64)
 
-	if svc.lat == 0 && svc.lon == 0 {
-		lat, lon, name, err := fetchStationInfo(svc.Deps.MustGetLogger(), svc.metadataBase, svc.stationID)
+	// Attempt to fetch NOAA metadata if we are missing coordinates or don't yet
+	// have a timezone. NOAA metadata is preferred when it contains an IANA
+	// timezone string.
+	if (svc.lat == 0 && svc.lon == 0) || configTZ == "" {
+		lat, lon, name, tzName, err := fetchStationInfo(svc.Deps.MustGetLogger(), svc.metadataBase, svc.stationID)
 		if err != nil {
-			svc.Deps.MustGetLogger().Warn("tides: could not fetch station coordinates; tide report disabled",
+			svc.Deps.MustGetLogger().Warn("tides: could not fetch station metadata",
 				"station", svc.stationID, "error", err)
 		} else {
-			svc.lat = lat
-			svc.lon = lon
-			svc.stationName = name
-			svc.Deps.MustGetLogger().Info("tides: using station coordinates from NOAA metadata API",
-				"station", svc.stationID, "lat", lat, "lon", lon)
+			// Only set coordinates if they were not explicitly provided via config.
+			if svc.lat == 0 && svc.lon == 0 {
+				svc.lat = lat
+				svc.lon = lon
+			}
+			if svc.stationName == "" && name != "" {
+				svc.stationName = name
+			}
+			svc.Deps.MustGetLogger().Info("tides: using station metadata from NOAA",
+				"station", svc.stationID, "lat", svc.lat, "lon", svc.lon)
+			// Try to map NOAA timezone abbreviations (e.g., PST/PDT) to a
+			// DST-aware IANA timezone before attempting to load it. This allows
+			// stations that report abbreviations to be interpreted with DST.
+			if tzName != "" {
+				if _, lerr2 := time.LoadLocation(tzName); lerr2 != nil {
+					if mapped, ok := timezoneAbbrevToIANA[strings.ToUpper(strings.TrimSpace(tzName))]; ok {
+						svc.Deps.MustGetLogger().Info("tides: mapping NOAA timezone abbreviation",
+							"station", svc.stationID, "from", tzName, "to", mapped)
+						tzName = mapped
+					}
+				}
+			}
+			// If NOAA provides an IANA timezone, prefer it over a configured
+			// timezone.
+			if tzName != "" {
+				if loc, lerr := time.LoadLocation(tzName); lerr == nil {
+					svc.tz = loc
+					svc.Deps.MustGetLogger().Info("tides: using timezone from NOAA metadata",
+						"station", svc.stationID, "tz", tzName)
+				} else {
+					svc.Deps.MustGetLogger().Warn("tides: failed to load timezone from NOAA metadata",
+						"station", svc.stationID, "tz", tzName, "error", lerr)
+				}
+			}
 		}
+	}
+
+	// If a configuration timezone was provided, prefer it and override NOAA metadata.
+	if configTZ != "" {
+		if loc, lerr := time.LoadLocation(configTZ); lerr == nil {
+			svc.tz = loc
+			svc.Deps.MustGetLogger().Info("tides: applying configured timezone (overrides NOAA)", "station", svc.stationID, "tz", configTZ)
+		} else {
+			svc.Deps.MustGetLogger().Warn("tides: invalid timezone in configuration (override)", "tz", configTZ, "error", lerr)
+		}
+	}
+
+	// If we still don't have a timezone, fall back to the configured value if
+	// one was provided and valid.
+	if svc.tz == nil && configTZ != "" {
+		if loc, lerr := time.LoadLocation(configTZ); lerr == nil {
+			svc.tz = loc
+			svc.Deps.MustGetLogger().Info("tides: using timezone from configuration as fallback", "station", svc.stationID, "tz", configTZ)
+		} else {
+			svc.Deps.MustGetLogger().Warn("tides: invalid timezone in configuration (fallback)", "tz", configTZ, "error", lerr)
+		}
+	}
+
+	// If no timezone was provided by NOAA metadata, fall back to a longitude-
+	// based FixedZone so times are interpreted in the station's approximate
+	// local time rather than the server's local zone. This is approximate and
+	// does not account for DST, but is preferable to misinterpreting times.
+	if svc.tz == nil && (svc.lat != 0 || svc.lon != 0) {
+		offHours := int(math.Round(svc.lon / 15.0))
+		offSec := offHours * 3600
+		name := fmt.Sprintf("UTC%+d", offHours)
+		svc.tz = time.FixedZone(name, offSec)
+		svc.Deps.MustGetLogger().Info("tides: using longitude-based fallback timezone",
+			"station", svc.stationID, "tz", name, "offset_sec", offSec)
 	}
 
 	// Low tide threshold for the daily report (default 5 ft).
@@ -307,11 +403,18 @@ func (svc *Service) Check() error {
 			if next, err := svc.loadDayFile(day.AddDate(0, 0, 1)); err == nil {
 				records = append(records, next.Records...)
 			}
-			sunrise, sunset := sunriseSunset(svc.lat, svc.lon, svc.alt, day)
+			// Compute the target day in the station's timezone (if known) so
+			// sunrise/sunset and record parsing use the same reference.
+			stationLoc := day.Location()
+			if svc.tz != nil {
+				stationLoc = svc.tz
+			}
+			dayInStation := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, stationLoc)
+			sunrise, sunset := sunriseSunset(svc.lat, svc.lon, svc.alt, dayInStation)
 			svc.mu.RLock()
 			threshold := svc.lowTideThreshold
 			svc.mu.RUnlock()
-			periods := daylightLowPeriods(records, day, sunrise, sunset, threshold)
+			periods := daylightLowPeriods(records, dayInStation, sunrise, sunset, threshold)
 			allPeriods = append(allPeriods, periods...)
 		}
 		if len(allPeriods) > 0 {

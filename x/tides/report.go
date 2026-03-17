@@ -19,12 +19,12 @@ const noaaMetadataBase = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webap
 // fetchStationInfo queries the NOAA metadata API and returns the latitude,
 // longitude, and name for stationID.  metadataBase may be overridden in
 // tests; pass noaaMetadataBase for production.
-func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, lon float64, name string, err error) {
+func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, lon float64, name, tz string, err error) {
 	url := fmt.Sprintf("%s/%s.json", metadataBase, stationID)
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", err
 	}
 	req.Header.Set("User-Agent", "keyop (https://github.com/keyop/keyop)")
 
@@ -32,7 +32,7 @@ func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, 
 	// network input and is safe. Suppress the gosec G704 warning here.
 	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", err
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
@@ -43,33 +43,68 @@ func fetchStationInfo(logger core.Logger, metadataBase, stationID string) (lat, 
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, "", fmt.Errorf("NOAA metadata API returned status %d for station %s", resp.StatusCode, stationID)
+		return 0, 0, "", "", fmt.Errorf("NOAA metadata API returned status %d for station %s", resp.StatusCode, stationID)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", err
 	}
 
-	var apiResp struct {
-		Stations []struct {
-			Lat  float64 `json:"lat"`
-			Lng  float64 `json:"lng"`
-			Name string  `json:"name"`
-		} `json:"stations"`
-	}
+	// Parse into a generic map so we can attempt to extract a timezone if present.
+	var apiResp map[string]any
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return 0, 0, "", fmt.Errorf("failed to parse NOAA metadata response for station %s: %w", stationID, err)
-	}
-	if len(apiResp.Stations) == 0 {
-		return 0, 0, "", fmt.Errorf("NOAA metadata API returned no station for ID %s", stationID)
+		return 0, 0, "", "", fmt.Errorf("failed to parse NOAA metadata response for station %s: %w", stationID, err)
 	}
 
-	s := apiResp.Stations[0]
-	if s.Lat == 0 && s.Lng == 0 {
-		return 0, 0, "", fmt.Errorf("NOAA metadata API returned zero coordinates for station %s", stationID)
+	stationsRaw, ok := apiResp["stations"].([]any)
+	if !ok || len(stationsRaw) == 0 {
+		return 0, 0, "", "", fmt.Errorf("NOAA metadata API returned no station for ID %s", stationID)
 	}
-	return s.Lat, s.Lng, s.Name, nil
+
+	first, ok := stationsRaw[0].(map[string]any)
+	if !ok {
+		return 0, 0, "", "", fmt.Errorf("unexpected station metadata format for %s", stationID)
+	}
+
+	// Extract lat/lng/name if available
+	if v, ok := first["lat"].(float64); ok {
+		lat = v
+	}
+	if v, ok := first["lng"].(float64); ok {
+		lon = v
+	}
+	if v, ok := first["name"].(string); ok {
+		name = v
+	}
+
+	// Prefer the explicit top-level timezone fields when present. NOAA often
+	// provides a 'timezone' (or 'timeZone') field; use that first. If absent,
+	// look for the same keys inside nested objects. Avoid scanning arbitrary
+	// string fields for '/' — that mistakenly picked up URLs in metadata.
+	if v, ok := first["timezone"].(string); ok && v != "" {
+		tz = v
+	} else if v, ok := first["timeZone"].(string); ok && v != "" {
+		tz = v
+	} else {
+		for _, v := range first {
+			if m, ok := v.(map[string]any); ok {
+				if s, ok := m["timezone"].(string); ok && s != "" {
+					tz = s
+					break
+				}
+				if s, ok := m["timeZone"].(string); ok && s != "" {
+					tz = s
+					break
+				}
+			}
+		}
+	}
+
+	if lat == 0 && lon == 0 {
+		return 0, 0, name, tz, fmt.Errorf("NOAA metadata API returned zero coordinates for station %s", stationID)
+	}
+	return lat, lon, name, tz, nil
 }
 
 // LowTidePeriod describes a contiguous window during which the tide is at or
@@ -79,6 +114,7 @@ type LowTidePeriod struct {
 	DayOfWeek string        `json:"dayOfWeek"` // e.g. "Monday"
 	Start     time.Time     `json:"start"`
 	End       time.Time     `json:"end"`
+	Sunset    time.Time     `json:"sunset"`
 	Duration  time.Duration `json:"duration"`
 	MinValue  float64       `json:"minValue"` // lowest reading within the period
 	MinTime   time.Time     `json:"minTime"`  // time of the lowest reading
@@ -106,14 +142,21 @@ func sunriseSunset(lat, lon, alt float64, t time.Time) (rise, set time.Time) {
 		Longitude: lon,
 		Elevation: alt,
 	}
-	rise, err := astral.Dawn(observer, t, astral.DepressionCivil)
+	// Use UTC date to avoid depending on the provided time.Location when
+	// performing astronomical calculations. Convert the resulting times back
+	// into the station's location for downstream comparisons and display.
+	tUTC := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	riseUTC, err := astral.Dawn(observer, tUTC, astral.DepressionCivil)
 	if err != nil {
-		rise = localMidnight(t)
+		riseUTC = localMidnight(tUTC)
 	}
-	set, err = astral.Dusk(observer, t, astral.DepressionCivil)
+	setUTC, err := astral.Dusk(observer, tUTC, astral.DepressionCivil)
 	if err != nil {
-		set = localMidnight(t).Add(24 * time.Hour)
+		setUTC = localMidnight(tUTC).Add(24 * time.Hour)
 	}
+	// Convert to the station/local time provided in t.
+	rise = riseUTC.In(t.Location())
+	set = setUTC.In(t.Location())
 	return rise, set
 }
 
@@ -147,6 +190,17 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 		if err != nil {
 			continue
 		}
+		// Only consider records that fall on this calendar day.
+		if t.Format(fileDateFormat) != dateStr {
+			// If we were in a period that started earlier on this day, don't let
+			// a record from another day affect it — just skip.
+			if inPeriod {
+				// Do not close here; daylight end logic will handle closing when we
+				// encounter an out-of-day record that also lies outside daylight.
+			}
+			continue
+		}
+
 		// Only consider records that fall within daylight on this calendar day.
 		if t.Before(sunrise) || t.After(sunset) {
 			if inPeriod {
@@ -199,10 +253,19 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 			DayOfWeek: dow,
 			Start:     periodStart,
 			End:       lastTime,
+			Sunset:    sunset,
 			Duration:  lastTime.Sub(periodStart),
 			MinValue:  minVal,
 			MinTime:   minTime,
 		})
+	}
+
+	// Ensure Sunset is populated for all returned periods in the station's
+	// location (some append paths historically omitted it).
+	for i := range periods {
+		if periods[i].Sunset.IsZero() {
+			periods[i].Sunset = sunset.In(dayDate.Location())
+		}
 	}
 
 	return periods
@@ -219,17 +282,18 @@ func formatTideReport(periods []LowTidePeriod, threshold float64, stationLabel s
 	}
 
 	out := fmt.Sprintf("## Tide Report — %s\n\nDaylight low tides ≤ %.1f ft:\n\n", stationLabel, threshold)
-	out += "| Date | Day | Start | End | Duration | Min | Min Time |\n"
-	out += "|------|-----|-------|-----|----------|-----|----------|\n"
+	out += "| Date | Day | Sunset | Start | End | Duration | Min | Min Time |\n"
+	out += "|------|-----|--------|-------|-----|----------|-----|----------|\n"
 	for _, p := range periods {
-		out += fmt.Sprintf("| %s | %s | %s | %s | %s | %.2f ft | %s |\n",
+		out += fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %.2f ft | %s |\n",
 			p.Date,
 			p.DayOfWeek,
-			p.Start.Format("15:04"),
-			p.End.Format("15:04"),
+			p.Sunset.Format("3:04pm"),
+			p.Start.Format("3:04pm"),
+			p.End.Format("3:04pm"),
 			FormatDuration(p.Duration),
 			p.MinValue,
-			p.MinTime.Format("15:04"),
+			p.MinTime.Format("3:04pm"),
 		)
 	}
 	return out

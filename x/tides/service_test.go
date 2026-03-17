@@ -138,6 +138,7 @@ func makeCfg(stationID string, extraConfig map[string]interface{}) core.ServiceC
 		Pubs: map[string]core.ChannelInfo{},
 		Config: map[string]interface{}{
 			"stationId": stationID,
+			"timeZone":  "UTC",
 		},
 	}
 	for k, v := range extraConfig {
@@ -1430,8 +1431,8 @@ func TestDaylightLowPeriods(t *testing.T) {
 		require.Len(t, periods, 1)
 		assert.Equal(t, "2026-03-01", periods[0].Date)
 		assert.Equal(t, "Sunday", periods[0].DayOfWeek)
-		assert.Equal(t, "08:00", periods[0].Start.Format("15:04"))
-		assert.Equal(t, "10:00", periods[0].End.Format("15:04"))
+		assert.Equal(t, "8:00am", periods[0].Start.Format("3:04pm"))
+		assert.Equal(t, "10:00am", periods[0].End.Format("3:04pm"))
 		assert.InDelta(t, 2.5, periods[0].MinValue, 0.001)
 	})
 
@@ -1446,10 +1447,10 @@ func TestDaylightLowPeriods(t *testing.T) {
 		}
 		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
 		require.Len(t, periods, 2)
-		assert.Equal(t, "08:00", periods[0].Start.Format("15:04"))
-		assert.Equal(t, "09:00", periods[0].End.Format("15:04"))
-		assert.Equal(t, "11:00", periods[1].Start.Format("15:04"))
-		assert.Equal(t, "12:00", periods[1].End.Format("15:04"))
+		assert.Equal(t, "8:00am", periods[0].Start.Format("3:04pm"))
+		assert.Equal(t, "9:00am", periods[0].End.Format("3:04pm"))
+		assert.Equal(t, "11:00am", periods[1].Start.Format("3:04pm"))
+		assert.Equal(t, "12:00pm", periods[1].End.Format("3:04pm"))
 	})
 
 	t.Run("period before sunrise is excluded", func(t *testing.T) {
@@ -1480,8 +1481,8 @@ func TestDaylightLowPeriods(t *testing.T) {
 		}
 		periods := daylightLowPeriods(records, day, sunrise, sunset, 5.0)
 		require.Len(t, periods, 1)
-		assert.Equal(t, "17:00", periods[0].Start.Format("15:04"))
-		assert.Equal(t, "17:30", periods[0].End.Format("15:04"))
+		assert.Equal(t, "5:00pm", periods[0].Start.Format("3:04pm"))
+		assert.Equal(t, "5:30pm", periods[0].End.Format("3:04pm"))
 	})
 
 	t.Run("duration is calculated correctly", func(t *testing.T) {
@@ -1521,6 +1522,7 @@ func TestFormatTideReport(t *testing.T) {
 				DayOfWeek: "Monday",
 				Start:     start,
 				End:       end,
+				Sunset:    time.Date(2026, 3, 2, 18, 0, 0, 0, time.Local),
 				Duration:  end.Sub(start),
 				MinValue:  2.34,
 				MinTime:   minTime,
@@ -1528,8 +1530,8 @@ func TestFormatTideReport(t *testing.T) {
 		}
 		out := formatTideReport(periods, 5.0, "9414290")
 		assert.Contains(t, out, "## Tide Report")
-		assert.Contains(t, out, "| Date | Day | Start | End | Duration | Min | Min Time |")
-		assert.Contains(t, out, "| 2026-03-02 | Monday | 08:00 | 10:30 | 2h 30m | 2.34 ft | 09:12 |")
+		assert.Contains(t, out, "| Date | Day | Sunset | Start | End | Duration | Min | Min Time |")
+		assert.Contains(t, out, "| 2026-03-02 | Monday | 6:00pm | 8:00am | 10:30am | 2h 30m | 2.34 ft | 9:12am |")
 		assert.Contains(t, out, "9414290")
 	})
 }

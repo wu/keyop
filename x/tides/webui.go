@@ -76,11 +76,16 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			if next, err := svc.loadDayFile(d.AddDate(0, 0, 1)); err == nil {
 				records = append(records, next.Records...)
 			}
-			sunrise, sunset := sunriseSunset(svc.lat, svc.lon, svc.alt, d)
+			stationLoc := d.Location()
+			if svc.tz != nil {
+				stationLoc = svc.tz
+			}
+			dayInStation := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, stationLoc)
+			sunrise, sunset := sunriseSunset(svc.lat, svc.lon, svc.alt, dayInStation)
 			svc.mu.RLock()
 			threshold := svc.lowTideThreshold
 			svc.mu.RUnlock()
-			periods := daylightLowPeriods(records, d, sunrise, sunset, threshold)
+			periods := daylightLowPeriods(records, dayInStation, sunrise, sunset, threshold)
 			allPeriods = append(allPeriods, periods...)
 		}
 
