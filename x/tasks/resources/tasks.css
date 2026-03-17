@@ -453,6 +453,45 @@
     display: flex;
 }
 
+/* Command input for inline per-task commands */
+.task-command-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.task-command-input {
+    display: none;
+    width: 120px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.task-command-submit {
+    display: none;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    padding: 0;
+    font-size: 14px;
+    border-radius: 4px;
+}
+
+/* Show command input and submit on hover or when item is selected */
+.task-item:hover .task-command-input,
+.task-item.task-selected .task-command-input,
+.task-item:hover .task-command-submit,
+.task-item.task-selected .task-command-submit {
+    display: inline-block;
+}
+
 .task-inprogress-time {
     font-size: 12px;
     color: var(--text);

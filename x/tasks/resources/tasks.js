@@ -1230,6 +1230,7 @@ function createTaskElement(task) {
                 ${addSubtaskBtn}
                 <button class="task-inprogress-btn" data-task-id="${task.id}" title="Toggle in progress">${state.inProgress[task.id] && state.inProgress[task.id].running ? '⏸' : '▶'}</button>
                 <div class="task-inprogress-time" data-task-id="${task.id}">${state.inProgress && state.inProgress[task.id] ? formatDurationMs(state.inProgress[task.id].accumulatedMs + (state.inProgress[task.id].running ? (Date.now() - state.inProgress[task.id].startedAt) : 0)) : ''}</div>
+                <form class="task-command-form" data-task-id="${task.id}"><input class="task-command-input" data-task-id="${task.id}" placeholder="cmd" /><button type="submit" class="task-command-submit" tabindex="-1" title="Run command">⏎</button></form>
                 <button class="task-edit-btn" title="Edit task" data-task-id="${task.id}">✎</button>
                 <button class="task-delete" title="Delete task" data-task-id="${task.id}">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -1462,8 +1463,93 @@ function attachTaskItemListeners(container) {
             };
         }
 
+        const cmdInput = item.querySelector('.task-command-input');
+        if (cmdInput) {
+            cmdInput.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const val = cmdInput.value.trim();
+                    if (!val) return;
+                    try {
+                        await processCommand(parseInt(item.dataset.taskId), val);
+                        cmdInput.value = '';
+                        // After processing, re-focus the (possibly replaced) command input (allow DOM update)
+                        setTimeout(() => {
+                            const sel = `.task-item[data-task-id="${item.dataset.taskId}"] .task-command-input, .draggable-parent[data-task-id="${item.dataset.taskId}"] .task-command-input`;
+                            const newInput = document.querySelector(sel);
+                            if (newInput) {
+                                try {
+                                    newInput.focus({preventScroll: true});
+                                    newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                                } catch (e) {
+                                }
+                            } else {
+                                try {
+                                    cmdInput.focus();
+                                    cmdInput.setSelectionRange(cmdInput.value.length, cmdInput.value.length);
+                                } catch (e) {
+                                }
+                            }
+                        }, 50);
+                    } catch (err) {
+                        console.error('[tasks] Command execution failed:', err);
+                        alert('Command failed: ' + (err.message || err));
+                    }
+                } else if (e.key === 'Tab') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Move focus to next/previous visible command input
+                    const allInputs = Array.from(document.querySelectorAll('.task-command-input'));
+                    const visibleInputs = allInputs.filter(el => {
+                        if (!el) return false;
+                        if (el.offsetParent === null && el.getClientRects().length === 0) return false;
+                        if (el.disabled) return false;
+                        return true;
+                    });
+                    if (visibleInputs.length === 0) return;
+                    let idx = visibleInputs.indexOf(cmdInput);
+                    if (idx === -1 && cmdInput.dataset && cmdInput.dataset.taskId) {
+                        idx = visibleInputs.findIndex(el => el.dataset && el.dataset.taskId === cmdInput.dataset.taskId);
+                    }
+                    if (idx === -1) idx = 0;
+                    let nextIdx;
+                    if (e.shiftKey) {
+                        nextIdx = idx > 0 ? idx - 1 : visibleInputs.length - 1;
+                    } else {
+                        nextIdx = (idx + 1) % visibleInputs.length;
+                    }
+                    const nextInput = visibleInputs[nextIdx];
+                    if (!nextInput) return;
+                    try {
+                        nextInput.focus({preventScroll: true});
+                    } catch (err) {
+                        try {
+                            nextInput.focus();
+                        } catch (err2) {
+                        }
+                    }
+                    try {
+                        nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length);
+                    } catch (err) {
+                    }
+                    try {
+                        nextInput.click();
+                    } catch (err) {
+                    }
+                    if (typeof navController !== 'undefined' && navController) {
+                        try {
+                            navController.focusOnServices = false;
+                            navController.selectedIndex = -1;
+                        } catch (e) {
+                        }
+                    }
+                }
+            });
+        }
+
         item.onclick = (e) => {
-            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete') || e.target.closest('.task-add-subtask') || e.target.closest('.task-edit-btn')) return;
+            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete') || e.target.closest('.task-add-subtask') || e.target.closest('.task-edit-btn') || e.target.closest('.task-command-input')) return;
             const taskID = parseInt(item.dataset.taskId);
             const task = (state.tasks || []).find(t => parseInt(t.id) === taskID);
             if (task) openTaskEditor(task);
@@ -1546,13 +1632,191 @@ function attachTaskItemListenersForTagsView(container) {
             };
         }
 
+        const cmdInput = item.querySelector('.task-command-input');
+        if (cmdInput) {
+            cmdInput.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const val = cmdInput.value.trim();
+                    if (!val) return;
+                    try {
+                        await processCommand(parseInt(item.dataset.taskId), val);
+                        cmdInput.value = '';
+                        // After processing, re-focus the (possibly replaced) command input (allow DOM update)
+                        setTimeout(() => {
+                            const sel = `.task-item[data-task-id="${item.dataset.taskId}"] .task-command-input, .draggable-parent[data-task-id="${item.dataset.taskId}"] .task-command-input`;
+                            const newInput = document.querySelector(sel);
+                            if (newInput) {
+                                try {
+                                    newInput.focus({preventScroll: true});
+                                    newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                                } catch (e) {
+                                }
+                            } else {
+                                try {
+                                    cmdInput.focus();
+                                    cmdInput.setSelectionRange(cmdInput.value.length, cmdInput.value.length);
+                                } catch (e) {
+                                }
+                            }
+                        }, 50);
+                    } catch (err) {
+                        console.error('[tasks] Command execution failed:', err);
+                        alert('Command failed: ' + (err.message || err));
+                    }
+                } else if (e.key === 'Tab') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Move focus to next/previous visible command input
+                    const allInputs = Array.from(document.querySelectorAll('.task-command-input'));
+                    const visibleInputs = allInputs.filter(el => {
+                        if (!el) return false;
+                        if (el.offsetParent === null && el.getClientRects().length === 0) return false;
+                        if (el.disabled) return false;
+                        return true;
+                    });
+                    if (visibleInputs.length === 0) return;
+                    let idx = visibleInputs.indexOf(cmdInput);
+                    if (idx === -1 && cmdInput.dataset && cmdInput.dataset.taskId) {
+                        idx = visibleInputs.findIndex(el => el.dataset && el.dataset.taskId === cmdInput.dataset.taskId);
+                    }
+                    if (idx === -1) idx = 0;
+                    let nextIdx;
+                    if (e.shiftKey) {
+                        nextIdx = idx > 0 ? idx - 1 : visibleInputs.length - 1;
+                    } else {
+                        nextIdx = (idx + 1) % visibleInputs.length;
+                    }
+                    const nextInput = visibleInputs[nextIdx];
+                    if (!nextInput) return;
+                    try {
+                        nextInput.focus({preventScroll: true});
+                    } catch (err) {
+                        try {
+                            nextInput.focus();
+                        } catch (err2) {
+                        }
+                    }
+                    try {
+                        nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length);
+                    } catch (err) {
+                    }
+                    try {
+                        nextInput.click();
+                    } catch (err) {
+                    }
+                    if (typeof navController !== 'undefined' && navController) {
+                        try {
+                            navController.focusOnServices = false;
+                            navController.selectedIndex = -1;
+                        } catch (e) {
+                        }
+                    }
+                }
+            });
+        }
+
         item.onclick = (e) => {
-            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete')) return;
+            if (e.target.closest('.task-checkbox') || e.target.closest('.subtask-toggle') || e.target.closest('.task-delete') || e.target.closest('.task-add-subtask') || e.target.closest('.task-edit-btn') || e.target.closest('.task-command-input')) return;
             const taskID = parseInt(item.dataset.taskId);
             const task = state.tagsViewTasks.find(t => t.id === taskID);
             if (task) openTaskEditor(task);
         };
     });
+}
+
+async function processCommand(taskId, commandText) {
+    const cmdText = (commandText || '').trim();
+    if (!cmdText) return;
+
+    try {
+        const response = await fetch('/api/tabs/tasks/action/run-task-command', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({taskId, command: cmdText, view: state.currentView})
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const res = await response.json();
+        if (res.error) throw new Error(res.error);
+
+        // Color handling: if server returned a color property (including empty to clear)
+        if (Object.prototype.hasOwnProperty.call(res, 'color')) {
+            const color = res.color || '';
+            const idx = (state.tasks || []).findIndex(t => parseInt(t.id) === parseInt(taskId));
+            if (idx !== -1) state.tasks[idx] = Object.assign({}, state.tasks[idx], {color});
+            const idx2 = (state.tagsViewTasks || []).findIndex(t => parseInt(t.id) === parseInt(taskId));
+            if (idx2 !== -1) state.tagsViewTasks[idx2] = Object.assign({}, state.tagsViewTasks[idx2], {color});
+            const el = document.querySelector(`.task-item[data-task-id="${taskId}"]`) || document.querySelector(`.draggable-parent[data-task-id="${taskId}"]`);
+            if (el) {
+                if (color) {
+                    el.style.borderLeft = `4px solid ${color}`;
+                    el.style.paddingLeft = '8px';
+                } else {
+                    el.style.borderLeft = '';
+                    el.style.paddingLeft = '';
+                }
+            }
+        }
+
+        // If server returned a full TaskRow (with scheduledAt/hasScheduledTime), merge and refresh
+        if (Object.prototype.hasOwnProperty.call(res, 'scheduledAt')) {
+            const idx = (state.tasks || []).findIndex(t => parseInt(t.id) === parseInt(taskId));
+            if (idx !== -1) {
+                state.tasks[idx] = Object.assign({}, state.tasks[idx], res);
+            }
+            const idx2 = (state.tagsViewTasks || []).findIndex(t => parseInt(t.id) === parseInt(taskId));
+            if (idx2 !== -1) {
+                state.tagsViewTasks[idx2] = Object.assign({}, state.tagsViewTasks[idx2], res);
+            }
+            if (state.currentView === 'tags') {
+                displayTagsView();
+            } else {
+                displayTasks();
+            }
+            // After re-rendering the view, attempt to re-focus the command input for this task (allow DOM to update)
+            setTimeout(() => {
+                const sel = `.task-item[data-task-id="${taskId}"] .task-command-input, .draggable-parent[data-task-id="${taskId}"] .task-command-input`;
+                const newInput = document.querySelector(sel);
+                if (newInput) {
+                    try {
+                        // Try several focus strategies to ensure input receives keyboard events
+                        try {
+                            newInput.focus({preventScroll: true});
+                        } catch (e) {
+                            newInput.focus();
+                        }
+                        try {
+                            newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                        } catch (e) {
+                        }
+                        try {
+                            newInput.click();
+                        } catch (e) {
+                        }
+                        try {
+                            newInput.dispatchEvent(new Event('focus'));
+                        } catch (e) {
+                        }
+                        if (typeof navController !== 'undefined' && navController) {
+                            try {
+                                navController.focusOnServices = false;
+                                navController.selectedIndex = -1;
+                            } catch (e) {
+                            }
+                        }
+                    } catch (e) {
+                    }
+                }
+            }, 50);
+        }
+
+
+    } catch (err) {
+        console.error('[tasks] processCommand error:', err);
+        alert('Command failed: ' + (err.message || err));
+        throw err;
+    }
 }
 
 function enhanceTaskItemsForSubtasks() {
@@ -2307,6 +2571,125 @@ ensureInProgressTimer();
 
 // Load tasks on startup
 loadTasks();
+
+// Delegate Enter key handling for command inputs to ensure dynamically created inputs work.
+// Use capture phase and a form submit fallback for cross-browser reliability.
+(function () {
+    function handleCommandInputSubmit(inputEl) {
+        return async function () {
+            try {
+                const val = (inputEl.value || '').trim();
+                if (!val) return;
+                const taskId = parseInt(inputEl.dataset.taskId);
+                await processCommand(taskId, val);
+                inputEl.value = '';
+                // Focus the (possibly re-rendered) command input for this task (allow DOM update)
+                setTimeout(() => {
+                    const sel = `.task-item[data-task-id="${taskId}"] .task-command-input, .draggable-parent[data-task-id="${taskId}"] .task-command-input`;
+                    const newInput = document.querySelector(sel);
+                    if (newInput) {
+                        try {
+                            newInput.focus();
+                            newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                        } catch (e) {
+                        }
+                    } else {
+                        try {
+                            inputEl.focus();
+                            inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+                        } catch (e) {
+                        }
+                    }
+                }, 50);
+            } catch (err) {
+                console.error('[tasks] Command execution failed (delegate):', err);
+                alert('Command failed: ' + (err.message || err));
+            }
+        };
+    }
+
+    // Keydown capture handler - should run before other bubble handlers and is reliable in most browsers.
+    document.addEventListener('keydown', async (e) => {
+        try {
+            const target = e.target;
+            if (!target || !(target instanceof HTMLElement)) return;
+            const input = (target.matches && target.matches('.task-command-input')) ? target : (target.closest ? target.closest('.task-command-input') : null);
+            if (!input) return;
+            const isEnter = (e.key === 'Enter' || e.keyCode === 13 || e.which === 13);
+            if (!isEnter) return;
+            e.stopPropagation();
+            e.preventDefault();
+            await handleCommandInputSubmit(input)();
+        } catch (err) {
+            console.error('[tasks] command input delegate error:', err);
+        }
+    }, {capture: true});
+
+    // Global Tab handler (fallback) to navigate command inputs if per-input handlers fail.
+    document.addEventListener('keydown', (e) => {
+        try {
+            if (e.key !== 'Tab' && e.keyCode !== 9 && e.which !== 9) return;
+            const target = e.target;
+            if (!target || !(target instanceof HTMLElement)) return;
+            const input = (target.matches && target.matches('.task-command-input')) ? target : (target.closest ? target.closest('.task-command-input') : null);
+            if (!input) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const allInputs = Array.from(document.querySelectorAll('.task-command-input'));
+            const visibleInputs = allInputs.filter(el => {
+                if (!el) return false;
+                if (el.offsetParent === null && el.getClientRects().length === 0) return false;
+                if (el.disabled) return false;
+                return true;
+            });
+            if (visibleInputs.length === 0) return;
+            let idx = visibleInputs.indexOf(input);
+            if (idx === -1 && input.dataset && input.dataset.taskId) {
+                idx = visibleInputs.findIndex(el => el.dataset && el.dataset.taskId === input.dataset.taskId);
+            }
+            if (idx === -1) idx = 0;
+            let nextIdx = e.shiftKey ? (idx > 0 ? idx - 1 : visibleInputs.length - 1) : ((idx + 1) % visibleInputs.length);
+            const nextInput = visibleInputs[nextIdx];
+            if (!nextInput) return;
+            try {
+                nextInput.focus({preventScroll: true});
+            } catch (err) {
+                try {
+                    nextInput.focus();
+                } catch (err2) {
+                }
+            }
+            try {
+                nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length);
+            } catch (err) {
+            }
+            if (typeof navController !== 'undefined' && navController) {
+                try {
+                    navController.focusOnServices = false;
+                    navController.selectedIndex = -1;
+                } catch (e) {
+                }
+            }
+        } catch (err) {
+            console.error('[tasks] global tab handler error:', err);
+        }
+    }, {capture: true});
+
+    // Fallback: listen for form submit events from task-command-form (pressing Enter in many browsers will submit the form).
+    document.addEventListener('submit', async (e) => {
+        try {
+            const form = e.target;
+            if (!form || !(form instanceof HTMLFormElement)) return;
+            if (!form.classList.contains('task-command-form')) return;
+            e.preventDefault();
+            const input = form.querySelector('.task-command-input');
+            if (!input) return;
+            await handleCommandInputSubmit(input)();
+        } catch (err) {
+            console.error('[tasks] command form submit error:', err);
+        }
+    });
+})();
 
 // Export init function for app.js
 export function init(container) {

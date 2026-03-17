@@ -84,6 +84,17 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return svc.updateTask(int64(taskID), params)
 		}
 		return nil, fmt.Errorf("invalid taskId")
+	case "run-task-command":
+		if taskID, ok := params["taskId"].(float64); ok {
+			if cmd, ok2 := params["command"].(string); ok2 {
+				view := ""
+				if v, ok := params["view"].(string); ok {
+					view = v
+				}
+				return svc.runTaskCommand(int64(taskID), cmd, view)
+			}
+		}
+		return nil, fmt.Errorf("invalid params for run-task-command")
 	case "set-in-progress":
 		if taskID, ok := params["taskId"].(float64); ok {
 			start := true
@@ -541,7 +552,7 @@ func (svc *Service) fetchRecentTasks() (any, error) {
 	rows, err := svc.db.Query(fmt.Sprintf(`
 		SELECT %s
 		FROM tasks
-		ORDER BY updated_at DESC NULLS LAST
+		ORDER BY (updated_at IS NULL), updated_at DESC
 	`, selectCols))
 	if err != nil {
 		return nil, err
@@ -568,6 +579,18 @@ func (svc *Service) fetchRecentTasks() (any, error) {
 			&task.ID, &task.Title, &task.Done, &scheduledAtStr, &completedAtStr,
 			&task.Tags, &hasScheduledTime, &updatedAtStr, &task.Color, &recurrenceType, &recurrenceDays, &recurrenceInterval,
 		}
+		var inProgressInt sql.NullInt64
+		var inProgressStarted sql.NullString
+		var inProgressTotal sql.NullInt64
+		if cols["in_progress"] {
+			scanTargets = append(scanTargets, &inProgressInt)
+		}
+		if cols["in_progress_started_at"] {
+			scanTargets = append(scanTargets, &inProgressStarted)
+		}
+		if cols["in_progress_total_seconds"] {
+			scanTargets = append(scanTargets, &inProgressTotal)
+		}
 		if cols["uuid"] {
 			scanTargets = append(scanTargets, &task.UUID)
 		}
@@ -576,6 +599,16 @@ func (svc *Service) fetchRecentTasks() (any, error) {
 		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			continue
+		}
+
+		if cols["in_progress"] && inProgressInt.Valid {
+			task.InProgress = inProgressInt.Int64 != 0
+		}
+		if cols["in_progress_started_at"] && inProgressStarted.Valid {
+			task.InProgressStartedAt = inProgressStarted.String
+		}
+		if cols["in_progress_total_seconds"] && inProgressTotal.Valid {
+			task.InProgressTotalSeconds = inProgressTotal.Int64
 		}
 
 		// Parse datetime strings
@@ -1952,7 +1985,6 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 
 	title, _ := params["title"].(string)
 	tags, _ := params["tags"].(string)
-	color, _ := params["color"].(string)
 	scheduledDateStr, _ := params["scheduledDate"].(string)
 	scheduledTimeStr, _ := params["scheduledTime"].(string)
 
@@ -2020,10 +2052,25 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		updateArgs = append(updateArgs, tags)
 	}
 
-	// Handle color
-	if color != "" {
-		updateFields = append(updateFields, "color = ?")
-		updateArgs = append(updateArgs, color)
+	// Handle color (support clearing when key present with empty string or null)
+	if _, hasColorKey := params["color"]; hasColorKey {
+		switch v := params["color"].(type) {
+		case nil:
+			// Some databases have color defined NOT NULL; prefer empty string for clearing
+			updateFields = append(updateFields, "color = ?")
+			updateArgs = append(updateArgs, "")
+		case string:
+			if v == "" {
+				// Treat empty string as clear -> set to empty string
+				updateFields = append(updateFields, "color = ?")
+				updateArgs = append(updateArgs, "")
+			} else {
+				updateFields = append(updateFields, "color = ?")
+				updateArgs = append(updateArgs, v)
+			}
+		default:
+			// ignore unexpected types
+		}
 	}
 
 	// Handle recurrence: check if `pattern` key was provided at all so we can clear recurrence when user sets it to null
