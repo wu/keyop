@@ -14,6 +14,7 @@ let journalState = {
 };
 
 // Refresh the list of available dates
+// If today's date does not have a file, create one automatically and refresh.
 async function refreshJournalDates() {
     try {
         const response = await fetch('/api/tabs/journal/action/get-dates', {
@@ -24,11 +25,41 @@ async function refreshJournalDates() {
 
         if (!response.ok) return;
 
-        const data = await response.json();
-        const dates = data.dates || [];
+        let data = await response.json();
+        let dates = data.dates || [];
         dates.sort().reverse(); // Sort newest first
 
         renderDateList(dates);
+
+        // If current date is missing, create it and refresh the list so it can be selected.
+        if (!dates.includes(journalState.currentDate)) {
+            try {
+                const createResp = await fetch('/api/tabs/journal/action/save-entry', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({date: journalState.currentDate, content: ''})
+                });
+                if (createResp.ok) {
+                    // Re-fetch dates and re-render
+                    const response2 = await fetch('/api/tabs/journal/action/get-dates', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({})
+                    });
+                    if (response2.ok) {
+                        const data2 = await response2.json();
+                        const dates2 = data2.dates || [];
+                        dates2.sort().reverse();
+                        renderDateList(dates2);
+                    }
+                } else {
+                    console.error('[journal] Failed to create today entry', createResp.status);
+                }
+            } catch (createErr) {
+                console.error('[journal] Error creating today entry:', createErr);
+            }
+        }
+
     } catch (err) {
         console.error('[journal] Failed to load dates:', err);
     }
