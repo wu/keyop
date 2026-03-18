@@ -20,8 +20,10 @@
     --task-row-border: #686259; /* task row border color */
     --time-scheduled: #e7c9ff; /* light purple for scheduled times (more saturated) */
     --time-elapsed: #ff8a3d; /* orange for elapsed time (more saturated) */
-    --inprogress-base: var(--accent-blue);
-    --inprogress-glow: var(--accent-bright);
+    --inprogress-base: #7b00ff; /* vivid saturated purple */
+    --inprogress-glow: rgba(123, 0, 255, 0.9); /* brighter glow color used at pulse midpoint */
+    --inprogress-glow-outer: rgba(123, 0, 255, 0.30);
+    --inprogress-glow-outer-2: rgba(123, 0, 255, 0.14);
     --tag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --tag-font-weight: 700;
     --tag-letter-spacing: 0.4px;

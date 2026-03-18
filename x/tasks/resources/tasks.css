@@ -299,22 +299,22 @@
     border-radius: 999px;
     flex-shrink: 0;
     background: var(--inprogress-base);
-    box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px rgba(138, 97, 214, 0.08);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px var(--inprogress-glow-outer-2);
     animation: task-progress-pulse 1.9s ease-in-out infinite;
 }
 
 @keyframes task-progress-pulse {
     0%, 100% {
         background: var(--inprogress-base);
-        box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px rgba(138, 97, 214, 0.08);
+        box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px var(--inprogress-glow-outer-2);
         transform: scale(1);
         opacity: 0.65;
     }
     50% {
-        background: rgba(207, 166, 255, 0.75);
-        box-shadow: 0 0 6px rgba(207, 166, 255, 0.30), 0 0 9px rgba(207, 166, 255, 0.14);
+        background: var(--inprogress-glow);
+        box-shadow: 0 0 6px var(--inprogress-glow-outer), 0 0 9px var(--inprogress-glow-outer-2);
         transform: scale(1.2);
-        opacity: 0.75;
+        opacity: 0.95;
     }
 }
 
