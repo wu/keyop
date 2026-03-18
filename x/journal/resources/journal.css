@@ -1,27 +1,27 @@
 .journal-container {
     display: flex;
-    height: calc(100vh - 180px);
-    gap: 0;
-    padding: 0;
-    background: #1a1a1a;
+    height: 100%;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     overflow: hidden;
 }
 
 .journal-sidebar {
-    width: 150px;
-    flex-shrink: 0;
-    border-right: 1px solid #333;
-    padding: 1rem 0;
-    overflow-y: auto;
-    max-height: 100%;
+    width: 300px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background-color: var(--tab-content-bg);
+    overflow: hidden;
 }
 
 .journal-sidebar h3 {
     margin-top: 0;
-    font-size: 14px;
-    color: #aaa;
+    font-size: 12px;
+    color: var(--text);
     text-transform: uppercase;
-    font-weight: bold;
+    font-weight: 600;
     padding: 0.5rem 1rem;
 }
 
@@ -29,116 +29,198 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    padding: 0;
+    overflow-y: auto;
+}
+
+/* Nested year -> month -> day list styles */
+.journal-year-btn,
+.journal-month-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    color: var(--text);
+    text-align: left;
+    font-size: 13px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+
+/* Make years more prominent and colorized like task headers */
+.journal-year-btn {
+    font-weight: 800;
+    font-size: 15px;
+    padding: 14px 12px;
+    letter-spacing: 0.2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    border-left: 4px solid transparent;
+}
+
+.journal-year-btn::before,
+.journal-month-btn::before {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-right: 8px;
+    transition: transform 0.18s ease;
+    transform: rotate(0deg);
+    transform-origin: center;
+    vertical-align: middle;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 8px solid var(--accent);
+}
+
+.journal-year:not(.collapsed) > .journal-year-btn::before,
+.journal-month:not(.collapsed) > .journal-month-btn::before {
+    transform: rotate(90deg);
+}
+
+/* Subtle highlight and accent when a year is expanded */
+.journal-year:not(.collapsed) > .journal-year-btn {
+    border-left-color: var(--accent-blue);
+    background-color: var(--accent-blue-bg);
+}
+
+.journal-month-list {
+    display: none;
+}
+
+.journal-year:not(.collapsed) .journal-month-list {
+    display: block;
+}
+
+.journal-month-btn {
+    padding-left: 28px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+    text-transform: uppercase;
+}
+
+.journal-month {
+    display: block;
+}
+
+.journal-day-list {
+    display: none;
+}
+
+.journal-month:not(.collapsed) .journal-day-list {
+    display: block;
+}
+
+/* Indent day buttons */
+.journal-day-list .journal-date-btn {
+    padding-left: 48px;
 }
 
 .journal-date-btn {
-    padding: 0.75rem 1rem;
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    color: var(--text);
     text-align: left;
-    background: transparent;
-    color: #ccc;
+    font-size: 13px;
     border: none;
-    border-left: 3px solid transparent;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-    margin: 0;
+    border-bottom: 1px solid var(--border);
+    border-left: 4px solid transparent;
 }
 
 .journal-date-btn:hover {
-    background: #222;
-    color: #fff;
-    border-left-color: #666;
+    background-color: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    border-left-color: var(--accent-blue);
 }
 
 .journal-date-btn.active {
-    background: #222;
-    color: #00d4ff;
-    border-left-color: #00d4ff;
+    background-color: var(--accent-blue-bg);
+    color: var(--text);
+    border-left-color: var(--accent-blue);
+    font-weight: 600;
 }
 
 .journal-main {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0;
-    padding: 15px;
-    background: #1a1a1a;
-    min-height: 0;
     overflow: hidden;
 }
 
 .journal-toolbar {
     display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-    margin-bottom: 10px;
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background-color: var(--header-bg);
+    align-items: center;
 }
 
 .journal-btn {
-    padding: 8px 16px;
-    background: #0088cc;
-    color: white;
-    border: none;
+    padding: 8px 12px;
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
-    transition: background 0.2s ease;
+    white-space: nowrap;
 }
 
 .journal-btn:hover {
-    background: #006699;
+    background-color: rgba(255, 255, 255, 0.03);
 }
 
 .journal-edit-btn {
-    background: #0088cc;
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
 }
 
 .journal-edit-btn:hover {
-    background: #006699;
+    opacity: 0.95;
 }
 
 .journal-save-btn,
 .journal-cancel-btn {
-    background: #28a745;
     display: none;
 }
 
-.journal-save-btn:hover {
-    background: #218838;
+.journal-save-btn {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
 }
 
 .journal-cancel-btn {
-    background: #dc3545;
-}
-
-.journal-cancel-btn:hover {
-    background: #c82333;
+    background-color: rgba(220, 53, 69, 1);
+    color: white;
 }
 
 .journal-view {
     flex: 1;
-    background: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 15px;
     overflow-y: auto;
+    padding: 24px;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
     line-height: 1.6;
-    color: #ccc;
+    color: var(--text);
     min-height: 0;
 }
 
-.journal-view h1,
-.journal-view h2,
-.journal-view h3,
-.journal-view h4,
-.journal-view h5,
-.journal-view h6 {
+.journal-view h1, .journal-view h2, .journal-view h3, .journal-view h4, .journal-view h5, .journal-view h6 {
     margin: 15px 0 10px 0;
-    color: #00d4ff;
+    color: var(--accent);
 }
 
 .journal-view h1 {
-    font-size: 24px;
+    font-size: 28px;
 }
 
 .journal-view h2 {
@@ -162,18 +244,18 @@
 }
 
 .journal-view p {
-    margin: 10px 0;
-    color: #ccc;
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+    color: var(--text);
 }
 
-.journal-view ul {
-    margin: 5px 0;
-    padding-left: 20px;
+.journal-view ul, .journal-view ol {
+    margin: 0 0 16px 0;
+    padding-left: 24px;
 }
-
 .journal-view li {
-    margin: 0;
-    color: #ccc;
+    margin-bottom: 4px;
+    line-height: 1.6;
 }
 
 .list-group-gap {
@@ -191,13 +273,12 @@
 .journal-edit textarea {
     flex: 1;
     width: 100%;
-    height: 100%;
     min-height: 0;
-    padding: 10px;
-    border: 1px solid #444;
-    border-radius: 4px;
-    background: #2a2a2a;
-    color: #ccc;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--tab-content-bg);
+    color: var(--text);
     font-family: 'Monaco', 'Courier New', monospace;
     font-size: 14px;
     resize: none;
@@ -206,6 +287,40 @@
 
 .journal-edit textarea:focus {
     outline: none;
-    border-color: #0088cc;
-    box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.25);
+    border-color: #0ea5e9;
+}
+
+/* Code/pre/blockquote/link styles to align with notes view */
+.journal-view code {
+    background-color: var(--tab-content-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    font-size: 13px;
+    color: var(--pre-text);
+}
+
+.journal-view pre {
+    background-color: var(--tab-content-bg);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+    border: 1px solid var(--border);
+}
+
+.journal-view blockquote {
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+    margin: 0 0 16px 0;
+    color: var(--pre-text);
+}
+
+.journal-view a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.journal-view a:hover {
+    text-decoration: underline;
 }

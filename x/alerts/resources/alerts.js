@@ -99,10 +99,20 @@ export function onMessage(msg) {
     }
 }
 
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function addAlertToList(msg) {
     let listDiv = alertsContainer.querySelector('#alerts-list');
     if (!listDiv) {
-        alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item active" data-service="all">all</div></div></div><div class="alerts-content"><div id="alerts-list"></div></div></div>';
+        alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item tag-item active" data-service="all"><span class="tag-label">all</span><span class="service-count">0</span></div></div></div><div class="alerts-content"><div id="alerts-list"></div></div></div>';
         listDiv = alertsContainer.querySelector('#alerts-list');
     }
 
@@ -111,28 +121,43 @@ function addAlertToList(msg) {
         noAlertsDiv.remove();
     }
 
-    const alertData = msg.data;
+    const alertData = msg.data || {};
     const severity = (alertData.level || 'info').toLowerCase();
-    const timestamp = formatElapsedTime(msg.timestamp);
-    const text = alertData.text;
+    let timeClass = '';
+    const timestampHtml = formatElapsedTime(msg.timestamp);
+    if (msg.timestamp) {
+        const ts = new Date(msg.timestamp);
+        timeClass = (Date.now() - ts.getTime() >= 0) ? 'past' : 'future';
+    }
+    const text = alertData.text || msg.summary || 'No details';
     const serviceName = msg.serviceName || 'Unknown';
-    const serviceType = msg.serviceType || 'Unknown';
+    const serviceType = msg.serviceType || '';
 
     updateHighestSeverity(severity);
     unreadAlertCount++;
     updateBubble();
 
+    // Build tag labels (avoid duplicate if serviceName === serviceType)
+    const safeService = escapeHtml(serviceName);
+    const safeType = escapeHtml(serviceType);
+    const tagHtml = (serviceType && serviceType === serviceName) ?
+        `<span class="tag-label">${safeService}</span>` :
+        `<span class="tag-label">${safeService}</span>${serviceType ? `<span class="tag-label">${safeType}</span>` : ''}`;
+
     const alertHTML = `
-        <div class="alert-item" data-alert-id="temp-${Date.now()}" data-service-name="${serviceName}" data-severity="${severity.toLowerCase()}">
-            <div class="alert-checkbox">
-                <input type="checkbox" class="alert-checkbox-input" />
-            </div>
-            <div class="alert-content">
-                <div class="alert-text-main">${text}</div>
-                <div class="alert-metadata">
-                    <span class="alert-timestamp">${timestamp}</span>
-                    <span class="alert-service-name">${serviceName}</span>
-                    ${serviceType ? `<span class="alert-service-type"> – ${serviceType}</span>` : ''}
+        <div class="alert-item task-item" data-alert-id="temp-${Date.now()}" data-service-name="${escapeHtml(serviceName)}" data-severity="${escapeHtml(severity)}">
+            <div class="task-checkbox" data-alert-id="temp-${Date.now()}"></div>
+            <div class="task-content">
+                <div class="task-title-row">
+                    <div class="task-title"><span class="task-title-text">${escapeHtml(text)}</span></div>
+                </div>
+                <div class="task-metadata alert-meta">
+                    <div class="task-metadata-primary">
+                        <span class="task-time ${timeClass}">${timestampHtml}</span>
+                    </div>
+                    <div class="task-tags">
+                        ${tagHtml}
+                    </div>
                 </div>
             </div>
         </div>
@@ -140,24 +165,24 @@ function addAlertToList(msg) {
 
     listDiv.insertAdjacentHTML('afterbegin', alertHTML);
 
-    const newCheckbox = listDiv.querySelector('.alert-item:first-child .alert-checkbox-input');
-    if (newCheckbox) {
-        newCheckbox.addEventListener('change', async (e) => {
-            if (e.target.checked) {
+    // Attach handler to the checkbox area of the newly added temp alert (no server id)
+    const newItem = listDiv.querySelector('.alert-item:first-child');
+    if (newItem) {
+        const cb = newItem.querySelector('.task-checkbox');
+        if (cb) {
+            cb.addEventListener('click', (e) => {
                 const alertItem = e.target.closest('.alert-item');
                 if (alertItem) {
                     alertItem.remove();
-                    // Decrement the unread count since we're removing an alert
                     unreadAlertCount = Math.max(0, unreadAlertCount - 1);
                     updateBubble();
                 }
                 if (listDiv.children.length === 0) {
                     listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
-                    // Rebuild service list to only show "all"
                     rebuildServiceList();
                 }
-            }
-        });
+            });
+        }
     }
 
     // Update service list if a new service has appeared
@@ -188,7 +213,7 @@ async function refreshAlerts() {
 
         // If the layout doesn't exist yet, create it
         if (!list) {
-            alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item active" data-service="all">all</div></div></div><div class="alerts-content"><div class="alerts-header"><button id="mark-all-seen-btn" class="mark-all-seen-btn">Mark All Seen</button></div><div id="alerts-list"></div></div></div>';
+            alertsContainer.innerHTML = '<div class="alerts-layout"><div class="filter-sidebar"><div class="filter-title">Services</div><div class="service-list"><div class="service-item tag-item active" data-service="all"><span class="tag-label">all</span><span class="service-count">0</span></div></div></div><div class="alerts-content"><div class="alerts-header"><button id="mark-all-seen-btn" class="mark-all-seen-btn">Mark All Seen</button></div><div id="alerts-list"></div></div></div>';
             list = alertsContainer.querySelector('#alerts-list');
             setupMarkAllSeenButton(); // Re-setup button when layout is created
         }
@@ -202,7 +227,7 @@ async function refreshAlerts() {
                 sidebar.innerHTML = `
                     <div class="filter-title">Services</div>
                     <div class="service-list">
-                        <div class="service-item active" data-service="all">all</div>
+                        <div class="service-item tag-item active" data-service="all"><span class="tag-label">all</span><span class="service-count">0</span></div>
                     </div>
                 `;
             }
@@ -230,30 +255,42 @@ async function refreshAlerts() {
         const serviceFilterHTML = `
             <div class="filter-title">Services</div>
             <div class="service-list">
-                <div class="service-item active" data-service="all">all</div>
+                <div class="service-item tag-item active" data-service="all"><span class="tag-label">all</span><span class="service-count">${alerts.length}</span></div>
                 ${sortedServices.map(service => `
-                    <div class="service-item" data-service="${service}">${service}</div>
+                    <div class="service-item tag-item" data-service="${service}"><span class="tag-label">${service}</span><span class="service-count">${serviceCounts[service] || 0}</span></div>
                 `).join('')}
             </div>
         `;
         sidebar.innerHTML = serviceFilterHTML;
 
         // Build alerts list
-        const html = alerts.map(alert => `
-            <div class="alert-item" data-alert-id="${alert.id}" data-service-name="${alert.serviceName}" data-severity="${alert.severity?.toLowerCase() || 'info'}">
-                <div class="alert-checkbox">
-                    <input type="checkbox" class="alert-checkbox-input" data-alert-id="${alert.id}" />
-                </div>
-                <div class="alert-content">
-                    <div class="alert-text-main">${alert.text ? alert.text : (alert.summary || 'No details')}</div>
-                    <div class="alert-metadata">
-                        <span class="alert-timestamp">${formatElapsedTime(alert.timestamp)}</span>
-                        <span class="alert-service-name">${alert.serviceName}</span>
-                        ${alert.serviceType ? `<span class="alert-service-type"> – ${alert.serviceType}</span>` : ''}
+        const html = alerts.map(alert => {
+            const text = alert.text ? alert.text : (alert.summary || 'No details');
+            const sName = alert.serviceName || 'Unknown';
+            const sType = alert.serviceType || '';
+            const tagHtml = (sType && sType === sName) ?
+                `<span class="tag-label">${escapeHtml(sName)}</span>` :
+                `<span class="tag-label">${escapeHtml(sName)}</span>${sType ? `<span class="tag-label">${escapeHtml(sType)}</span>` : ''}`;
+
+            return `
+            <div class="alert-item task-item" data-alert-id="${alert.id}" data-service-name="${escapeHtml(sName)}" data-severity="${escapeHtml((alert.severity || 'info').toLowerCase())}">
+                <div class="task-checkbox" data-alert-id="${alert.id}"></div>
+                <div class="task-content">
+                    <div class="task-title-row">
+                        <div class="task-title"><span class="task-title-text">${escapeHtml(text)}</span></div>
+                    </div>
+                    <div class="task-metadata alert-meta">
+                        <div class="task-metadata-primary">
+                            <span class="task-time ${alert.timestamp && (Date.now() - new Date(alert.timestamp).getTime() >= 0) ? 'past' : 'future'}">${formatElapsedTime(alert.timestamp)}</span>
+                        </div>
+                        <div class="task-tags">
+                            ${tagHtml}
+                        </div>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         list.innerHTML = html;
 
@@ -272,21 +309,18 @@ async function refreshAlerts() {
         }
 
         // Attach checkbox handlers
-        alertsContainer.querySelectorAll('.alert-checkbox-input').forEach(checkbox => {
-            checkbox.addEventListener('change', async (e) => {
-                if (e.target.checked) {
-                    const alertID = parseInt(e.target.dataset.alertId, 10);
-                    await markAlertSeen(alertID);
-                    const alertItem = document.querySelector(`[data-alert-id="${alertID}"]`);
-                    if (alertItem) {
-                        alertItem.remove();
-                    }
-                    const listDiv = alertsContainer.querySelector('#alerts-list');
-                    if (listDiv && listDiv.children.length === 0) {
-                        listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
-                        // Rebuild service list to only show "all"
-                        rebuildServiceList();
-                    }
+        alertsContainer.querySelectorAll('.task-checkbox').forEach(cb => {
+            cb.addEventListener('click', async (e) => {
+                const id = parseInt(cb.dataset.alertId, 10);
+                if (!Number.isFinite(id)) return;
+                await markAlertSeen(id);
+                const alertItem = document.querySelector(`[data-alert-id="${id}"]`);
+                if (alertItem) alertItem.remove();
+                const listDiv = alertsContainer.querySelector('#alerts-list');
+                if (listDiv && listDiv.children.length === 0) {
+                    listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
+                    // Rebuild service list to only show "all"
+                    rebuildServiceList();
                 }
             });
         });
@@ -363,12 +397,10 @@ function rebuildServiceList() {
     const serviceListHTML = `
         <div class="filter-title">Services</div>
         <div class="service-list">
-            <div class="service-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all">
-                all <span class="service-count">${totalCount}</span>
-            </div>
+            <div class="service-item tag-item ${navController.selectedService === 'all' ? 'active' : ''}" data-service="all"><span class="tag-label">all</span><span class="service-count">${totalCount}</span></div>
             ${sortedServices.map(service => `
-                <div class="service-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">
-                    ${service} <span class="service-count">${countsFromDOM[service] || 0}</span>
+                <div class="service-item tag-item ${navController.selectedService === service ? 'active' : ''}" data-service="${service}">
+                    <span class="tag-label">${service}</span> <span class="service-count">${countsFromDOM[service] || 0}</span>
                 </div>
             `).join('')}
         </div>
@@ -403,7 +435,7 @@ function setupNavigation() {
         container: alertsContainer,
         itemSelector: '.alert-item',
         serviceSelector: '.service-item',
-        selectedClass: 'alert-selected',
+        selectedClass: 'task-selected',
         markedClass: 'alert-marked',
         markItemCallback: async (item) => {
             const alertID = parseInt(item.dataset.alertId, 10);

@@ -222,7 +222,11 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 		return tabs[i].Title < tabs[j].Title
 	})
 
+	// Ensure clients always get fresh tab content
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	_ = json.NewEncoder(w).Encode(tabs)
 }
 
@@ -376,6 +380,12 @@ func (svc *Service) handleGetAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get asset info", http.StatusInternalServerError)
 		return
 	}
+
+	// Prevent caching of dynamic assets served from plugins so updates appear
+	// immediately in the browser (avoid requiring users to clear history).
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
 	http.ServeContent(w, r, path, stat.ModTime(), file)
 }

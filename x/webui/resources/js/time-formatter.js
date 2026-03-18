@@ -91,9 +91,9 @@ export function formatElapsedTime(isoString) {
     }
 
     const fullDate = timestamp.toLocaleString();
-    const suffix = isPast ? 'ago' : 'from now';
+    const textContent = isPast ? `${elapsedText} ago` : `in ${elapsedText}`;
 
-    return `<span class="elapsed-time" title="${fullDate}" data-timestamp="${isoString}">${elapsedText} ${suffix}</span>`;
+    return `<span class="elapsed-time" title="${fullDate}" data-timestamp="${isoString}">${textContent}</span>`;
 }
 
 /**
@@ -140,8 +140,7 @@ export function startElapsedTimeUpdates() {
                 elapsedText = '0m';
             }
 
-            const suffix = isPast ? 'ago' : 'from now';
-            span.textContent = `${elapsedText} ${suffix}`;
+            span.textContent = isPast ? `${elapsedText} ago` : `in ${elapsedText}`;
         });
     }
 

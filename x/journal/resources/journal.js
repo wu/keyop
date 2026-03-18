@@ -34,7 +34,7 @@ async function refreshJournalDates() {
     }
 }
 
-// Render the date list in the calendar
+// Render the date list in the calendar (nested: year -> month -> day)
 function renderDateList(dates) {
     const dateList = document.getElementById('journal-date-list');
     if (!dateList) {
@@ -43,24 +43,125 @@ function renderDateList(dates) {
 
     dateList.innerHTML = '';
 
-    dates.forEach(date => {
-        const button = document.createElement('button');
-        button.className = 'journal-date-btn';
-        button.setAttribute('data-date', date);
-        if (date === journalState.currentDate) {
-            button.classList.add('active');
+    // Group dates by year and month
+    const years = {};
+    dates.forEach(d => {
+        if (!d) return;
+        const parts = d.split('-');
+        if (parts.length < 3) return;
+        const y = parts[0];
+        const m = parts[1];
+        if (!years[y]) years[y] = {};
+        if (!years[y][m]) years[y][m] = [];
+        years[y][m].push(d);
+    });
+
+    // Determine current year/month so we can expand them by default
+    const cur = new Date(journalState.currentDate + 'T00:00:00');
+    const currentYear = String(cur.getFullYear());
+    const currentMonth = String(cur.getMonth() + 1).padStart(2, '0');
+
+    // Sort years descending (newest first)
+    const yearKeys = Object.keys(years).sort((a, b) => Number(b) - Number(a));
+
+    yearKeys.forEach(year => {
+        const yearContainer = document.createElement('div');
+        yearContainer.className = 'journal-year';
+        yearContainer.setAttribute('data-year', year);
+
+        const yearBtn = document.createElement('button');
+        yearBtn.className = 'journal-year-btn';
+        yearBtn.type = 'button';
+        yearBtn.textContent = year;
+        yearBtn.setAttribute('aria-expanded', 'false');
+        yearBtn.onclick = () => {
+            const collapsed = yearContainer.classList.toggle('collapsed');
+            yearBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        };
+
+        yearContainer.appendChild(yearBtn);
+
+        const monthList = document.createElement('div');
+        monthList.className = 'journal-month-list';
+
+        // Expand current year by default
+        if (year === currentYear) {
+            yearContainer.classList.remove('collapsed');
+            yearBtn.setAttribute('aria-expanded', 'true');
+        } else {
+            yearContainer.classList.add('collapsed');
+            yearBtn.setAttribute('aria-expanded', 'false');
         }
 
-        const dateObj = new Date(date + 'T00:00:00');
-        const formatted = dateObj.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
+        // Sort months descending
+        const monthKeys = Object.keys(years[year]).sort((a, b) => Number(b) - Number(a));
+        monthKeys.forEach(month => {
+            const monthContainer = document.createElement('div');
+            monthContainer.className = 'journal-month';
+            monthContainer.setAttribute('data-month', month);
+
+            const monthBtn = document.createElement('button');
+            monthBtn.className = 'journal-month-btn';
+            monthBtn.type = 'button';
+            // Month label like 'Mar' (short)
+            const mDate = new Date(Number(year), Number(month) - 1, 1);
+            const monthLabel = mDate.toLocaleString('en-US', {month: 'short'});
+            monthBtn.textContent = monthLabel;
+            monthBtn.setAttribute('aria-expanded', 'false');
+            monthBtn.onclick = () => {
+                const collapsed = monthContainer.classList.toggle('collapsed');
+                monthBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            };
+
+            // Expand current month for current year
+            if (year === currentYear && month === currentMonth) {
+                monthContainer.classList.remove('collapsed');
+                monthBtn.setAttribute('aria-expanded', 'true');
+            } else {
+                monthContainer.classList.add('collapsed');
+                monthBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            monthContainer.appendChild(monthBtn);
+
+            const dayList = document.createElement('div');
+            dayList.className = 'journal-day-list';
+
+            // Sort days descending
+            const dayDates = years[year][month].sort().reverse();
+            dayDates.forEach(date => {
+                const button = document.createElement('button');
+                button.className = 'journal-date-btn';
+                button.setAttribute('data-date', date);
+                button.type = 'button';
+
+                const dateObj = new Date(date + 'T00:00:00');
+                const yyyy = dateObj.getFullYear();
+                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getDate()).padStart(2, '0');
+                const weekday = dateObj.toLocaleDateString('en-US', {weekday: 'short'}).toLowerCase();
+                const formatted = `${yyyy}.${mm}.${dd} ${weekday}`;
+
+                button.textContent = formatted;
+                if (date === journalState.currentDate) {
+                    button.classList.add('active');
+                    // ensure parents are expanded
+                    yearContainer.classList.remove('collapsed');
+                    monthContainer.classList.remove('collapsed');
+                    yearBtn.setAttribute('aria-expanded', 'true');
+                    monthBtn.setAttribute('aria-expanded', 'true');
+                }
+
+                button.onclick = () => selectDate(date);
+                dayList.appendChild(button);
+            });
+
+            monthContainer.appendChild(dayList);
+            monthList.appendChild(monthContainer);
         });
 
-        button.textContent = formatted;
-        button.onclick = () => selectDate(date);
-        dateList.appendChild(button);
+        yearContainer.appendChild(monthList);
+        dateList.appendChild(yearContainer);
     });
 }
 
@@ -255,8 +356,54 @@ function updateDateButtons() {
         btn.classList.remove('active');
         if (btn.getAttribute('data-date') === journalState.currentDate) {
             btn.classList.add('active');
+
+            // Ensure parent month/year are expanded so the selected date is visible
+            const monthContainer = btn.closest('.journal-month');
+            const yearContainer = btn.closest('.journal-year');
+            if (monthContainer) {
+                monthContainer.classList.remove('collapsed');
+                const monthBtn = monthContainer.querySelector('.journal-month-btn');
+                if (monthBtn) monthBtn.setAttribute('aria-expanded', 'true');
+            }
+            if (yearContainer) {
+                yearContainer.classList.remove('collapsed');
+                const yearBtn = yearContainer.querySelector('.journal-year-btn');
+                if (yearBtn) yearBtn.setAttribute('aria-expanded', 'true');
+            }
+
+            // Keep selected date visible
+            try {
+                btn.scrollIntoView({block: 'nearest', inline: 'nearest'});
+            } catch (e) {
+            }
         }
     });
+}
+
+// Export focusItems and canReturnToTabs for app-level keyboard navigation
+export function focusItems() {
+    const buttons = Array.from(document.querySelectorAll('.journal-date-btn')).filter(b => b.offsetParent !== null);
+    if (!buttons || buttons.length === 0) return;
+    const curIdx = buttons.findIndex(b => b.getAttribute('data-date') === journalState.currentDate || b.classList.contains('active'));
+    const btn = (curIdx >= 0) ? buttons[curIdx] : buttons[0];
+    if (btn) {
+        const date = btn.getAttribute('data-date');
+        if (date && date !== journalState.currentDate) {
+            // Use selectDate to ensure unsaved edits are handled
+            selectDate(date);
+        }
+        try {
+            btn.focus();
+        } catch (err) {
+        }
+    }
+}
+
+export function canReturnToTabs() {
+    const buttons = Array.from(document.querySelectorAll('.journal-date-btn')).filter(b => b.offsetParent !== null);
+    if (!buttons || buttons.length === 0) return true;
+    const currentIndex = buttons.findIndex(b => b.getAttribute('data-date') === journalState.currentDate || b.classList.contains('active'));
+    return currentIndex <= 0; // at top or no selection
 }
 
 // Export init function for the web UI
@@ -291,8 +438,62 @@ export async function init(container) {
         });
     }
 
+    // Keyboard navigation for date list (up/down arrows)
+    if (!journalState.keyboardBound) {
+        document.addEventListener('keydown', (e) => {
+            // Ignore when editing or when focus is on an input/textarea/contenteditable
+            if (journalState.isEditing) return;
+            const tag = e.target && e.target.tagName ? e.target.tagName.toUpperCase() : '';
+            if (tag === 'TEXTAREA' || tag === 'INPUT' || e.target.isContentEditable) return;
+
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                // Determine visible buttons only (respect collapsed months)
+                const buttons = Array.from(document.querySelectorAll('.journal-date-btn')).filter(b => b.offsetParent !== null);
+                if (!buttons || buttons.length === 0) return;
+
+                const currentIndex = buttons.findIndex(b => b.getAttribute('data-date') === journalState.currentDate || b.classList.contains('active'));
+                let nextIndex = currentIndex;
+
+                if (e.key === 'ArrowUp') {
+                    if (currentIndex === -1) {
+                        nextIndex = 0; // default to first
+                        e.preventDefault();
+                    } else if (currentIndex > 0) {
+                        e.preventDefault();
+                        nextIndex = currentIndex - 1;
+                    } else {
+                        // At top of list: allow event to bubble so app-level navigation can return focus to tabs
+                        return;
+                    }
+                } else { // ArrowDown
+                    if (currentIndex === -1) {
+                        nextIndex = 0;
+                        e.preventDefault();
+                    } else {
+                        e.preventDefault();
+                        nextIndex = currentIndex >= buttons.length - 1 ? 0 : currentIndex + 1;
+                    }
+                }
+
+                const nextBtn = buttons[nextIndex];
+                if (nextBtn) {
+                    const date = nextBtn.getAttribute('data-date');
+                    if (date) {
+                        selectDate(date);
+                        try {
+                            nextBtn.focus();
+                        } catch (err) {
+                        }
+                    }
+                }
+            }
+        }, true);
+        journalState.keyboardBound = true;
+    }
+
     // Load initial data
     await refreshJournalDates();
     await loadJournalEntry(journalState.currentDate);
     updateDateButtons();
 }
+
