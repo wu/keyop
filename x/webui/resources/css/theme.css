@@ -1,13 +1,31 @@
 :root {
-    --bg: #2a2a2a;
-    --text: #e0e0e0;
-    --header-bg: #242424;
-    --tab-content-bg: #242424;
-    --border: #333;
-    --accent: #8658bf;
+    --bg: #2e2e32; /* page background */
+    --text: #e6e7ea; /* softer, less bright text */
+    --header-bg: #232426; /* header/background panels */
+    --tab-content-bg: #2f3335; /* content background slightly lighter */
+    --border: var(--task-row-border); /* subtle borders (alias to task row border) */
+
+    /* Increased saturation for the accent palette */
+    --accent: #8a3fd3; /* more saturated purple */
+    --accent-bright: #e0b8ff; /* brighter accent */
+    --accent-pink: #e048c6; /* richer magenta */
+    --accent-blue: #9b5af0; /* stronger purple-blue */
+    --accent-blue-bg: rgba(155, 90, 240, 0.18); /* slightly heavier translucent background */
+    --tag-color: var(--accent-blue); /* tag badges use purple accent */
+
     --accent-text: #1a1a1a;
-    --pre-text: #03dac6;
-    --shadow: rgba(0, 0, 0, 0.3);
+    --pre-text: #33ff88; /* neon green accent used for task left stripe */
+    --task-left-accent: #33ff88; /* explicit variable for left stripe */
+    --task-row-bg: #343738; /* task row background */
+    --task-row-border: #686259; /* task row border color */
+    --time-scheduled: #e7c9ff; /* light purple for scheduled times (more saturated) */
+    --time-elapsed: #ff8a3d; /* orange for elapsed time (more saturated) */
+    --inprogress-base: var(--accent-blue);
+    --inprogress-glow: var(--accent-bright);
+    --tag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --tag-font-weight: 700;
+    --tag-letter-spacing: 0.4px;
+    --shadow: rgba(0, 0, 0, 0.35);
 }
 
 /* Dark theme flag (in case we add toggling later) */

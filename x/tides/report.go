@@ -193,11 +193,9 @@ func daylightLowPeriods(records []TideRecord, dayDate time.Time, sunrise, sunset
 		// Only consider records that fall on this calendar day.
 		if t.Format(fileDateFormat) != dateStr {
 			// If we were in a period that started earlier on this day, don't let
-			// a record from another day affect it — just skip.
-			if inPeriod {
-				// Do not close here; daylight end logic will handle closing when we
-				// encounter an out-of-day record that also lies outside daylight.
-			}
+			// a record from another day affect it — just skip. Do not close here;
+			// daylight end logic will handle closing when we encounter an out-of-day
+			// record that also lies outside daylight.
 			continue
 		}
 

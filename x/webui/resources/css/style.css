@@ -11,7 +11,7 @@ body {
 header {
     background-color: var(--header-bg);
     border-bottom: 1px solid var(--border);
-    padding: 1rem 2rem;
+    padding: 0.6rem 1rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -125,15 +125,16 @@ h1 {
 }
 
 main {
-    padding: 2rem;
+    padding: 1rem;
 }
 
 .tab-content {
     display: none;
-    background: var(--tab-content-bg);
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px var(--shadow);
+    /* Match the page background to remove the outer outline */
+    background: var(--bg);
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: none;
 }
 
 .tab-content.active {

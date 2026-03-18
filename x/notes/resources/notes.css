@@ -131,8 +131,11 @@
 }
 
 .notes-item.active {
-    background-color: var(--accent);
-    color: var(--accent-text);
+    /* Use a translucent accent so the active note isn't overwhelming */
+    background-color: var(--accent-blue-bg);
+    color: var(--text);
+    font-weight: 600;
+    border-color: rgba(138, 97, 214, 0.24);
 }
 
 .notes-item-title {

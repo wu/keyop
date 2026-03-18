@@ -312,7 +312,37 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 				"sat": time.Saturday, "saturday": time.Saturday,
 			}
 			if len(parts2) >= 1 {
-				if dwd, ok := dayNames[parts2[0]]; ok {
+				// Support 'today', 'tomorrow', 'yesterday' with optional time, e.g. 'tomorrow 1pm'
+				if parts2[0] == "today" || parts2[0] == "tomorrow" || parts2[0] == "yesterday" {
+					var baseMid time.Time
+					if svc.logicalCalc != nil {
+						baseMid = svc.logicalCalc.Today().In(loc)
+					} else {
+						now := time.Now().In(loc)
+						baseMid = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+					}
+					switch parts2[0] {
+					case "tomorrow":
+						baseMid = baseMid.AddDate(0, 0, 1)
+					case "yesterday":
+						baseMid = baseMid.AddDate(0, 0, -1)
+					case "today":
+						// no-op
+					}
+					if len(parts2) > 1 {
+						timePart := strings.Join(parts2[1:], " ")
+						if t, ok := parseTimeStringLocal(timePart, baseMid, loc); ok {
+							newTime = t
+							resultHasTime = true
+						} else {
+							newTime = baseMid
+							resultHasTime = false
+						}
+					} else {
+						newTime = baseMid
+						resultHasTime = false
+					}
+				} else if dwd, ok := dayNames[parts2[0]]; ok {
 					var baseMid time.Time
 					if svc.logicalCalc != nil {
 						baseMid = svc.logicalCalc.Today().In(loc)
@@ -323,6 +353,10 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 					cur := int(baseMid.Weekday())
 					target := int(dwd)
 					delta := (target - cur + 7) % 7
+					// Treat same-day as next week to ensure 'future' weekday (e.g., 'wed' means next Wednesday)
+					if delta == 0 {
+						delta = 7
+					}
 					date := baseMid.AddDate(0, 0, delta)
 					if len(parts2) > 1 {
 						timePart := strings.Join(parts2[1:], " ")
@@ -493,6 +527,101 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 		}
 
 		return map[string]any{"status": "ok"}, nil
+	case "t", "tag":
+		argText := strings.TrimSpace(args)
+		if argText == "" {
+			return nil, fmt.Errorf("tag required")
+		}
+		// Parse tokens (support multiple tags and removals like "t -foo")
+		tokens := strings.Fields(argText)
+		// Load current tags
+		var currentTags sql.NullString
+		if err := svc.db.QueryRow("SELECT COALESCE(tags, '') FROM tasks WHERE id = ?", taskID).Scan(&currentTags); err != nil {
+			return nil, err
+		}
+		origOrder := []string{}
+		if currentTags.Valid && currentTags.String != "" {
+			for _, tt := range strings.Split(currentTags.String, ",") {
+				tt = strings.TrimSpace(tt)
+				if tt != "" {
+					origOrder = append(origOrder, tt)
+				}
+			}
+		}
+		existing := map[string]bool{}
+		for _, t := range origOrder {
+			existing[t] = true
+		}
+		changed := false
+		addedOrder := []string{}
+		for _, tok := range tokens {
+			if tok == "" {
+				continue
+			}
+			if strings.HasPrefix(tok, "-") && len(tok) > 1 {
+				name := strings.TrimSpace(tok[1:])
+				if name == "" {
+					continue
+				}
+				if existing[name] {
+					delete(existing, name)
+					changed = true
+				}
+			} else {
+				name := strings.TrimSpace(tok)
+				if name == "" {
+					continue
+				}
+				if !existing[name] {
+					existing[name] = true
+					addedOrder = append(addedOrder, name)
+					changed = true
+				}
+			}
+		}
+		if !changed {
+			if t, _ := findUpdatedTask(); t != nil {
+				return t, nil
+			}
+			return map[string]any{"status": "ok", "tags": currentTags.String}, nil
+		}
+		// Build final tag list: keep original order for remaining tags, then append newly added tags
+		finalTags := []string{}
+		seen := map[string]bool{}
+		for _, t := range origOrder {
+			if existing[t] {
+				finalTags = append(finalTags, t)
+				seen[t] = true
+			}
+		}
+		for _, t := range addedOrder {
+			if !seen[t] && existing[t] {
+				finalTags = append(finalTags, t)
+				seen[t] = true
+			}
+		}
+		newTagsCSV := strings.Join(finalTags, ",")
+		if _, err := svc.updateTask(taskID, map[string]any{"tags": newTagsCSV}); err != nil {
+			return nil, err
+		}
+		if t, _ := findUpdatedTask(); t != nil {
+			messenger := svc.Deps.MustGetMessenger()
+			if messenger != nil {
+				msg := core.Message{Version: "1.0", Timestamp: time.Now(), ChannelName: "tasks", ServiceType: "tasks", ServiceName: "tasks", Event: "taskUpdated", Status: "updated"}
+				bodyMap := map[string]any{"taskId": taskID}
+				if t.Tags != "" {
+					bodyMap["tags"] = t.Tags
+				} else {
+					bodyMap["tags"] = ""
+				}
+				if b, err := json.Marshal(bodyMap); err == nil {
+					msg.Body = string(b)
+				}
+				_ = messenger.Send(msg)
+			}
+			return t, nil
+		}
+		return map[string]any{"status": "ok", "tags": newTagsCSV}, nil
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmd)
 	}

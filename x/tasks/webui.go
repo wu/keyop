@@ -1343,12 +1343,9 @@ func (svc *Service) createSubtask(parentUUID string, params map[string]any) (any
 		return nil, fmt.Errorf("subtask title cannot be empty")
 	}
 
-	// Get the parent task to find its scheduled date
-	var scheduledDate string
-	err := svc.db.QueryRow(
-		"SELECT scheduled_date FROM tasks WHERE uuid = ?",
-		parentUUID,
-	).Scan(&scheduledDate)
+	// Ensure parent exists (but do NOT copy its scheduled date to the subtask)
+	var exists int
+	err := svc.db.QueryRow("SELECT 1 FROM tasks WHERE uuid = ?", parentUUID).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("parent task not found: %w", err)
 	}
@@ -1367,10 +1364,10 @@ func (svc *Service) createSubtask(parentUUID string, params map[string]any) (any
 		minPosition = minPosition - 1 // Insert above current minimum
 	}
 
-	// Insert the subtask
+	// Insert the subtask WITHOUT a scheduled date
 	result, err := svc.db.Exec(
-		"INSERT INTO tasks (uuid, title, scheduled_date, subtask_parent_uuid, created_at, updated_at, done, position) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
-		uuid.New().String(), title, scheduledDate, parentUUID, now, now, minPosition,
+		"INSERT INTO tasks (uuid, title, subtask_parent_uuid, created_at, updated_at, done, position) VALUES (?, ?, ?, ?, ?, 0, ?)",
+		uuid.New().String(), title, parentUUID, now, now, minPosition,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subtask: %w", err)
@@ -1984,7 +1981,6 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 	}
 
 	title, _ := params["title"].(string)
-	tags, _ := params["tags"].(string)
 	scheduledDateStr, _ := params["scheduledDate"].(string)
 	scheduledTimeStr, _ := params["scheduledTime"].(string)
 
@@ -2047,9 +2043,20 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		updateArgs = append(updateArgs, title)
 	}
 
-	if tags != "" {
-		updateFields = append(updateFields, "tags = ?")
-		updateArgs = append(updateArgs, tags)
+	// Handle tags (support clearing when key present with empty string or null)
+	if _, hasTagsKey := params["tags"]; hasTagsKey {
+		switch v := params["tags"].(type) {
+		case nil:
+			// Some databases prefer empty string for clearing
+			updateFields = append(updateFields, "tags = ?")
+			updateArgs = append(updateArgs, "")
+		case string:
+			// Set provided string (may be empty to clear)
+			updateFields = append(updateFields, "tags = ?")
+			updateArgs = append(updateArgs, v)
+		default:
+			// ignore unexpected types
+		}
 	}
 
 	// Handle color (support clearing when key present with empty string or null)

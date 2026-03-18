@@ -18,7 +18,7 @@
     border-right: 1px solid var(--border);
     padding: 12px;
     overflow-y: auto;
-    background-color: var(--tab-content-bg);
+    background-color: var(--bg);
     flex-shrink: 0;
 }
 
@@ -52,7 +52,7 @@
     transition: background-color 0.15s;
     color: var(--text);
     background-color: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid var(--bg);
     text-align: center;
     flex: 1;
 }
@@ -81,6 +81,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
+    font-variant: small-caps;
     transition: background-color 0.15s;
     color: var(--text);
     background-color: transparent;
@@ -88,6 +89,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-family: var(--tag-font-family);
+    font-weight: var(--tag-font-weight);
+    letter-spacing: var(--tag-letter-spacing);
+    -webkit-font-smoothing: antialiased;
 }
 
 .tag-item:hover,
@@ -97,22 +102,26 @@
 
 .tag-item.active,
 .service-item.active {
-    background-color: var(--accent);
-    color: white;
-    font-weight: 500;
+    /* Use a translucent accent so the active tag isn't overwhelming */
+    background-color: var(--accent-blue-bg);
+    color: var(--text);
+    font-weight: 600;
+    /* Slight accent border to indicate active selection */
+    border-color: rgba(138, 97, 214, 0.24);
 }
 
 .tag-item.menu-selected {
-    background: rgba(150, 200, 255, 0.25);
-    color: #ffffff;
-    border-left-color: #8eb7ff;
+    background: var(--accent-blue-bg);
+    color: var(--text);
+    border-left-color: var(--accent-blue);
 }
 
 .service-count {
     font-size: 0.75rem;
-    background-color: rgba(100, 150, 255, 0.3);
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
+    background-color: transparent;
+    color: var(--text);
+    padding: 0;
+    border-radius: 0;
     font-weight: 600;
 }
 
@@ -182,8 +191,8 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background-color: var(--tab-content-bg);
-    border: 1px solid var(--border);
+    background-color: var(--task-row-bg);
+    border: 1px solid var(--task-row-border);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.12s;
@@ -210,8 +219,8 @@
 }
 
 .task-item.task-selected {
-    background-color: rgba(100, 150, 255, 0.15);
-    border-color: #6496ff;
+    background-color: var(--accent-blue-bg);
+    border-color: var(--accent-blue);
 }
 
 .task-checkbox {
@@ -289,21 +298,23 @@
     height: 8px;
     border-radius: 999px;
     flex-shrink: 0;
-    background: #a855f7;
-    box-shadow: 0 0 4px rgba(168, 85, 247, 0.45);
-    animation: task-progress-pulse 2.2s ease-in-out infinite;
+    background: var(--inprogress-base);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px rgba(138, 97, 214, 0.08);
+    animation: task-progress-pulse 1.9s ease-in-out infinite;
 }
 
 @keyframes task-progress-pulse {
     0%, 100% {
-        background: #c084fc;
-        box-shadow: 0 0 3px rgba(192, 132, 252, 0.35);
-        opacity: 0.8;
+        background: var(--inprogress-base);
+        box-shadow: 0 0 3px rgba(0, 0, 0, 0.35), 0 0 5px rgba(138, 97, 214, 0.08);
+        transform: scale(1);
+        opacity: 0.65;
     }
     50% {
-        background: #7e22ce;
-        box-shadow: 0 0 7px rgba(126, 34, 206, 0.65);
-        opacity: 1;
+        background: rgba(207, 166, 255, 0.75);
+        box-shadow: 0 0 6px rgba(207, 166, 255, 0.30), 0 0 9px rgba(207, 166, 255, 0.14);
+        transform: scale(1.2);
+        opacity: 0.75;
     }
 }
 
@@ -314,7 +325,12 @@
 }
 
 .task-time.future {
-    color: var(--accent);
+    color: var(--time-scheduled);
+}
+
+.task-time.future .task-time-label,
+.task-time.future .task-time-age {
+    color: var(--time-scheduled);
 }
 
 .task-time.completed-time {
@@ -328,11 +344,11 @@
 }
 
 .task-time.past .task-time-label {
-    color: var(--accent);
+    color: var(--time-scheduled);
 }
 
 .task-time.past .task-time-age {
-    color: #c28752;
+    color: var(--time-elapsed);
 }
 
 .task-metadata {
@@ -361,12 +377,24 @@
 
 .tag-badge {
     display: inline-block;
-    background-color: transparent;
-    color: var(--accent);
+    background-color: var(--accent-blue-bg);
+    color: var(--accent-blue);
     padding: 0 6px;
     border-radius: 3px;
     font-size: 11px;
     font-weight: 600;
+    font-variant: small-caps;
+}
+
+.tag-label {
+    display: inline-block;
+    background-color: transparent;
+    color: var(--text);
+    padding: 0;
+    border-radius: 0;
+    font-size: 13px;
+    font-weight: 600;
+    margin-right: 8px;
     font-variant: small-caps;
 }
 

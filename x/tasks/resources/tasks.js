@@ -995,7 +995,16 @@ function updateTagList() {
         if (allItem) {
             allItem.style.display = '';
             const count = state.tasks.length;
-            allItem.innerHTML = `all <span class="service-count">${count}</span>`;
+            // Clear and build label + count elements to avoid innerHTML and ensure escaping
+            allItem.innerHTML = '';
+            const allLabel = document.createElement('span');
+            allLabel.className = 'tag-label';
+            allLabel.textContent = 'all';
+            const allCount = document.createElement('span');
+            allCount.className = 'service-count';
+            allCount.textContent = count;
+            allItem.appendChild(allLabel);
+            allItem.appendChild(allCount);
         }
 
         // Remove existing tag items (keep "all")
@@ -1011,7 +1020,15 @@ function updateTagList() {
             const item = document.createElement('div');
             item.className = 'tag-item';
             item.dataset.tag = tag;
-            item.innerHTML = `${tag} <span class="service-count">${count}</span>`;
+            // Build safe label + count nodes
+            const label = document.createElement('span');
+            label.className = 'tag-label';
+            label.textContent = tag;
+            const countSpan = document.createElement('span');
+            countSpan.className = 'service-count';
+            countSpan.textContent = count;
+            item.appendChild(label);
+            item.appendChild(countSpan);
             elements.tagList.appendChild(item);
         }
     }
@@ -1051,7 +1068,15 @@ function updateTagsViewTagList() {
             item.classList.add('active');
         }
         item.dataset.tag = tag;
-        item.innerHTML = `${tag} <span class="service-count">${count}</span>`;
+        // Build safe label + count nodes
+        const label = document.createElement('span');
+        label.className = 'tag-label';
+        label.textContent = tag;
+        const countSpan = document.createElement('span');
+        countSpan.className = 'service-count';
+        countSpan.textContent = count;
+        item.appendChild(label);
+        item.appendChild(countSpan);
         elements.tagList.appendChild(item);
     }
 }
@@ -1286,9 +1311,9 @@ function createTaskElement(task) {
                 const localTime = `${displayHours}:${minutes}${ampm}`;
 
                 if (isPast) {
-                    timeDisplay = `<div class="task-time ${timeClass}"><span class="task-time-label">${localTime}</span><span class="task-time-age">${timeAgo}</span></div>`;
+                    timeDisplay = `<div class="task-time ${timeClass}"><span class="task-time-label">${localTime}</span> <span class="task-time-age">${timeAgo}</span></div>`;
                 } else {
-                    timeDisplay = `<div class="task-time ${timeClass}">${localTime} (${timeAgo})</div>`;
+                    timeDisplay = `<div class="task-time ${timeClass}"><span class="task-time-label">${localTime}</span> <span class="task-time-age">${timeAgo}</span></div>`;
                 }
             } else {
                 // Just a date without time - show the date or nothing
@@ -1337,7 +1362,7 @@ function createTaskElement(task) {
 
     return `<div class="${taskClass}${flagClass}" data-task-id="${task.id}" data-task-uuid="${task.uuid || ''}" data-tag="${primaryTag}" data-all-tags="${escapeHtml(taskTags.join(',') || 'untagged')}"${colorStyle}>
             <span class="subtask-toggle-placeholder"></span>
-            <div class="${checkboxClass}" title="Toggle task completion"></div>
+            <div class="${checkboxClass}" title="Toggle task completion" data-task-id="${task.id}"></div>
             <div class="task-content">
                 <div class="task-title"><span class="task-title-text">${escapeHtml(task.title)}</span>${inProgressIndicator}</div>
                 ${metadataDisplay}
@@ -1854,8 +1879,31 @@ async function processCommand(taskId, commandText) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({taskId, command: cmdText, view: state.currentView})
         });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const res = await response.json();
+        // Read response body as text to provide better error messages on non-2xx responses
+        const respText = await response.text();
+        if (!response.ok) {
+            let msg = `HTTP ${response.status}`;
+            try {
+                if (respText && respText.trim() !== '') {
+                    const parsed = JSON.parse(respText);
+                    if (parsed && (parsed.error || parsed.message)) {
+                        msg = parsed.error || parsed.message;
+                    } else {
+                        msg = respText.trim();
+                    }
+                }
+            } catch (e) {
+                if (respText && respText.trim() !== '') msg = respText.trim();
+            }
+            throw new Error(msg);
+        }
+        let res = {};
+        if (respText && respText.trim() !== '') {
+            try {
+                res = JSON.parse(respText);
+            } catch (e) { /* ignore parse error */
+            }
+        }
         if (res.error) throw new Error(res.error);
 
         // Color handling: if server returned a color property (including empty to clear)
@@ -2396,6 +2444,15 @@ function handleTaskUpdate(msg) {
             }
         }
 
+        // Update left stripe color on the task element
+        if (task.color && task.color.trim()) {
+            taskEl.style.borderLeft = `4px solid ${task.color}`;
+            taskEl.style.paddingLeft = '8px';
+        } else {
+            taskEl.style.borderLeft = '';
+            taskEl.style.paddingLeft = '';
+        }
+
         // Update title if changed
         if (msg.title !== undefined) {
             const titleEl = taskEl.querySelector('.task-title');
@@ -2573,14 +2630,16 @@ function setupNewTaskInput() {
 
 async function createTask(title) {
     try {
-        // Create a local date for "today" and send it as an ISO string
+        // Build payload and include the currently-selected tag when in Tags view
+        const payload = {title, hasScheduledTime: false};
+        if (state.currentView === 'tags' && state.currentFilter && state.currentFilter !== 'all') {
+            payload.tags = state.currentFilter;
+        }
+
         const response = await fetch('/api/tabs/tasks/action/create-task', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                title,
-                hasScheduledTime: false
-            })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2639,7 +2698,10 @@ async function createNewSubtask(parentUUID) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 parentUuid: parentUUID,
-                title: title.trim()
+                title: title.trim(),
+                // Explicitly ensure subtasks are created without a scheduled date/time
+                scheduledAt: null,
+                hasScheduledTime: false
             })
         });
 
@@ -3079,18 +3141,24 @@ async function saveTask() {
     }
 
     try {
+        // Build payload and only include color when the user explicitly provided one (via the hex input)
+        const payload = {
+            taskId: state.currentEditingTask.id,
+            title: elements.taskTitle.value,
+            tags: elements.taskTags.value,
+            scheduledAt: scheduledDateISO,
+            hasScheduledTime: elements.taskHasScheduledTime.checked,
+            pattern: pattern
+        };
+        const hexVal = (elements.taskColorHex.value || '').trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(hexVal)) {
+            payload.color = hexVal;
+        }
+
         const response = await fetch('/api/tabs/tasks/action/update-task', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                taskId: state.currentEditingTask.id,
-                title: elements.taskTitle.value,
-                color: elements.taskColor.value,
-                tags: elements.taskTags.value,
-                scheduledAt: scheduledDateISO,
-                hasScheduledTime: elements.taskHasScheduledTime.checked,
-                pattern: pattern
-            })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
