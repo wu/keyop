@@ -217,8 +217,38 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 		tabs = append(tabs, p.WebUITab())
 	}
 
-	// Sort tabs alphabetically by title
+	// Sort tabs in the specified order (case-insensitive)
+	tabOrder := map[string]int{
+		"dashboard": 0,
+		"alerts":    1,
+		"errors":    2,
+		"statusmon": 3,
+		"tasks":     4,
+		"notes":     5,
+		"journal":   6,
+		"idle":      7,
+		"aurora":    8,
+		"tides":     9,
+		"temps":     10,
+		"messages":  11,
+	}
+
 	sort.Slice(tabs, func(i, j int) bool {
+		orderI, okI := tabOrder[strings.ToLower(tabs[i].Title)]
+		orderJ, okJ := tabOrder[strings.ToLower(tabs[j].Title)]
+
+		// If both are in the order list, use the order
+		if okI && okJ {
+			return orderI < orderJ
+		}
+		// If only one is in the order list, it comes first
+		if okI {
+			return true
+		}
+		if okJ {
+			return false
+		}
+		// If neither are in the order list, sort alphabetically as fallback
 		return tabs[i].Title < tabs[j].Title
 	})
 

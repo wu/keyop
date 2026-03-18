@@ -10,10 +10,27 @@ async function loadTabs() {
     const response = await fetch('/api/tabs');
     const tabs = await response.json();
 
-    // Sort tabs: dashboard first, then alphabetical by title
+    // Sort tabs in the specified order
+    const tabOrder = {
+        'dashboard': 0,
+        'alerts': 1,
+        'errors': 2,
+        'statusmon': 3,
+        'tasks': 4,
+        'notes': 5,
+        'journal': 6,
+        'idle': 7,
+        'aurora': 8,
+        'tides': 9,
+        'temps': 10,
+        'messages': 11
+    };
+    
     tabs.sort((a, b) => {
-        if (a.id === 'dashboard') return -1;
-        if (b.id === 'dashboard') return 1;
+        const orderA = tabOrder[a.id] ?? 999;
+        const orderB = tabOrder[b.id] ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        // Fallback to alphabetical if same priority
         return a.title.localeCompare(b.title);
     });
 
