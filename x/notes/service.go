@@ -2,8 +2,11 @@ package notes
 
 import (
 	"fmt"
+	"time"
+
 	"keyop/core"
 	"keyop/util"
+	"keyop/x/git"
 	"sync"
 )
 
@@ -111,7 +114,7 @@ func (svc *Service) createNote(params map[string]any) (any, error) {
 	return createNotesEntry(svc.dbPath, title, content, tags)
 }
 
-// updateNote updates an existing note.
+// updateNote updates an existing note and emits a ContentChange event with the old and new content.
 func (svc *Service) updateNote(params map[string]any) (any, error) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -136,7 +139,44 @@ func (svc *Service) updateNote(params map[string]any) (any, error) {
 		tags = ""
 	}
 
-	return updateNotesEntry(svc.dbPath, int64(id), title, content, tags)
+	// Fetch old content for the ContentChange event. Don't fail update if retrieval fails.
+	var oldContent string
+	if oldEntry, err := getNotesEntry(svc.dbPath, int64(id)); err == nil {
+		if m, ok := oldEntry.(map[string]any); ok {
+			if oc, ok2 := m["content"].(string); ok2 {
+				oldContent = oc
+			}
+		}
+	} else {
+		// Log but continue
+		svc.Deps.MustGetLogger().Warn("notes: failed to fetch previous content", "id", id, "error", err)
+	}
+
+	res, err := updateNotesEntry(svc.dbPath, int64(id), title, content, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	// Emit ContentChange event (typed). Messenger will set DataType automatically.
+	cc := git.ContentChangeEvent{
+		Name:      title,
+		Old:       oldContent,
+		New:       content,
+		UpdatedAt: time.Now().Format(time.RFC3339Nano),
+	}
+
+	if sendErr := svc.Deps.MustGetMessenger().Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "content_change",
+		Summary:     title,
+		Data:        cc,
+	}); sendErr != nil {
+		svc.Deps.MustGetLogger().Error("notes: failed to send ContentChange event", "error", sendErr, "id", id)
+	}
+
+	return res, nil
 }
 
 // deleteNote deletes a note.

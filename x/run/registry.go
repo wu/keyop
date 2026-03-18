@@ -7,6 +7,7 @@ import (
 	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
 	"keyop/x/errorevents"
+	"keyop/x/git"
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
 	"keyop/x/heartbeat"
@@ -40,7 +41,6 @@ import (
 	"keyop/x/thermostat"
 	"keyop/x/tides"
 	"keyop/x/txtmsg"
-	"keyop/x/versionControlGit"
 	"keyop/x/weatherstation"
 	"keyop/x/webSocketClient"
 	"keyop/x/webSocketServer"
@@ -162,8 +162,12 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"thermostat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return thermostat.NewService(deps, cfg)
 	},
+	"git": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return git.NewService(deps, cfg)
+	},
+	// backwards-compatible alias for older configs
 	"versionControlGit": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return versionControlGit.NewService(deps, cfg)
+		return git.NewService(deps, cfg)
 	},
 	"webSocketClient": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return webSocketClient.NewService(deps, cfg)

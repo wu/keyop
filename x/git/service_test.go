@@ -1,5 +1,5 @@
 //nolint:revive
-package versionControlGit
+package git
 
 import (
 	"context"
@@ -84,8 +84,7 @@ func TestValidateConfig_valid_withOptionals(t *testing.T) {
 			"input": {Name: "some-channel"},
 		},
 		Config: map[string]interface{}{
-			"dir":       "/tmp/repo",
-			"data_path": "new.content",
+			"dir": "/tmp/repo",
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
@@ -163,49 +162,18 @@ func TestValidateConfig_dirEmptyString(t *testing.T) {
 	assert.Contains(t, errs[0].Error(), "dir")
 }
 
-func TestValidateConfig_dataPathWrongType(t *testing.T) {
-	deps, _, _, _ := testDepsWithFakeOs(t, t.TempDir())
-	cfg := core.ServiceConfig{
-		Name: "vcgit",
-		Subs: map[string]core.ChannelInfo{"input": {Name: "ch"}},
-		Config: map[string]interface{}{
-			"data_path": true, // wrong type
-		},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	errs := svc.ValidateConfig()
-	require.Len(t, errs, 1)
-	assert.Contains(t, errs[0].Error(), "data_path")
-}
-
-func TestValidateConfig_dataPathEmptyString(t *testing.T) {
-	deps, _, _, _ := testDepsWithFakeOs(t, t.TempDir())
-	cfg := core.ServiceConfig{
-		Name: "vcgit",
-		Subs: map[string]core.ChannelInfo{"input": {Name: "ch"}},
-		Config: map[string]interface{}{
-			"data_path": "",
-		},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	errs := svc.ValidateConfig()
-	require.Len(t, errs, 1)
-	assert.Contains(t, errs[0].Error(), "data_path")
-}
-
 func TestValidateConfig_multipleErrors(t *testing.T) {
 	deps, _, _, _ := testDepsWithFakeOs(t, t.TempDir())
 	cfg := core.ServiceConfig{
 		Name: "vcgit",
 		// nil subs → missing input
 		Config: map[string]interface{}{
-			"dir":       "",  // bad
-			"data_path": 123, // bad
+			"dir": "", // bad
 		},
 	}
 	svc := NewService(deps, cfg).(*Service)
 	errs := svc.ValidateConfig()
-	assert.GreaterOrEqual(t, len(errs), 3, "expected errors for missing sub, bad dir, and bad data_path")
+	assert.GreaterOrEqual(t, len(errs), 2, "expected errors for missing sub and bad dir")
 }
 
 // ─── Initialize ──────────────────────────────────────────────────────────────
@@ -238,21 +206,6 @@ func TestInitialize_customDir(t *testing.T) {
 	svc := NewService(deps, cfg).(*Service)
 	require.NoError(t, svc.Initialize())
 	assert.Equal(t, tmp, svc.dir)
-}
-
-func TestInitialize_dataPath(t *testing.T) {
-	tmp := t.TempDir()
-	deps, _, fOs, _ := testDepsWithFakeOs(t, tmp)
-	fOs.CommandFunc = successGitCmdFunc(new([]string))
-
-	cfg := core.ServiceConfig{
-		Name:   "vcgit",
-		Config: map[string]interface{}{"dir": tmp, "data_path": "a.b.c"},
-		Subs:   map[string]core.ChannelInfo{"input": {Name: "ch"}},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	require.NoError(t, svc.Initialize())
-	assert.Equal(t, "a.b.c", svc.dataPath)
 }
 
 func TestInitialize_mkdirFailure_doesNotReturnError(t *testing.T) {
@@ -330,7 +283,7 @@ func Test_handleMessage_storeFullMessageAndGitCommit(t *testing.T) {
 	msg := core.Message{
 		ChannelName: "vcgit",
 		ServiceName: "vcgit",
-		ServiceType: "versionControlGit",
+		ServiceType: "git",
 		Summary:     "My Test Subject",
 		Text:        "body text",
 		Data:        map[string]interface{}{"k": "v"},
@@ -400,88 +353,6 @@ func Test_handleMessage_fallbackSubjectTimestamp(t *testing.T) {
 	}
 	assert.Len(t, txts, 1, "expected exactly one timestamped file")
 	assert.Empty(t, fm.Messages)
-}
-
-func Test_handleMessage_dataPath_stringNode(t *testing.T) {
-	tmp := t.TempDir()
-	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
-	fOs.CommandFunc = successGitCmdFunc(new([]string))
-
-	cfg := core.ServiceConfig{
-		Name:   "vcgit",
-		Config: map[string]interface{}{"dir": tmp, "data_path": "new.content"},
-		Subs:   map[string]core.ChannelInfo{"input": {Name: "ch"}},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	require.NoError(t, svc.Initialize())
-
-	msg := core.Message{
-		Summary: "subject-1",
-		Data:    map[string]interface{}{"new": map[string]interface{}{"content": "hello world"}},
-	}
-	require.NoError(t, svc.handleMessage(msg))
-
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-1")+".txt")) //nolint:gosec // test-only file read
-	require.NoError(t, err)
-	assert.Equal(t, "hello world", string(b))
-	assert.Empty(t, fm.Messages)
-}
-
-func Test_handleMessage_dataPath_objectNode(t *testing.T) {
-	tmp := t.TempDir()
-	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
-	fOs.CommandFunc = successGitCmdFunc(new([]string))
-
-	cfg := core.ServiceConfig{
-		Name:   "vcgit",
-		Config: map[string]interface{}{"dir": tmp, "data_path": "new.content"},
-		Subs:   map[string]core.ChannelInfo{"input": {Name: "ch"}},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	require.NoError(t, svc.Initialize())
-
-	msg := core.Message{
-		Summary: "subject-obj",
-		Data:    map[string]interface{}{"new": map[string]interface{}{"content": map[string]interface{}{"a": float64(1)}}},
-	}
-	require.NoError(t, svc.handleMessage(msg))
-
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("subject-obj")+".txt")) //nolint:gosec // test-only file read
-	require.NoError(t, err)
-	assert.Contains(t, string(b), `"a": 1`)
-	assert.Empty(t, fm.Messages)
-}
-
-func Test_handleMessage_dataPath_extractFailure_fallsBackToFullMessage(t *testing.T) {
-	tmp := t.TempDir()
-	deps, fm, fOs, _ := testDepsWithFakeOs(t, tmp)
-	fOs.CommandFunc = successGitCmdFunc(new([]string))
-
-	cfg := core.ServiceConfig{
-		Name:   "vcgit",
-		Config: map[string]interface{}{"dir": tmp, "data_path": "nonexistent.path"},
-		Subs:   map[string]core.ChannelInfo{"input": {Name: "ch"}},
-	}
-	svc := NewService(deps, cfg).(*Service)
-	require.NoError(t, svc.Initialize())
-
-	msg := core.Message{
-		Summary: "fallback-test",
-		Data:    map[string]interface{}{"x": "y"},
-	}
-	require.NoError(t, svc.handleMessage(msg))
-
-	// file should exist and contain the full JSON-marshaled message
-	b, err := os.ReadFile(filepath.Join(tmp, sanitizeFilename("fallback-test")+".txt")) //nolint:gosec // test-only file read
-	require.NoError(t, err)
-	var parsed core.Message
-	require.NoError(t, json.Unmarshal(b, &parsed))
-	assert.Equal(t, msg.Summary, parsed.Summary)
-
-	// an error event should have been emitted for the failed extraction
-	require.Len(t, fm.Messages, 1)
-	assert.Equal(t, "error", fm.Messages[0].Event)
-	assert.Equal(t, "extract-data-node", fm.Messages[0].Data.(map[string]string)["op"])
 }
 
 func Test_handleMessage_mkdirFailure_emitsErrorAndReturnsNil(t *testing.T) {
@@ -765,46 +636,4 @@ func Test_sanitizeFilename(t *testing.T) {
 			assert.Equal(t, tc.expected, got)
 		})
 	}
-}
-
-// ─── extractDataNode ─────────────────────────────────────────────────────────
-
-func Test_extractDataNode_nilData(t *testing.T) {
-	_, err := extractDataNode(nil, "a.b")
-	assert.Error(t, err)
-}
-
-func Test_extractDataNode_nonExistentPath(t *testing.T) {
-	data := map[string]interface{}{"x": map[string]interface{}{"y": "z"}}
-	_, err := extractDataNode(data, "x.z")
-	assert.Error(t, err)
-}
-
-func Test_extractDataNode_pathThroughNonMap(t *testing.T) {
-	data := map[string]interface{}{"x": "not a map"}
-	_, err := extractDataNode(data, "x.y")
-	assert.Error(t, err)
-}
-
-func Test_extractDataNode_stringValue(t *testing.T) {
-	data := map[string]interface{}{"a": map[string]interface{}{"b": "my string"}}
-	got, err := extractDataNode(data, "a.b")
-	require.NoError(t, err)
-	assert.Equal(t, "my string", string(got))
-}
-
-func Test_extractDataNode_numericValue(t *testing.T) {
-	data := map[string]interface{}{"val": float64(42)}
-	got, err := extractDataNode(data, "val")
-	require.NoError(t, err)
-	assert.Equal(t, "42", string(got))
-}
-
-func Test_extractDataNode_nestedObject(t *testing.T) {
-	data := map[string]interface{}{"a": map[string]interface{}{"b": map[string]interface{}{"c": "deep"}}}
-	got, err := extractDataNode(data, "a.b")
-	require.NoError(t, err)
-	var parsed map[string]interface{}
-	require.NoError(t, json.Unmarshal(got, &parsed))
-	assert.Equal(t, "deep", parsed["c"])
 }
