@@ -1,0 +1,17 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/aurora.sql
+
+  payloadTypes:
+    - core.aurora.v1
+    - aurora
+
+subs:
+
+  aurora:
+    name: aurora
+    description: process incoming events
+
+

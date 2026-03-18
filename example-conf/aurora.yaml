@@ -1,0 +1,29 @@
+x: aurora
+freq: 30m
+
+config:
+
+  lat: 45.00000
+  lon: -120.00000
+
+  pub_preprocess:
+
+    - when: 'event eq "aurora_check"'
+      updates:
+        channelName: aurora
+
+    - when: 'event eq "aurora_alert"'
+      updates:
+        channelName: alerts
+
+
+subs:
+
+  aurora:
+    name: aurora
+    description: read aurora events from local channel
+
+  gps:
+    name: gps
+    description: subscribe to gps updates
+

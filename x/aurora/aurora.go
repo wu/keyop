@@ -14,6 +14,10 @@ import (
 // DefaultAPIURL is the NOAA OVATION latest forecast URL.
 const DefaultAPIURL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
+// DefaultForecastAPIURL is the NOAA OVATION multi-day forecast URL. This may be
+// overridden by configuration if a different endpoint is desired.
+const DefaultForecastAPIURL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
+
 // OvationData represents the NOAA OVATION forecast data.
 type OvationData struct {
 	ForecastTime string  `json:"Forecast Time"`
@@ -48,6 +52,32 @@ func FetchOvationData(url string) (*OvationData, error) {
 	}
 
 	return &data, nil
+}
+
+// FetchOvationForecast fetches the multi-day forecast JSON from the given URL
+// and returns the raw response bytes so callers can persist or decode as needed.
+func FetchOvationForecast(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("aurora: failed to fetch forecast: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("aurora: failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("aurora: failed to fetch forecast: status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 }
 
 // FindProbability finds the aurora probability for a given latitude and longitude in the OVATION data.

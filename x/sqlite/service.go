@@ -134,31 +134,38 @@ func (svc *Service) Initialize() error {
 }
 
 func (svc *Service) handleMessage(msg core.Message) error {
+	logger := svc.Deps.MustGetLogger()
+
 	// Only route by typed payload DataType. Legacy service-type routing removed.
 	if msg.DataType == "" {
 		return nil
 	}
+
+	logger.Debug("sqlite: processing message", "datatype", msg.DataType, "msg", msg)
 
 	svc.mu.RLock()
 	provider, ok := svc.providers[msg.DataType]
 	svc.mu.RUnlock()
 
 	if !ok {
-		// No provider registered for this payload type
+		logger.Warn("No provider registered for this payload type", "dataType", msg.DataType)
 		return nil
 	}
 
 	query, args := provider.SQLiteInsert(msg)
 	if query == "" {
+		logger.Warn("No SQLite insert query provided by provider", "dataType", msg.DataType)
 		return nil
 	}
 
+	logger.Debug("Inserting data into SQLite", "dataType", msg.DataType)
 	_, err := svc.db.Exec(query, args...)
 	if err != nil {
-		svc.Deps.MustGetLogger().Error("failed to insert message into sqlite", "error", err, "dataType", msg.DataType, "query", query)
+		logger.Error("failed to insert message into sqlite", "error", err, "dataType", msg.DataType, "query", query)
 		return err
 	}
 
+	logger.Debug("Insertion successful", "dataType", msg.DataType)
 	return nil
 }
 

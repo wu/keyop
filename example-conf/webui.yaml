@@ -2,10 +2,8 @@ x: webui
 
 config:
   port: 8080
-  dbPaths:
-    core.alert.v1: sqlite/alerts.sql
-    core.error.v1: sqlite/errors.sql
-    core.temp.v1: sqlite/temps.sql
+
+
 
 subs:
 
@@ -21,16 +19,32 @@ subs:
     name: alerts
     description: process incoming events
 
-  errorevents:
-    name: errorevents
-    description: process incoming events
-
-  temp:
-    name: temp
-    description: process incoming events
-
   messenger:
     name: messenger
+    description: process incoming events
+
+  astral:
+    name: astral
+    description: process incoming events
+
+  aurora:
+    name: aurora
+    description: process incoming events
+
+  temp-shared:
+    name: temp-shared
+    description: process incoming events
+
+  status:
+    name: status
+    description: process incoming events
+
+  status-shared:
+    name: status-shared
+    description: process incoming events
+
+  status-ping:
+    name: status-ping
     description: process incoming events
 
 

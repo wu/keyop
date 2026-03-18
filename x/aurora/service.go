@@ -1,10 +1,12 @@
 package aurora
 
 import (
+	"database/sql"
 	"fmt"
 	"keyop/core"
 	"keyop/util"
 	"sync"
+	"time"
 )
 
 // Service polls the NOAA aurora API on a schedule and publishes aurora activity events and metrics to subscribers.
@@ -16,15 +18,24 @@ type Service struct {
 	cachedLat *float64
 	cachedLon *float64
 	apiURL    string
-	mu        sync.RWMutex
+	// apiForecastURL is the endpoint used to fetch multi-day forecasts. It may be
+	// overridden by configuration (cfg.Config["forecast_url"]).
+	apiForecastURL string
+	mu             sync.RWMutex
+
+	// db is a pointer to the sqlite DB managed by the sqlite service. It is
+	// populated at runtime if a sqlite service is configured and accepts
+	// the aurora payload types.
+	db **sql.DB
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps:   deps,
-		Cfg:    cfg,
-		apiURL: DefaultAPIURL,
+		Deps:           deps,
+		Cfg:            cfg,
+		apiURL:         DefaultAPIURL,
+		apiForecastURL: DefaultForecastAPIURL,
 	}
 
 	if lat, ok := cfg.Config["lat"].(float64); ok {
@@ -33,9 +44,15 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	if lon, ok := cfg.Config["lon"].(float64); ok {
 		svc.Lon = lon
 	}
+	if fu, ok := cfg.Config["forecast_url"].(string); ok && fu != "" {
+		svc.apiForecastURL = fu
+	}
 
 	return svc
 }
+
+// Name returns the canonical service type name for aurora (implements core.RuntimePlugin).
+func (svc *Service) Name() string { return "aurora" }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
@@ -88,6 +105,8 @@ func (svc *Service) gpsHandler(msg core.Message) error {
 
 // Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
+	logger := svc.Deps.MustGetLogger()
+
 	svc.mu.RLock()
 	lat := svc.Lat
 	lon := svc.Lon
@@ -106,7 +125,13 @@ func (svc *Service) Check() error {
 
 	messenger := svc.Deps.MustGetMessenger()
 
-	// Send event each time Check() gets run
+	// Send event each time Check() gets run using a typed Event payload
+	auroraData := Event{
+		Likelihood:   bestProb,
+		Lat:          lat,
+		Lon:          lon,
+		ForecastTime: data.ForecastTime,
+	}
 	eventMsg := core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
@@ -114,32 +139,60 @@ func (svc *Service) Check() error {
 		Event:       "aurora_check",
 		Text:        fmt.Sprintf("Aurora likelihood: %d%%", bestProb),
 		Summary:     fmt.Sprintf("Aurora: %d%%", bestProb),
-		Data: map[string]interface{}{
-			"likelihood":    bestProb,
-			"lat":           lat,
-			"lon":           lon,
-			"forecast_time": data.ForecastTime,
-		},
+		Data:        auroraData,
 	}
 	if err := messenger.Send(eventMsg); err != nil {
 		return err
 	}
 
-	// Send an alert if the possibility is greater than zero
+	// Send an alert if the possibility is greater than zero using core.AlertEvent
 	if bestProb > 0 {
+		alert := core.AlertEvent{
+			Summary: fmt.Sprintf("Aurora Alert: %d%%", bestProb),
+			Text:    fmt.Sprintf("Aurora alert! Likelihood is %d%% at your location.", bestProb),
+		}
 		alertMsg := core.Message{
 			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Event:       "aurora_alert",
-			Text:        fmt.Sprintf("Aurora alert! Likelihood is %d%% at your location.", bestProb),
-			Summary:     fmt.Sprintf("Aurora Alert: %d%%", bestProb),
-			Data: map[string]interface{}{
-				"likelihood": bestProb,
-			},
+			Text:        alert.Text,
+			Summary:     alert.Summary,
+			Data:        alert,
 		}
 		if err := messenger.Send(alertMsg); err != nil {
 			return err
+		}
+	}
+
+	// Attempt to fetch the multi-day forecast and publish it as a typed Forecast payload.
+	if svc.apiForecastURL != "" {
+		logger.Warn("aurora: fetching 3-day forecast")
+		if body, err := FetchOvationForecast(svc.apiForecastURL); err == nil {
+			fc := Forecast{
+				FetchedAt: time.Now(),
+				SourceURL: svc.apiForecastURL,
+			}
+			// Try to parse plain-text 3-day forecast into structured data
+			if pf, perr := Parse3DayForecastText(body); perr == nil && pf != nil && len(pf.Table) > 0 {
+				fc.Data = pf
+			}
+
+			forecastMsg := core.Message{
+				ChannelName: svc.Cfg.Name,
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Event:       "aurora_forecast",
+				Text:        "Aurora 3-day forecast updated",
+				Summary:     "Aurora forecast",
+				Data:        fc,
+			}
+			logger.Warn("aurora: send 3-day forecast event", "data", fc)
+			if err := messenger.Send(forecastMsg); err != nil {
+				svc.Deps.MustGetLogger().Debug("aurora: failed to send forecast message", "err", err)
+			}
+		} else {
+			logger.Warn("aurora: failed to fetch 3-day forecast", "err", err)
 		}
 	}
 
