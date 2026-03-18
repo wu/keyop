@@ -257,6 +257,21 @@ input[type="date"]:focus {
     justify-content: center;
     aspect-ratio: 3 / 4; /* portrait: taller than wide */
     overflow: hidden;
+    cursor: grab;
+    transition: opacity 0.2s ease;
+}
+
+.dashboard-panel:hover {
+    cursor: grab;
+}
+
+.dashboard-panel:active {
+    cursor: grabbing;
+}
+
+.dashboard-panel[draggable="true"] {
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .dashboard-panel .panel {

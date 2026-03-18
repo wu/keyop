@@ -81,6 +81,9 @@ function switchTab(tabId) {
     focusOnTabs = true; // Reset to tabs focus when switching
 }
 
+// Export switchTab globally so dashboard panels can navigate to tabs
+window.switchTab = switchTab;
+
 function updateTabVisualFocus(tabIndex) {
     // Update visual focus (keyboard focus highlight) without switching tabs
     document.querySelectorAll('.tab-link').forEach((link, index) => {

@@ -66,6 +66,10 @@ type Service struct {
 
 	clients   map[chan []byte]bool
 	clientsMu sync.Mutex
+
+	// Panel order persistence
+	panelOrder   []string
+	panelOrderMu sync.RWMutex
 }
 
 // NewService creates a new Service.
@@ -85,6 +89,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		assetProviders: make(map[string]AssetProvider),
 		port:           port,
 		clients:        make(map[chan []byte]bool),
+		panelOrder:     []string{},
 	}
 }
 
@@ -115,9 +120,21 @@ func (svc *Service) Initialize() error {
 	logger := svc.Deps.MustGetLogger()
 	ctx := svc.Deps.MustGetContext()
 
+	// Load panel order from state store
+	if ss := svc.Deps.GetStateStore(); ss != nil {
+		var order []string
+		if err := ss.Load("dashboard_panel_order", &order); err == nil {
+			svc.panelOrderMu.Lock()
+			svc.panelOrder = order
+			svc.panelOrderMu.Unlock()
+		}
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tabs", svc.handleGetTabs)
 	mux.HandleFunc("GET /api/panels", svc.handleGetPanels)
+	mux.HandleFunc("GET /api/dashboard/panel-order", svc.handleGetPanelOrder)
+	mux.HandleFunc("POST /api/dashboard/panel-order", svc.handleSavePanelOrder)
 	mux.HandleFunc("POST /api/tabs/{id}/action/{action}", svc.handleTabAction)
 	mux.HandleFunc("GET /events", svc.handleEvents)
 	mux.HandleFunc("GET /api/assets/{type}/{path...}", svc.handleGetAsset)
@@ -446,6 +463,41 @@ func (svc *Service) handleCSSAsset(w http.ResponseWriter, r *http.Request) {
 	// Serve from x/webui/resources/css/
 	filePath := fmt.Sprintf("x/webui/resources/css/%s", path)
 	http.ServeFile(w, r, filePath)
+}
+
+// handleGetPanelOrder returns the saved panel order.
+func (svc *Service) handleGetPanelOrder(w http.ResponseWriter, _ *http.Request) {
+	svc.panelOrderMu.RLock()
+	defer svc.panelOrderMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string][]string{"order": svc.panelOrder})
+}
+
+// handleSavePanelOrder saves the panel order from the request.
+func (svc *Service) handleSavePanelOrder(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Order []string `json:"order"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	svc.panelOrderMu.Lock()
+	svc.panelOrder = payload.Order
+	svc.panelOrderMu.Unlock()
+
+	// Save to state store if available
+	if ss := svc.Deps.GetStateStore(); ss != nil {
+		if err := ss.Save("dashboard_panel_order", svc.panelOrder); err != nil {
+			svc.Deps.MustGetLogger().Warn("webui: failed to save panel order to state store", "error", err)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // Check performs a basic health check of the web UI service.
