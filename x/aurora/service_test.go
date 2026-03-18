@@ -105,7 +105,7 @@ func TestService_ValidateConfig(t *testing.T) {
 }
 
 func TestService_Check(t *testing.T) {
-	// Mock NOAA server
+	// Mock NOAA server for OvationData
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		data := OvationData{
 			ForecastTime: "2026-02-18T21:00:00Z",
@@ -120,13 +120,28 @@ func TestService_Check(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// Mock NOAA forecast server
+	forecastServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Serve testdata/3-day-forecast.txt
+		data, err := os.ReadFile("testdata/3-day-forecast.txt")
+		if err != nil {
+			http.Error(w, "failed to read forecast data", http.StatusInternalServerError)
+			return
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Logf("failed to write forecast response: %v", err)
+		}
+	}))
+	t.Cleanup(forecastServer.Close)
+
 	deps := testDeps(t)
 	cfg := core.ServiceConfig{
 		Name: "aurora",
 		Type: "aurora",
 		Config: map[string]interface{}{
-			"lat": 45.0,
-			"lon": -93.0,
+			"lat":          45.0,
+			"lon":          -93.0,
+			"forecast_url": forecastServer.URL,
 		},
 		Pubs: map[string]core.ChannelInfo{
 			"events": {Name: "events"},
@@ -139,6 +154,7 @@ func TestService_Check(t *testing.T) {
 
 	var receivedChecks []core.Message
 	var receivedAlerts []core.Message
+	var receivedForecasts []core.Message
 	var mu sync.Mutex
 
 	messenger := deps.MustGetMessenger()
@@ -149,6 +165,8 @@ func TestService_Check(t *testing.T) {
 			receivedChecks = append(receivedChecks, msg)
 		case "aurora_alert":
 			receivedAlerts = append(receivedAlerts, msg)
+		case "aurora_forecast":
+			receivedForecasts = append(receivedForecasts, msg)
 		}
 		mu.Unlock()
 		return nil
@@ -168,6 +186,11 @@ func TestService_Check(t *testing.T) {
 	assert.Equal(t, "Aurora: 10%", receivedChecks[0].Summary)
 	assert.Len(t, receivedAlerts, 1)
 	assert.Equal(t, "Aurora Alert: 10%", receivedAlerts[0].Summary)
+	// Should have received a forecast message with parsed data
+	assert.Len(t, receivedForecasts, 1)
+	// Verify the forecast contains G events
+	forecastMsg := receivedForecasts[0]
+	assert.Equal(t, "aurora_forecast", forecastMsg.Event)
 }
 
 func TestService_InitializeAndGpsHandler(t *testing.T) {

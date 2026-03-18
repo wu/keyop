@@ -176,6 +176,48 @@ func (svc *Service) Check() error {
 			// Try to parse plain-text 3-day forecast into structured data
 			if pf, perr := Parse3DayForecastText(body); perr == nil && pf != nil && len(pf.Table) > 0 {
 				fc.Data = pf
+
+				// Extract and check for high G events (> G3)
+				currentGEvents, _ := extractGEvents(pf)
+				if len(currentGEvents) > 0 {
+					previousGEvents, _ := svc.loadPreviousGEvents()
+					newGEvents := filterNewEvents(currentGEvents, previousGEvents)
+
+					// If there are new G events, send an alert
+					if len(newGEvents) > 0 {
+						highest := findHighestGEvent(newGEvents)
+						if highest != nil {
+							alertText := fmt.Sprintf(
+								"Aurora alert! %s event predicted on %s from %s to %s UTC",
+								highest.GScale,
+								highest.StartTime.Format("Jan 2"),
+								highest.StartTime.Format("15:04"),
+								highest.EndTime.Format("15:04"),
+							)
+							alertMsg := core.Message{
+								ChannelName: svc.Cfg.Name,
+								ServiceName: svc.Cfg.Name,
+								ServiceType: svc.Cfg.Type,
+								Event:       "aurora_alert",
+								Text:        alertText,
+								Summary:     fmt.Sprintf("Aurora Alert: %s predicted", highest.GScale),
+								Data: core.AlertEvent{
+									Summary: fmt.Sprintf("Aurora Alert: %s predicted", highest.GScale),
+									Text:    alertText,
+								},
+							}
+							logger.Warn("aurora: send G-event alert", "text", alertText)
+							if err := messenger.Send(alertMsg); err != nil {
+								logger.Debug("aurora: failed to send G-event alert", "err", err)
+							}
+						}
+					}
+
+					// Save current G events for next comparison
+					if err := svc.savePreviousGEvents(currentGEvents); err != nil {
+						logger.Debug("aurora: failed to save G-events to state store", "err", err)
+					}
+				}
 			}
 
 			forecastMsg := core.Message{
