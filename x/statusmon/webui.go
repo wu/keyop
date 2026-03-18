@@ -27,6 +27,20 @@ func (svc *Service) WebUITab() webui.TabInfo {
 	}
 }
 
+// WebUIPanels returns panels provided by the statusmon service for the dashboard.
+func (svc *Service) WebUIPanels() []webui.PanelInfo {
+	return []webui.PanelInfo{
+		{
+			ID:          "statusmon",
+			Title:       "Services",
+			Content:     `<div class="panel" id="panel-statusmon"><div class="panel-body">Loading...</div></div>`,
+			JSPath:      "/api/assets/statusmon/statusmon-panel.js",
+			Event:       "statusmon",
+			ServiceType: svc.Cfg.Type,
+		},
+	}
+}
+
 // HandleWebUIAction handles actions from the WebUI.
 func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
 	switch action {
@@ -117,6 +131,11 @@ func (svc *Service) fetchStatus() (any, error) {
 				acknowledged = state.Acknowledged
 			}
 
+			// Clear acknowledged flag if status is now OK (no need to acknowledge OK status)
+			if level == "ok" {
+				acknowledged = false
+			}
+
 			statuses = append(statuses, StatusItem{
 				Name:         name,
 				Hostname:     hostname,
@@ -152,6 +171,12 @@ func (svc *Service) fetchStatus() (any, error) {
 			}
 		}
 
+		// Clear acknowledged flag if status is now OK (no need to acknowledge OK status)
+		acknowledged := state.Acknowledged
+		if level == "ok" {
+			acknowledged = false
+		}
+
 		statuses = append(statuses, StatusItem{
 			Name:         name,
 			Hostname:     "",
@@ -159,7 +184,7 @@ func (svc *Service) fetchStatus() (any, error) {
 			Details:      state.Details,
 			Level:        level,
 			LastSeen:     lastSeen,
-			Acknowledged: state.Acknowledged,
+			Acknowledged: acknowledged,
 		})
 	}
 
