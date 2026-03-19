@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// Compile-time interface assertion.
+var _ core.PayloadProvider = (*Service)(nil)
+
 // Event represents a notification event emitted by the 'notify' service.
 // It contains a timestamp, a short summary, whether it was sent, and optional details.
 type Event struct {

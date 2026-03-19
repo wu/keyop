@@ -85,7 +85,7 @@ func TestRuntimeInit_Order_RegistryThenPluginThenSubscribers(t *testing.T) {
 
 	// Manually invoke the logic we added to loadPlugin
 	dummySvc := newServiceFunc(deps, core.ServiceConfig{Name: "discovery-" + pluginName})
-	if rtPlugin, ok := dummySvc.(core.RuntimePlugin); ok {
+	if rtPlugin, ok := dummySvc.(core.PayloadProvider); ok {
 		reg := deps.MustGetMessenger().GetPayloadRegistry()
 		require.NotNil(t, reg)
 		err := rtPlugin.RegisterPayloads(reg)
@@ -281,7 +281,7 @@ func TestLoadPlugins_InvokesRegisterPayloads(t *testing.T) {
 
 	// Simulate what loadPlugin does:
 	dummySvc := newServiceFunc(deps, core.ServiceConfig{Name: "discovery-mock"})
-	if rtPlugin, ok := dummySvc.(core.RuntimePlugin); ok {
+	if rtPlugin, ok := dummySvc.(core.PayloadProvider); ok {
 		reg := deps.MustGetMessenger().GetPayloadRegistry()
 		err := rtPlugin.RegisterPayloads(reg)
 		assert.NoError(t, err)

@@ -4,11 +4,22 @@ import (
 	"database/sql"
 	"fmt"
 	"keyop/core"
+	"keyop/x/sqlite"
+	"keyop/x/webui"
 	"os"
 	"path/filepath"
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
+)
+
+// Compile-time interface assertions.
+var (
+	_ core.PayloadProvider  = (*Service)(nil)
+	_ sqlite.SchemaProvider = (*Service)(nil)
+	_ sqlite.Consumer       = (*Service)(nil)
+	_ webui.TabProvider     = (*Service)(nil)
+	_ webui.ActionProvider  = (*Service)(nil)
 )
 
 // SQLiteSchema returns the SQL DDL for the tables needed by the tides service.

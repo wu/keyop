@@ -1,0 +1,20 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/gps.sql
+
+  payloadTypes:
+    - service.owntracks.location.v1
+    - service.owntracks.enter.v1
+    - service.owntracks.exit.v1
+
+subs:
+
+  gps:
+    name: gps
+    description: process incoming gps location events
+
+  alerts:
+    name: alerts
+    description: process incoming region enter/exit events

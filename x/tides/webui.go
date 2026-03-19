@@ -186,5 +186,7 @@ func (svc *Service) fetchCurrentTide() (any, error) {
 		"currentLevel":     current.Value,
 		"peakLevel":        peak.Value,
 		"state":            state,
+		"lat":              svc.lat,
+		"lon":              svc.lon,
 	}, nil
 }

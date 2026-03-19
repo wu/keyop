@@ -26,6 +26,8 @@ func (e Event) PayloadType() string { return "service.aurora.v1" }
 type Forecast struct {
 	FetchedAt time.Time       `json:"fetched_at"`
 	SourceURL string          `json:"source_url,omitempty"`
+	Lat       float64         `json:"lat,omitempty"`
+	Lon       float64         `json:"lon,omitempty"`
 	Data      *ParsedForecast `json:"data,omitempty"`
 }
 

@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// Compile-time interface assertion.
+var _ core.PayloadProvider = (*Service)(nil)
+
 // HeartbeatEvent represents a heartbeat from a service.
 //
 // Note: type name is intentionally HeartbeatEvent for clarity when used across tests

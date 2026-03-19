@@ -1,5 +1,67 @@
 let container = null;
 
+// Compute civil dawn and dusk for a given date and location using the NOAA algorithm.
+// Returns {dawn: Date, dusk: Date} as UTC Date objects.
+function computeCivilDawnDusk(date, lat, lon) {
+    const rad = Math.PI / 180;
+    const deg = 180 / Math.PI;
+
+    const jd = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + 2440587.5;
+    const n = jd - 2451545.0;
+    const L = (280.460 + 0.9856474 * n) % 360;
+    const g = (357.528 + 0.9856003 * n) % 360;
+    const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
+    const epsilon = 23.439 - 0.0000004 * n;
+    const sinDec = Math.sin(epsilon * rad) * Math.sin(lambda * rad);
+    const dec = Math.asin(sinDec) * deg;
+
+    // Civil twilight depression = 6 degrees below horizon
+    const depression = 6;
+    const cosH = (Math.cos((90 + depression) * rad) - Math.sin(lat * rad) * Math.sin(dec * rad))
+        / (Math.cos(lat * rad) * Math.cos(dec * rad));
+
+    const baseMs = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    if (cosH < -1) {
+        // Polar day — always light
+        return {dawn: new Date(baseMs), dusk: new Date(baseMs + 86399000)};
+    }
+    if (cosH > 1) {
+        // Polar night — always dark; dawn == dusk == noon (no light)
+        return {dawn: new Date(baseMs + 43200000), dusk: new Date(baseMs + 43200000)};
+    }
+
+    const H = Math.acos(cosH) * deg;
+
+    // Solar noon UTC: 720 - 4*lon - eqTime (eqTime = 4*(L-lambda), minutes)
+    const eqTime = 4 * (L - lambda);
+    const solarNoonUTC = 720 - 4 * lon - eqTime; // minutes from UTC midnight
+
+    const dawnUTC = solarNoonUTC - H * 4; // minutes
+    const duskUTC = solarNoonUTC + H * 4;
+
+    return {
+        dawn: new Date(baseMs + dawnUTC * 60000),
+        dusk: new Date(baseMs + duskUTC * 60000),
+    };
+}
+
+// Returns 'day', 'night', or 'mixed' for the period (startDate..endDate) at lat/lon.
+function getLightType(startDate, endDate, lat, lon) {
+    // Compute dawn/dusk for the day containing the start of the period
+    const {dawn, dusk} = computeCivilDawnDusk(startDate, lat, lon);
+    const periodStart = startDate.getTime();
+    const periodEnd = endDate.getTime();
+    const dawnMs = dawn.getTime();
+    const duskMs = dusk.getTime();
+
+    // Period is entirely in daylight
+    if (periodStart >= dawnMs && periodEnd <= duskMs) return 'day';
+    // Period is entirely in darkness
+    if (periodEnd <= dawnMs || periodStart >= duskMs) return 'night';
+    // Otherwise mixed (spans dawn or dusk)
+    return 'mixed';
+}
+
 function formatRemaining(ms) {
     if (ms == null || isNaN(ms)) return '—';
     ms = Math.max(0, ms);
@@ -42,10 +104,12 @@ function convertUtcToLocal(utcHour, dateStr) {
     return utcDate;
 }
 
-function renderForecastTable(forecast) {
+function renderForecastTable(forecast, lat, lon) {
     if (!forecast || !forecast.data) return '';
     const pf = forecast.data;
     if (!pf.days || !pf.periods || !pf.table) return '';
+
+    const hasSolar = lat != null && lon != null;
 
     let html = '<table style="border-collapse: collapse; width: 100%;"><thead><tr>';
     html += '<th style="border: 1px solid var(--task-row-border); padding: 8px;">Date</th>';
@@ -86,6 +150,19 @@ function renderForecastTable(forecast) {
                 continue;
             }
 
+            // Determine daylight/night background
+            let rowBg = '';
+            if (hasSolar) {
+                const lightType = getLightType(startUtcDate, endUtcDate, lat, lon);
+                if (lightType === 'day') {
+                    rowBg = 'background-color: rgba(255,255,255,0.10);';
+                } else if (lightType === 'night') {
+                    rowBg = 'background-color: rgba(0,0,0,0.28);';
+                } else {
+                    rowBg = 'background-color: rgba(255,255,255,0.03);';
+                }
+            }
+
             // Format date as "tue may 17" (weekday, month, day)
             const dateStr = startUtcDate.toLocaleDateString('en-US', {
                 weekday: 'short',
@@ -123,7 +200,7 @@ function renderForecastTable(forecast) {
                 gEventText = entry.g_scale;
             }
 
-            html += `<tr>`;
+            html += `<tr style="${rowBg}">`;
             html += `<td style="border: 1px solid var(--task-row-border); padding: 8px;">${dateStr}</td>`;
             html += `<td style="border: 1px solid var(--task-row-border); padding: 8px;">${startTimeStr}</td>`;
             html += `<td style="border: 1px solid var(--task-row-border); padding: 8px;">${endTimeStr}</td>`;
@@ -181,13 +258,49 @@ function extractKpValues(forecast, futureOnly = false) {
     return kpValues;
 }
 
+// Like extractKpValues but also returns start/end dates for each entry.
+function extractKpEntries(forecast, futureOnly = false) {
+    if (!forecast || !forecast.data || !forecast.data.table) {
+        return [];
+    }
+
+    const pf = forecast.data;
+    const entries = [];
+    const now = new Date();
+
+    for (let dayIndex = 0; dayIndex < pf.days.length; dayIndex++) {
+        const dayStr = pf.days[dayIndex];
+
+        for (const period of pf.periods) {
+            const periodEntries = pf.table[period] || [];
+            const entry = periodEntries[dayIndex];
+
+            if (!entry || entry.kp === null || entry.kp === undefined) {
+                continue;
+            }
+
+            const {start: startHour, end: endHour} = parseUtcHours(period);
+            const startDate = convertUtcToLocal(startHour, dayStr);
+            const endDate = convertUtcToLocal(endHour, dayStr);
+            if (endHour < startHour) endDate.setDate(endDate.getDate() + 1);
+
+            if (futureOnly && startDate < now) continue;
+
+            entries.push({kp: entry.kp, startDate, endDate});
+        }
+    }
+
+    return entries;
+}
+
 // Render a sparkline graph showing KP values over time
-function renderSparkline(forecast, width = 300, futureOnly = true) {
-    const kpValues = extractKpValues(forecast, futureOnly);
-    if (kpValues.length === 0) {
+function renderSparkline(forecast, width = 300, futureOnly = true, lat = null, lon = null) {
+    const kpEntries = extractKpEntries(forecast, futureOnly);
+    if (kpEntries.length === 0) {
         return '';
     }
 
+    const kpValues = kpEntries.map(e => e.kp);
     const height = 60;
     const padding = 5;
     const graphWidth = width - (padding * 2);
@@ -199,8 +312,8 @@ function renderSparkline(forecast, width = 300, futureOnly = true) {
     const range = maxKp - minKp || 1; // Avoid division by zero
 
     // Calculate points for the sparkline
-    const points = kpValues.map((kp, i) => {
-        const x = padding + (i / (kpValues.length - 1 || 1)) * graphWidth;
+    const points = kpEntries.map(({kp}, i) => {
+        const x = padding + (i / (kpEntries.length - 1 || 1)) * graphWidth;
         const normalizedY = (kp - minKp) / range;
         const y = padding + graphHeight - (normalizedY * graphHeight);
         return {x, y, kp};
@@ -214,6 +327,24 @@ function renderSparkline(forecast, width = 300, futureOnly = true) {
 
     // Create SVG
     let svg = `<svg width="${width}" height="${height}" style="margin-bottom: 12px;">`;
+
+    // Draw daylight/night background rects if lat/lon available
+    if (lat != null && lon != null && kpEntries.length > 1) {
+        const totalMs = kpEntries[kpEntries.length - 1].endDate - kpEntries[0].startDate;
+        const startMs = kpEntries[0].startDate.getTime();
+        for (let i = 0; i < kpEntries.length; i++) {
+            const {startDate, endDate} = kpEntries[i];
+            const lightType = getLightType(startDate, endDate, lat, lon);
+            const color = lightType === 'day'
+                ? 'rgba(255,255,255,0.10)'
+                : lightType === 'night'
+                    ? 'rgba(0,0,0,0.28)'
+                    : 'rgba(255,255,255,0.03)';
+            const rx = padding + ((startDate - startMs) / totalMs) * graphWidth;
+            const rw = ((endDate - startDate) / totalMs) * graphWidth;
+            svg += `<rect x="${rx}" y="${padding}" width="${rw}" height="${graphHeight}" fill="${color}"/>`;
+        }
+    }
 
     // Draw grid lines for reference
     svg += `<line x1="${padding}" y1="${padding}" x2="${padding}" y2="${padding + graphHeight}" stroke="var(--task-row-border)" stroke-width="1"/>`;
@@ -278,8 +409,10 @@ export function init(el) {
                 forecastEl = pre;
             }
             if (data.forecast && data.forecast.data) {
-                const sparklineHtml = renderSparkline(data.forecast);
-                const tableHtml = renderForecastTable(data.forecast);
+                const lat = cur && cur.lat != null ? cur.lat : (data.forecast.data.lat ?? null);
+                const lon = cur && cur.lon != null ? cur.lon : (data.forecast.data.lon ?? null);
+                const sparklineHtml = renderSparkline(data.forecast, 300, true, lat, lon);
+                const tableHtml = renderForecastTable(data.forecast, lat, lon);
                 forecastEl.innerHTML = (sparklineHtml || '') + (tableHtml || 'No forecast available');
             }
         })
@@ -347,8 +480,10 @@ export function onMessage(msg) {
         } else {
             dataObj = msg.data;
         }
-        const sparklineHtml = renderSparkline({data: dataObj});
-        const tableHtml = renderForecastTable({data: dataObj});
+        const sparklineHtml = renderSparkline({data: dataObj}, 300, true, lat, lon);
+        const lat = msg.data && msg.data.lat != null ? msg.data.lat : (dataObj && dataObj.lat != null ? dataObj.lat : null);
+        const lon = msg.data && msg.data.lon != null ? msg.data.lon : (dataObj && dataObj.lon != null ? dataObj.lon : null);
+        const tableHtml = renderForecastTable({data: dataObj}, lat, lon);
         forecastEl.innerHTML = (sparklineHtml || '') + (tableHtml || 'No forecast available');
     }
 }

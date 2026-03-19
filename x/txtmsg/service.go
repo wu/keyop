@@ -50,6 +50,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// Name satisfies the core.PayloadProvider interface.
+func (svc *Service) Name() string { return "moon" }
+
 // RegisterPayloads registers the messages payload types with the provided registry.
 func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
 	if err := reg.Register("txtmsg", func() any { return &Event{} }); err != nil {

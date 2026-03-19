@@ -1,9 +1,9 @@
 // Package core implements the core service for keyop and provides ValidateConfig, Initialize and Check hooks.
 package core
 
-// RuntimePlugin defines the interface for external plugins that can register
+// PayloadProvider defines the interface for external plugins that can register
 // their own payload types at runtime.
-type RuntimePlugin interface {
+type PayloadProvider interface {
 	Name() string
 	RegisterPayloads(reg PayloadRegistry) error
 }

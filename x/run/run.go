@@ -92,8 +92,18 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
-		// Check if service implements RuntimePlugin for payload registration
-		if rtPlugin, ok := service.(core.RuntimePlugin); ok {
+		// Check if service implements PayloadProvider for payload registration
+		// First detect partial implementation: has RegisterPayloads but not Name() (missing PayloadProvider).
+		type registrar interface {
+			RegisterPayloads(reg core.PayloadRegistry) error
+		}
+		if _, hasRegister := service.(registrar); hasRegister {
+			if _, ok := service.(core.PayloadProvider); !ok {
+				return fmt.Errorf("service %q implements RegisterPayloads but not Name(): it must implement the full core.PayloadProvider interface", serviceConfig.Name)
+			}
+		}
+
+		if rtPlugin, ok := service.(core.PayloadProvider); ok {
 			reg := serviceDeps.MustGetMessenger().GetPayloadRegistry()
 			if reg != nil {
 				// Built-in services might already have their payloads registered if they are multiple instances,

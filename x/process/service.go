@@ -43,6 +43,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// Name satisfies the core.PayloadProvider interface.
+func (svc *Service) Name() string { return "process" }
+
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()

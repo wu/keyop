@@ -61,7 +61,9 @@ export function onMessage(msg) {
                         sparklineRecords: data.sparklineRecords || [],
                         currentLevel: data.currentLevel,
                         peakLevel: data.peakLevel,
-                        state: data.state
+                        state: data.state,
+                        lat: data.lat,
+                        lon: data.lon,
                     };
                     updatePanel();
                 }
@@ -79,6 +81,8 @@ function updatePanel() {
     const event = lastTideData.event || lastTideData;
     const sparklineRecords = lastTideData.sparklineRecords || [];
     const state = lastTideData.state || event.state || '';
+    const lat = lastTideData.lat != null ? lastTideData.lat : null;
+    const lon = lastTideData.lon != null ? lastTideData.lon : null;
 
     console.log('=== updatePanel ===');
     console.log('Current level:', lastTideData.currentLevel);
@@ -94,7 +98,7 @@ function updatePanel() {
     html += `<div style="font-weight: bold; margin-bottom: 6px;">Tide Forecast</div>`;
     if (sparklineRecords.length > 0) {
         html += `<div id="tides-sparkline" style="margin-top: 0px; margin-bottom: 12px;">`;
-        html += renderSparkline(sparklineRecords);
+        html += renderSparkline(sparklineRecords, lat, lon);
         html += `</div>`;
     }
     html += `</div>`;
@@ -131,7 +135,34 @@ function updatePanel() {
     panelBody.innerHTML = html;
 }
 
-function renderSparkline(records) {
+// Compute civil dawn and dusk for a given date at lat/lon (NOAA algorithm).
+// Returns {dawn: Date, dusk: Date} as UTC Date objects.
+function computeCivilDawnDusk(date, lat, lon) {
+    const rad = Math.PI / 180;
+    const deg = 180 / Math.PI;
+    const jd = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + 2440587.5;
+    const n = jd - 2451545.0;
+    const L = (280.460 + 0.9856474 * n) % 360;
+    const g = (357.528 + 0.9856003 * n) % 360;
+    const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
+    const epsilon = 23.439 - 0.0000004 * n;
+    const sinDec = Math.sin(epsilon * rad) * Math.sin(lambda * rad);
+    const dec = Math.asin(sinDec) * deg;
+    const cosH = (Math.cos(96 * rad) - Math.sin(lat * rad) * Math.sin(dec * rad))
+        / (Math.cos(lat * rad) * Math.cos(dec * rad));
+    const baseMs = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    if (cosH < -1) return {dawn: new Date(baseMs), dusk: new Date(baseMs + 86399000)};
+    if (cosH > 1) return {dawn: new Date(baseMs + 43200000), dusk: new Date(baseMs + 43200000)};
+    const H = Math.acos(cosH) * deg;
+    const eqTime = 4 * (L - lambda);
+    const solarNoonUTC = 720 - 4 * lon - eqTime;
+    return {
+        dawn: new Date(baseMs + (solarNoonUTC - H * 4) * 60000),
+        dusk: new Date(baseMs + (solarNoonUTC + H * 4) * 60000),
+    };
+}
+
+function renderSparkline(records, lat = null, lon = null) {
     const values = records.map(r => parseFloat(r.v || r.value || 0));
     if (values.length === 0) return '';
 
@@ -185,6 +216,32 @@ function renderSparkline(records) {
     // Create SVG with fixed dimensions (matching aurora panel pattern)
     let svg = `<svg width="${width}" height="${height}" style="margin-top: 8px;">`;
 
+    // Draw daylight/night background if lat/lon available
+    if (lat != null && lon != null && timeRange > 0) {
+        // Sample background in ~30-min slices across the time range
+        const slices = 48;
+        const sliceMs = timeRange / slices;
+        for (let i = 0; i < slices; i++) {
+            const sliceStart = new Date(minTime + i * sliceMs);
+            const sliceEnd = new Date(minTime + (i + 1) * sliceMs);
+            const {dawn, dusk} = computeCivilDawnDusk(sliceStart, lat, lon);
+            const s = sliceStart.getTime(), e = sliceEnd.getTime();
+            const d = dawn.getTime(), k = dusk.getTime();
+            let lightType;
+            if (s >= d && e <= k) lightType = 'day';
+            else if (e <= d || s >= k) lightType = 'night';
+            else lightType = 'mixed';
+            const color = lightType === 'day'
+                ? 'rgba(255,255,255,0.10)'
+                : lightType === 'night'
+                    ? 'rgba(0,0,0,0.28)'
+                    : 'rgba(255,255,255,0.03)';
+            const rx = padding + (i / slices) * graphWidth;
+            const rw = graphWidth / slices + 0.5; // slight overlap to avoid gaps
+            svg += `<rect x="${rx}" y="${padding}" width="${rw}" height="${graphHeight}" fill="${color}"/>`;
+        }
+    }
+
     // Draw vertical line at current time (based on actual time position in range)
     const currentX = padding + (currentPosition * graphWidth);
     svg += `<line x1="${currentX}" y1="${padding}" x2="${currentX}" y2="${height - padding}" stroke="var(--accent-blue, #9b5af0)" stroke-width="2" opacity="0.3"/>`;
@@ -207,3 +264,4 @@ function renderSparkline(records) {
 
     return svg;
 }
+

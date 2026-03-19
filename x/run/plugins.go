@@ -96,12 +96,12 @@ func loadPlugin(info PluginInfo, deps core.Dependencies) error {
 		return fmt.Errorf("could not open plugin: %w", err)
 	}
 
-	// 1. Try to register payloads if it's a RuntimePlugin
+	// 1. Try to register payloads if it's a PayloadProvider
 	// We need a way to get the plugin instance.
 	// Common pattern is a 'GetPlugin' or looking up the service constructor and checking if it's a plugin.
 	// However, usually we lookup a symbol that returns the plugin interface.
 
-	// Let's see if there's a "Plugin" symbol or if NewService returns something that implements RuntimePlugin.
+	// Let's see if there's a "Plugin" symbol or if NewService returns something that implements PayloadProvider.
 	// Given the current structure, we register the constructor in ServiceRegistry.
 
 	symbol, err := p.Lookup("NewService")
@@ -117,9 +117,9 @@ func loadPlugin(info PluginInfo, deps core.Dependencies) error {
 	// To register payloads, we need an instance of the plugin.
 	// Since NewService might be called multiple times for different service instances,
 	// we should ideally have a one-time registration.
-	// Let's try to invoke NewService with a dummy config to see if it implements RuntimePlugin.
+	// Let's try to invoke NewService with a dummy config to see if it implements PayloadProvider.
 	dummySvc := newServiceFunc(deps, core.ServiceConfig{Name: "discovery-" + info.Name})
-	if rtPlugin, ok := dummySvc.(core.RuntimePlugin); ok {
+	if rtPlugin, ok := dummySvc.(core.PayloadProvider); ok {
 		reg := deps.MustGetMessenger().GetPayloadRegistry()
 		if reg != nil {
 			if err := rtPlugin.RegisterPayloads(reg); err != nil {

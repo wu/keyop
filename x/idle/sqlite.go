@@ -3,6 +3,17 @@ package idle
 import (
 	"database/sql"
 	"keyop/core"
+	"keyop/x/sqlite"
+	"keyop/x/webui"
+)
+
+// Compile-time interface assertions.
+var (
+	_ core.PayloadProvider  = (*Service)(nil)
+	_ sqlite.SchemaProvider = (*Service)(nil)
+	_ sqlite.Consumer       = (*Service)(nil)
+	_ webui.TabProvider     = (*Service)(nil)
+	_ webui.ActionProvider  = (*Service)(nil)
 )
 
 // SQLiteSchema returns the SQL DDL for the table needed by the idle service.

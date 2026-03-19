@@ -22,8 +22,9 @@ async function loadTabs() {
         'idle': 7,
         'aurora': 8,
         'tides': 9,
-        'temps': 10,
-        'messages': 11
+        'gps': 10,
+        'temps': 11,
+        'messages': 12
     };
     
     tabs.sort((a, b) => {

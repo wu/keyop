@@ -2,6 +2,9 @@ package tides
 
 import "keyop/core"
 
+// Compile-time interface assertions.
+var _ core.PayloadProvider = (*Service)(nil)
+
 // TideEvent represents the payload sent with the 'tide' event. It carries the
 // station identifier, the current reading, an optional next reading and peak,
 // and optional low-tide periods used by the web UI.
@@ -33,6 +36,9 @@ type TideAlertEvent struct {
 
 // PayloadType returns the canonical payload type for tide alerts.
 func (e TideAlertEvent) PayloadType() string { return "service.tides.tideAlert.v1" }
+
+// Name satisfies the core.PayloadProvider interface.
+func (svc *Service) Name() string { return "tides" }
 
 // RegisterPayloads registers the tide payloads with the provided registry.
 // It follows the same duplicate-registration handling pattern as other services.

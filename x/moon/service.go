@@ -54,6 +54,9 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	}
 }
 
+// Name satisfies the core.PayloadProvider interface.
+func (svc *Service) Name() string { return "moon" }
+
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	return nil

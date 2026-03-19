@@ -51,7 +51,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	return svc
 }
 
-// Name returns the canonical service type name for aurora (implements core.RuntimePlugin).
+// Name returns the canonical service type name for aurora (implements core.PayloadProvider).
 func (svc *Service) Name() string { return "aurora" }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
@@ -169,9 +169,19 @@ func (svc *Service) Check() error {
 	if svc.apiForecastURL != "" {
 		logger.Warn("aurora: fetching 3-day forecast")
 		if body, err := FetchOvationForecast(svc.apiForecastURL); err == nil {
+			lat := svc.Lat
+			lon := svc.Lon
+			if svc.cachedLat != nil {
+				lat = *svc.cachedLat
+			}
+			if svc.cachedLon != nil {
+				lon = *svc.cachedLon
+			}
 			fc := Forecast{
 				FetchedAt: time.Now(),
 				SourceURL: svc.apiForecastURL,
+				Lat:       lat,
+				Lon:       lon,
 			}
 			// Try to parse plain-text 3-day forecast into structured data
 			if pf, perr := Parse3DayForecastText(body); perr == nil && pf != nil && len(pf.Table) > 0 {

@@ -246,8 +246,9 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 		"idle":      7,
 		"aurora":    8,
 		"tides":     9,
-		"temps":     10,
-		"messages":  11,
+		"gps":       10,
+		"temps":     11,
+		"messages":  12,
 	}
 
 	sort.Slice(tabs, func(i, j int) bool {

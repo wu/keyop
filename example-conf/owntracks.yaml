@@ -1,0 +1,28 @@
+x: owntracks
+
+config:
+
+  port: 2331
+
+  pub_preprocess:
+    - when: 'event eq "location"'
+      updates:
+        channelName: owntracks
+
+    - when: 'event eq "gps"'
+      updates:
+        channelName: gps
+
+    - when: 'event eq "battery_metric"'
+      updates:
+        channelName: metrics
+
+    - when: 'event eq "region_enter"'
+      updates:
+        channelName: alerts
+
+    - when: 'event eq "region_exit"'
+      updates:
+        channelName: alerts
+
+
