@@ -1,3 +1,45 @@
+## [0.6.0](https://github.com/wu/keyop/compare/0.5.0...0.6.0) (2026-03-19)
+
+### Features
+
+* add aurora forecast support and multi-day data parsing ([bb0e2ea](https://github.com/wu/keyop/commit/bb0e2ea3b428df25b77bc193bd398106c6e38250))
+* add full-text search option for notes ([b4d8d97](https://github.com/wu/keyop/commit/b4d8d976eed3183fe40c42e942adfee869bce596))
+* add G-event extraction and alerting for aurora forecasts ([818c285](https://github.com/wu/keyop/commit/818c2858f1c95751e69b255754cf01ab7d2eb98a))
+* add inline task command input and execution ([735a7c5](https://github.com/wu/keyop/commit/735a7c56bae6c9b961ff997537f567501645cf79))
+* add status acknowledgment support in status monitor ([dc0c5c9](https://github.com/wu/keyop/commit/dc0c5c93636054f11a7aead22dc44b105931a685))
+* add subtask management in task UI ([85e50e4](https://github.com/wu/keyop/commit/85e50e40990f3cf7437c723b4ad39e426a5dbcfa))
+* add support for marking tasks as done and subtask improvements ([b2a621f](https://github.com/wu/keyop/commit/b2a621fa387903da235acf68ee63e31d8b31b264))
+* add tags view and in-progress timers to task UI ([127b7f4](https://github.com/wu/keyop/commit/127b7f4e66cbbd1d329813fee7331785dc0f5401))
+* add WebUI support for idle and status monitoring panels ([d289baf](https://github.com/wu/keyop/commit/d289baf9a125e59f25ffee4ecc35ef892fb1099b))
+* auto-create today's journal entry if missing ([80904af](https://github.com/wu/keyop/commit/80904af2f6b6f787f630a5f65f404f28bfdf74b8))
+* enable draggable dashboard panels with order persistence ([03c426a](https://github.com/wu/keyop/commit/03c426ad9b1fc4101f9e09ed2799673d323da4cc))
+* enhance alerts and errors UI with service filtering and unread count updates ([c32613a](https://github.com/wu/keyop/commit/c32613a8ec6ac45dfc8b97d6affa95a6676f1bf5))
+* enhance markdown processing with wiki-style links, plain URL conversion, and improved note linking ([165280c](https://github.com/wu/keyop/commit/165280c33e6319fb927e10c767d280830421fbca))
+* enhance status monitoring and alerts handling ([b609ac8](https://github.com/wu/keyop/commit/b609ac857852cc0a4487d43c6d4fe8b389463643))
+* enhance task navigation and keyboard controls ([6219004](https://github.com/wu/keyop/commit/6219004b46d1377014fabd6aaca6ddf7236f3239))
+* enhance timezone handling for tide reports ([3141c95](https://github.com/wu/keyop/commit/3141c954800692820f94536f5d326657da469881))
+* enhance UI and backend for alerts, panels, and tide data ([162b844](https://github.com/wu/keyop/commit/162b844af9d22c1e2f518f6f3b71c442fe0e8129))
+* expand event support with TempEvent and WeatherStationEvent ([40822f9](https://github.com/wu/keyop/commit/40822f962c1eae7f6f47018324b9e0726fc48667))
+* implement custom tab sorting logic ([bb528ad](https://github.com/wu/keyop/commit/bb528adf360b62fc47559a1a0fc4598a6219efe6))
+* improve task metadata display ([c7f660d](https://github.com/wu/keyop/commit/c7f660dfc7ebe29208025e91741f0d5437694e46))
+* introduce journaling service with Web UI and markdown storage ([5586958](https://github.com/wu/keyop/commit/55869587a078b9e94c1d6d042cdb7a2e59dbf5d7))
+* rename `git` service and add ContentChange event support ([2ee9240](https://github.com/wu/keyop/commit/2ee9240dd855fc0498426936925cd46ecd0f35be))
+* unify alert and task UI with improved styling and functionality ([76f7217](https://github.com/wu/keyop/commit/76f7217c737bfa3543c20099ed10669258eba108))
+* update in-progress task styling ([0497812](https://github.com/wu/keyop/commit/0497812ac160e3b17e91a602c1531f9241811416))
+
+### Bug Fixes
+
+* display separate badges for status critical and warning ([08da055](https://github.com/wu/keyop/commit/08da0555c472de3a3df1b69184e7e3ee5e37bdfb))
+* plot message stats with rolling 60-second average ([f15780a](https://github.com/wu/keyop/commit/f15780a9d413f72789375953212524603b9cc034))
+* resolve issue with missing data in idle chart ([86a59c9](https://github.com/wu/keyop/commit/86a59c998d34dd3a36c84d0c67209ee03c4bb250))
+
+### Refactoring
+
+* add notes, modularize markdown processing and rendering ([29ff88c](https://github.com/wu/keyop/commit/29ff88ce005828622ec332c714abe303bc209124))
+* introduce new 'tasks' web ui ([d95da2d](https://github.com/wu/keyop/commit/d95da2da99982812709cb4eca574578af3400b01))
+* standardize alert event handling and configurations ([72d829c](https://github.com/wu/keyop/commit/72d829c0341f4fa51d7f554a4d6b2e42e4eec55d))
+* update journal UI and backend to improve usability and markdown rendering ([d3f0c03](https://github.com/wu/keyop/commit/d3f0c0397834297b162f04f4c34b0bb8135af76c))
+
 ## [0.5.0](https://github.com/wu/keyop/compare/0.4.0...0.5.0) (2026-03-13)
 
 ### Features
