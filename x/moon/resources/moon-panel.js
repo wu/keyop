@@ -3,10 +3,11 @@ let body = null;
 let elPhase = null;
 let elPhaseValue = null;
 let elIllum = null;
-let elRemaining = null;
+let elFullMoonRemaining = null;
+let elNewMoonRemaining = null;
 let remainingTimer = null;
-let nextEventTime = null;
-let nextEventName = null;
+let nextFullMoonTime = null;
+let nextNewMoonTime = null;
 
 function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
@@ -101,28 +102,27 @@ function clearRemainingTimer() {
 }
 
 function updateRemainingDisplay() {
-    if (!elRemaining) return;
-    if (!nextEventTime && body && body.dataset && body.dataset.nextEventTime) {
-        const parsed = new Date(body.dataset.nextEventTime);
-        if (!isNaN(parsed) && parsed > new Date()) {
-            nextEventTime = parsed;
-            nextEventName = body.dataset.nextEventName || null;
+    const now = new Date();
+
+    // Update full moon timer
+    if (elFullMoonRemaining && nextFullMoonTime) {
+        const diff = nextFullMoonTime - now;
+        if (diff > 0) {
+            elFullMoonRemaining.textContent = formatRemaining(diff);
         } else {
-            delete body.dataset.nextEventTime;
-            delete body.dataset.nextEventName;
+            elFullMoonRemaining.textContent = 'Now';
         }
     }
-    if (!nextEventTime) {
-        elRemaining.textContent = '';
-        return;
+
+    // Update new moon timer
+    if (elNewMoonRemaining && nextNewMoonTime) {
+        const diff = nextNewMoonTime - now;
+        if (diff > 0) {
+            elNewMoonRemaining.textContent = formatRemaining(diff);
+        } else {
+            elNewMoonRemaining.textContent = 'Now';
+        }
     }
-    const now = new Date();
-    const diff = nextEventTime - now;
-    if (diff <= 0) {
-        elRemaining.textContent = 'Now';
-        return;
-    }
-    elRemaining.textContent = `${nextEventName ? nextEventName + ' in ' : 'In '}${formatRemaining(diff)}`;
 }
 
 export function init(el) {
@@ -136,15 +136,22 @@ export function init(el) {
         <div class="sun-wrapper">
             <div class="sun-icon"><img class="moon-image" src="/images/moon/new.png" alt="Moon phase"></div>
             <div class="sun-event">Loading…</div>
-            <div class="sun-remaining">—</div>
-            <div class="sun-meta">
-                <div class="sun-length sun-day">
+            <div class="sun-meta" style="flex-direction: column; gap: 12px;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
                     <div class="sun-label">Phase</div>
                     <div class="sun-value sun-day-value">—</div>
                 </div>
-                <div class="sun-length sun-night">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
                     <div class="sun-label">Illumination</div>
                     <div class="sun-value sun-night-value">—</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div class="sun-label">Full Moon</div>
+                    <div class="sun-value moon-full-remaining">—</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div class="sun-label">New Moon</div>
+                    <div class="sun-value moon-new-remaining">—</div>
                 </div>
             </div>
         </div>
@@ -152,40 +159,39 @@ export function init(el) {
 
     elPhase = body.querySelector('.sun-event');
     elIllum = body.querySelector('.sun-night-value');
-    elRemaining = body.querySelector('.sun-remaining');
     elPhaseValue = body.querySelector('.sun-day-value');
+    elFullMoonRemaining = body.querySelector('.moon-full-remaining');
+    elNewMoonRemaining = body.querySelector('.moon-new-remaining');
 
-    // resume next event from localStorage or dataset
-    if (body.dataset && body.dataset.nextEventTime) {
-        const p = new Date(body.dataset.nextEventTime);
-        if (!isNaN(p) && p > new Date()) {
-            nextEventTime = p;
-            nextEventName = body.dataset.nextEventName || null;
-        } else {
-            delete body.dataset.nextEventTime;
-            delete body.dataset.nextEventName;
-        }
-    } else {
-        try {
-            if (typeof localStorage !== 'undefined') {
-                const ls = localStorage.getItem('panel-moon-nextEventTime');
-                if (ls) {
-                    const p = new Date(ls);
-                    if (!isNaN(p) && p > new Date()) {
-                        nextEventTime = p;
-                        nextEventName = localStorage.getItem('panel-moon-nextEventName') || null;
-                        if (body && body.dataset) body.dataset.nextEventTime = ls;
-                    } else {
-                        localStorage.removeItem('panel-moon-nextEventTime');
-                        localStorage.removeItem('panel-moon-nextEventName');
-                    }
+    // Resume next events from localStorage
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const fullLS = localStorage.getItem('panel-moon-nextFullTime');
+            if (fullLS) {
+                const p = new Date(fullLS);
+                if (!isNaN(p) && p > new Date()) {
+                    nextFullMoonTime = p;
+                    if (body && body.dataset) body.dataset.nextFullTime = fullLS;
+                } else {
+                    localStorage.removeItem('panel-moon-nextFullTime');
                 }
             }
-        } catch (e) {
+
+            const newLS = localStorage.getItem('panel-moon-nextNewTime');
+            if (newLS) {
+                const p = new Date(newLS);
+                if (!isNaN(p) && p > new Date()) {
+                    nextNewMoonTime = p;
+                    if (body && body.dataset) body.dataset.nextNewTime = newLS;
+                } else {
+                    localStorage.removeItem('panel-moon-nextNewTime');
+                }
+            }
         }
+    } catch (e) {
     }
 
-    if (nextEventTime) {
+    if (nextFullMoonTime || nextNewMoonTime) {
         updateRemainingDisplay();
         if (!remainingTimer) remainingTimer = setInterval(updateRemainingDisplay, 1000);
     }
@@ -207,64 +213,51 @@ export function onMessage(msg) {
         // illumination: prefer server-provided illumination if present
         if (data.illumination !== undefined) {
             const illum = Number(data.illumination);
-            if (!isNaN(illum) && elIllum) elIllum.textContent = `${illum}% illuminated`;
+            if (!isNaN(illum) && elIllum) elIllum.textContent = `${illum}%`;
         } else if (data.phase !== undefined) {
             const p = Number(data.phase);
             const illum = computeIlluminationFromPhase(p);
-            if (!isNaN(illum) && elIllum) elIllum.textContent = `${illum}% illuminated`;
+            if (!isNaN(illum) && elIllum) elIllum.textContent = `${illum}%`;
         } else if (elIllum) {
             elIllum.textContent = '';
         }
 
-        // If server sent an absolute next event time, use it
-        if (data.next_major_time) {
-            const t = new Date(data.next_major_time);
-            if (!isNaN(t)) {
-                nextEventTime = t;
-                nextEventName = data.next_major_name || null;
+        // Handle next_full time from server
+        if (data.next_full) {
+            const t = new Date(data.next_full);
+            if (!isNaN(t) && t > new Date()) {
+                nextFullMoonTime = t;
                 if (body && body.dataset) {
-                    body.dataset.nextEventTime = t.toISOString();
-                    body.dataset.nextEventName = nextEventName || '';
+                    body.dataset.nextFullTime = t.toISOString();
                 }
                 try {
                     if (typeof localStorage !== 'undefined') {
-                        localStorage.setItem('panel-moon-nextEventTime', t.toISOString());
-                        localStorage.setItem('panel-moon-nextEventName', nextEventName || '');
+                        localStorage.setItem('panel-moon-nextFullTime', t.toISOString());
                     }
                 } catch (e) {
                 }
-                updateRemainingDisplay();
-                clearRemainingTimer();
-                remainingTimer = setInterval(updateRemainingDisplay, 1000);
             }
         }
-    }
 
-    // If message text contains "Next <Type> in <duration>", set countdown
-    const text = msg.text || msg.summary || '';
-    const m = text.match(/Next\s+(New Moon|Full Moon)\s+in\s+(.+)$/i);
-    if (m) {
-        const nextName = m[1];
-        const durStr = m[2];
-        const ms = parseDurationLike(durStr);
-        if (!isNaN(ms)) {
-            const fut = new Date(Date.now() + ms);
-            nextEventTime = fut;
-            nextEventName = nextName;
-            if (body && body.dataset) {
-                body.dataset.nextEventTime = fut.toISOString();
-                body.dataset.nextEventName = nextName;
-            }
-            try {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem('panel-moon-nextEventTime', fut.toISOString());
-                    localStorage.setItem('panel-moon-nextEventName', nextName);
+        // Handle next_new time from server
+        if (data.next_new) {
+            const t = new Date(data.next_new);
+            if (!isNaN(t) && t > new Date()) {
+                nextNewMoonTime = t;
+                if (body && body.dataset) {
+                    body.dataset.nextNewTime = t.toISOString();
                 }
-            } catch (e) {
+                try {
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem('panel-moon-nextNewTime', t.toISOString());
+                    }
+                } catch (e) {
+                }
             }
-            updateRemainingDisplay();
-            clearRemainingTimer();
-            remainingTimer = setInterval(updateRemainingDisplay, 1000);
         }
+
+        updateRemainingDisplay();
+        clearRemainingTimer();
+        remainingTimer = setInterval(updateRemainingDisplay, 1000);
     }
 }

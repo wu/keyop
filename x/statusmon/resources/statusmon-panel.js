@@ -34,14 +34,17 @@ export function onMessage(msg) {
 function updatePanel(statuses) {
     if (!panelBody) return;
 
-    // Calculate status counts
-    const totalServices = statuses.length;
-    const okServices = statuses.filter(s => (s.level || 'ok').toLowerCase() === 'ok').length;
-    const warningServices = statuses.filter(s => (s.level || 'ok').toLowerCase() === 'warning');
-    const criticalServices = statuses.filter(s => (s.level || 'ok').toLowerCase() === 'critical');
+    // Filter out acknowledged problems from the counts
+    const activeStatuses = statuses.filter(s => !s.acknowledged || (s.level || 'ok').toLowerCase() === 'ok');
+
+    // Calculate status counts (excluding acked problems)
+    const totalServices = activeStatuses.length;
+    const okServices = activeStatuses.filter(s => (s.level || 'ok').toLowerCase() === 'ok').length;
+    const warningServices = activeStatuses.filter(s => (s.level || 'ok').toLowerCase() === 'warning');
+    const criticalServices = activeStatuses.filter(s => (s.level || 'ok').toLowerCase() === 'critical');
     const ackedProblems = statuses.filter(s => s.acknowledged && ((s.level || 'ok').toLowerCase() === 'warning' || (s.level || 'ok').toLowerCase() === 'critical'));
 
-    // Determine overall status
+    // Determine overall status (based only on active, non-acked problems)
     let overallStatus = 'ok';
     if (criticalServices.length > 0) {
         overallStatus = 'critical';
@@ -84,8 +87,7 @@ function updatePanel(statuses) {
         if (criticalServices.length > 0) {
             problemsHtml += `<div style="font-size: 0.85em; color: #ef4444; font-weight: bold;">Critical: ${criticalServices.length}</div>`;
             for (const service of criticalServices) {
-                const ackedTag = service.acknowledged ? ' [✓]' : '';
-                problemsHtml += `<div style="font-size: 0.8em; color: #ef4444;">${service.name}${ackedTag}</div>`;
+                problemsHtml += `<div style="font-size: 0.8em; color: #ef4444;">${service.name}</div>`;
             }
         }
 
@@ -93,8 +95,7 @@ function updatePanel(statuses) {
             if (problemsHtml) problemsHtml += '<div style="margin-top: 4px;"></div>';
             problemsHtml += `<div style="font-size: 0.85em; color: #f59e0b; font-weight: bold;">Warnings: ${warningServices.length}</div>`;
             for (const service of warningServices) {
-                const ackedTag = service.acknowledged ? ' [✓]' : '';
-                problemsHtml += `<div style="font-size: 0.8em; color: #f59e0b;">${service.name}${ackedTag}</div>`;
+                problemsHtml += `<div style="font-size: 0.8em; color: #f59e0b;">${service.name}</div>`;
             }
         }
 

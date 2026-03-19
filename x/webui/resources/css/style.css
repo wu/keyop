@@ -61,17 +61,33 @@ h1 {
 
 #tabs-nav {
     display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
-#tabs-nav {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.25rem 0.5rem;
+#tabs-nav::-webkit-scrollbar {
+    height: 4px;
+}
+
+#tabs-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#tabs-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+#tabs-nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .tab-link {
-    padding: 0.5rem 0.9rem;
+    padding: 0.4rem 0.7rem;
     margin-left: 0;
     cursor: pointer;
     border-radius: 4px;
@@ -81,6 +97,8 @@ h1 {
     background: transparent;
     position: relative;
     transition: color 120ms ease, background-color 120ms ease;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .tab-link:hover {
@@ -340,7 +358,7 @@ input[type="date"]:focus {
 }
 
 .sun-night-icon svg {
-    color: #9b5af0; /* Purple for night */
+    color: #000000; /* Black for night */
 }
 
 .sun-event {
@@ -1036,14 +1054,16 @@ input[type="date"]:focus {
     justify-content: center;
     background-color: #dc3545;
     color: white;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: bold;
-    width: 20px;
-    height: 20px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
     border-radius: 50%;
-    margin-left: 8px;
+    margin-left: 6px;
     position: relative;
     top: -2px;
+    flex-shrink: 0;
 }
 
 .tab-badge[data-badge-style="critical"] {
