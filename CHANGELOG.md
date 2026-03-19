@@ -1,3 +1,24 @@
+## [0.7.0](https://github.com/wu/keyop/compare/0.6.0...0.7.0) (2026-03-19)
+
+### Features
+
+* add "Heartbeat" service to web ui ([372b273](https://github.com/wu/keyop/commit/372b2734b687586c148a187d39e2cad226f281b6))
+* add in-progress time tracking and duration parsing ([0bd0152](https://github.com/wu/keyop/commit/0bd0152a9b74901b93fc1f70027fa75167477f07))
+* improve moon panel and status monitoring UI/logic ([5a6f82d](https://github.com/wu/keyop/commit/5a6f82d638ea1d76656a4aff933646008f0aed5a))
+* improve task handling, UI, and SSE updates in WebUI ([7707cab](https://github.com/wu/keyop/commit/7707cab07a4e1ee3d447821661b17bcd48a425a9))
+* introduce GPS location tracking with region events and WebUI support ([99c553d](https://github.com/wu/keyop/commit/99c553d9bd50c07abdebacdd7521b4c64acd0d52))
+
+### Bug Fixes
+
+* adjust permissions and add security annotations for map cache handling ([53634e9](https://github.com/wu/keyop/commit/53634e9a31be71d47e47d7a526dd8eb627a6e0fd))
+* reset selected service to "all" if no items remain ([f26b2fe](https://github.com/wu/keyop/commit/f26b2fe55d2f97db27ca41dc18ea141f0929bb3a))
+* resolve double-counting of alerts in tab banner ([005c7b5](https://github.com/wu/keyop/commit/005c7b5a3d0fa5324e922f0cc78e24295ab52984))
+
+### Refactoring
+
+* rename macOS Reminders, improve task integration ([c94c92d](https://github.com/wu/keyop/commit/c94c92d75ca6466a9b15a9c9fb02883ee3e44e31))
+* replace RuntimePlugin with PayloadProvider and add daylight context in WebUI ([d3d79c7](https://github.com/wu/keyop/commit/d3d79c75f9326b1d81cacc3cb031c2d0d83e34cb))
+
 ## [0.6.0](https://github.com/wu/keyop/compare/0.5.0...0.6.0) (2026-03-19)
 
 ### Features
