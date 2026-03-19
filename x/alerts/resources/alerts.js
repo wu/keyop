@@ -86,21 +86,10 @@ export function onMessage(msg) {
         return;
     }
 
-    // Check if the alerts tab content is visible
-    const tabContent = alertsContainer.closest('.tab-content');
-    const isTabActive = tabContent && tabContent.classList.contains('active');
-
-    // When a new alert message arrives, process it
+    // When a new alert message arrives, add it to the list.
+    // addAlertToList handles the unreadAlertCount increment and badge update.
     if (msg.text || msg.summary || msg.data) {
-        // Always add the alert to the list (whether tab is active or not)
-        // This ensures the alert is present when the user switches to the alerts tab
         addAlertToList(msg);
-
-        // Update unread count only if tab isn't active
-        if (!isTabActive) {
-            unreadAlertCount++;
-            updateBubble();
-        }
     }
 }
 
