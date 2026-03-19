@@ -387,6 +387,17 @@ function rebuildServiceList() {
 
     const sortedServices = Array.from(serviceNames).sort();
 
+    // If the currently selected service no longer has any items, fall back to 'all'
+    if (navController.selectedService !== 'all' && !sortedServices.includes(navController.selectedService)) {
+        navController.selectedService = 'all';
+        navController.selectedServiceIndex = 0;
+        navController.selectedIndex = -1;
+        // Show all items since we're resetting to 'all'
+        alertsContainer.querySelectorAll('.alert-item').forEach(item => {
+            item.style.display = '';
+        });
+    }
+
     // Recalculate counts based on actual visible items in the DOM
     const countsFromDOM = {};
     items.forEach(item => {
