@@ -182,6 +182,9 @@ func TestService_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("Location and Battery and Regions", func(t *testing.T) {
+		// Register typed payloads so the messenger can decode them when reading from queue
+		_ = svc.(*Service).RegisterPayloads(core.GetPayloadRegistry())
+
 		messenger := deps.MustGetMessenger().(*core.Messenger)
 		allMsgs := make(chan core.Message, 20)
 
@@ -237,16 +240,17 @@ func TestService_ServeHTTP(t *testing.T) {
 		assert.Contains(t, events, "region_enter")
 
 		gpsMsg := events["gps"]
-		data := gpsMsg.Data.(map[string]interface{})
-		assert.Equal(t, 51.5033, data["lat"])
+		gpsPayload, ok := core.AsType[*LocationEvent](gpsMsg.Data)
+		assert.True(t, ok, "gps data should be *LocationEvent")
+		assert.Equal(t, 51.5033, gpsPayload.Lat)
 
 		battMsg := events["battery_metric"]
 		assert.Equal(t, float64(85), battMsg.Metric)
 
 		enterMsg := events["region_enter"]
-		enterData := enterMsg.Data.(map[string]interface{})
-		assert.Equal(t, "enter", enterData["event"])
-		assert.Equal(t, "home", enterData["region"])
+		enterPayload, ok := core.AsType[*LocationEnterEvent](enterMsg.Data)
+		assert.True(t, ok, "region_enter data should be *LocationEnterEvent")
+		assert.Equal(t, "home", enterPayload.Region)
 
 		// Second request: exit home, enter work
 		testData2 := map[string]interface{}{
@@ -278,11 +282,10 @@ func TestService_ServeHTTP(t *testing.T) {
 		foundExit := false
 		foundEnter := false
 		for _, e := range regionMsgs {
-			d := e.Data.(map[string]interface{})
-			if d["event"] == "exit" && d["region"] == "home" {
+			if ev, ok := core.AsType[*LocationExitEvent](e.Data); ok && ev.Region == "home" {
 				foundExit = true
 			}
-			if d["event"] == "enter" && d["region"] == "work" {
+			if ev, ok := core.AsType[*LocationEnterEvent](e.Data); ok && ev.Region == "work" {
 				foundEnter = true
 			}
 		}

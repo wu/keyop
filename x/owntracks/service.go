@@ -2,6 +2,7 @@
 package owntracks
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ type Service struct {
 	Cfg  core.ServiceConfig
 	Port int
 
+	db             **sql.DB
 	deviceNames    map[string]string
 	currentRegions []string
 	mu             sync.Mutex
@@ -197,12 +199,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// gps
 	if msgType, ok := data["_type"].(string); ok && msgType == "location" {
-		gpsData := make(map[string]interface{})
-		for _, field := range []string{"lat", "lon", "alt"} {
-			if val, ok := data[field]; ok {
-				gpsData[field] = val
-			}
-		}
+		lat, _ := data["lat"].(float64)
+		lon, _ := data["lon"].(float64)
+		alt, _ := data["alt"].(float64)
+		acc, _ := data["acc"].(float64)
+		batt, _ := data["batt"].(float64)
 
 		gpsMsg := core.Message{
 			Correlation: correlationID,
@@ -210,7 +211,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ServiceType: svc.Cfg.Type,
 			ServiceName: serviceName,
 			Event:       "gps",
-			Data:        gpsData,
+			Data: &LocationEvent{
+				Device: deviceName,
+				Lat:    lat,
+				Lon:    lon,
+				Alt:    alt,
+				Acc:    acc,
+				Batt:   batt,
+			},
 		}
 		if err := messenger.Send(gpsMsg); err != nil {
 			logger.Error("failed to send gps message", "error", err)
@@ -252,6 +260,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// events
 	if inregions, ok := data["inregions"].([]interface{}); ok {
+		lat, _ := data["lat"].(float64)
+		lon, _ := data["lon"].(float64)
+
 		var newRegions []string
 		for _, r := range inregions {
 			if s, ok := r.(string); ok {
@@ -278,9 +289,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Event:       "region_enter",
 					Text:        fmt.Sprintf("Entered region: %s", nr),
 					Summary:     fmt.Sprintf("Arriving: %s", nr),
-					Data: map[string]interface{}{
-						"event":  "enter",
-						"region": nr,
+					Data: &LocationEnterEvent{
+						Device: deviceName,
+						Region: nr,
+						Lat:    lat,
+						Lon:    lon,
 					},
 				}
 				if err := messenger.Send(eventMsg); err != nil {
@@ -307,9 +320,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Event:       "region_exit",
 					Text:        fmt.Sprintf("Exited region: %s", cr),
 					Summary:     fmt.Sprintf("Departing: %s", cr),
-					Data: map[string]interface{}{
-						"event":  "exit",
-						"region": cr,
+					Data: &LocationExitEvent{
+						Device: deviceName,
+						Region: cr,
+						Lat:    lat,
+						Lon:    lon,
 					},
 				}
 				if err := messenger.Send(eventMsg); err != nil {
