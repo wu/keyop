@@ -18,7 +18,6 @@ import (
 	"keyop/x/kodi"
 	"keyop/x/logManager"
 	"keyop/x/macosBluetoothBattery"
-	"keyop/x/macosReminders"
 	"keyop/x/memoryMonitor"
 	"keyop/x/messengerStats"
 	"keyop/x/metricmon"
@@ -30,6 +29,7 @@ import (
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
 	"keyop/x/process"
+	"keyop/x/reminders"
 	"keyop/x/slack"
 	"keyop/x/speak"
 	"keyop/x/sqlite"
@@ -122,7 +122,10 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 		return txtmsg.NewService(deps, cfg)
 	},
 	"macosReminders": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return macosReminders.NewService(deps, cfg)
+		return reminders.NewService(deps, cfg)
+	},
+	"reminders": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return reminders.NewService(deps, cfg)
 	},
 	"owntracks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return owntracks.NewService(deps, cfg)

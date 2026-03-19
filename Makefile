@@ -68,7 +68,7 @@ plugins: build-plugins
 build-reminders-fetcher:
 	@if [ "$(shell uname -s)" = "Darwin" ]; then \
 		echo "Building reminders_fetcher (macOS only)"; \
-		swiftc -o x/macosReminders/cmd/reminders_fetcher/reminders_fetcher x/macosReminders/cmd/reminders_fetcher/main.swift; \
+		swiftc -o x/reminders/cmd/reminders_fetcher/reminders_fetcher x/reminders/cmd/reminders_fetcher/main.swift; \
 	else \
 		echo "Skipping reminders_fetcher build: not macOS"; \
 	fi
@@ -105,7 +105,7 @@ build-release: build-main build-reminders-fetcher
 	@if [ "$(shell uname -s)" = "Darwin" ]; then \
 		echo "Packaging reminders_fetcher into $(OUTPUT_DIR)"; \
 		mkdir -p $(OUTPUT_DIR); \
-		cp x/macosReminders/cmd/reminders_fetcher/reminders_fetcher $(OUTPUT_DIR)/reminders_fetcher || true; \
+		cp x/reminders/cmd/reminders_fetcher/reminders_fetcher $(OUTPUT_DIR)/reminders_fetcher || true; \
 	else \
 		echo "Skipping packaging helper: not macOS"; \
 	fi
@@ -124,7 +124,7 @@ clean-plugins:
 
 clean-reminders-fetcher:
 	@echo "Removing reminders_fetcher binary if present"; \
-	rm -f x/macosReminders/cmd/reminders_fetcher/reminders_fetcher
+	rm -f x/reminders/cmd/reminders_fetcher/reminders_fetcher
 
 # Formatting, linting and test helpers
 fmt:

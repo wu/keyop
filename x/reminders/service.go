@@ -1,7 +1,5 @@
-// Package macosReminders integrates with the macOS Reminders app to fetch and emit reminder events and changes.
-//
-//nolint:revive // package name uses MixedCaps for historical reasons
-package macosReminders
+// Package reminders integrates with the macOS Reminders app to fetch and emit reminder events and changes.
+package reminders
 
 import (
 	"encoding/json"
@@ -9,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
+	"keyop/x/tasks"
 	"os"
 	"runtime"
 	"strconv"
@@ -235,6 +234,7 @@ func parseSwiftJSONLines(r io.Reader, onlyUncompleted bool, inboxName string) (m
 			}
 		}
 		dueStr, _ := obj["due"].(string)
+		dueHasTime, _ := obj["due_has_time"].(bool)
 
 		key := idStr
 		if strings.TrimSpace(key) == "" {
@@ -353,13 +353,14 @@ func parseSwiftJSONLines(r io.Reader, onlyUncompleted bool, inboxName string) (m
 			Summary:     title,
 			Text:        note,
 			Data: map[string]interface{}{
-				"id":        idStr,
-				"title":     title,
-				"note":      note,
-				"due_raw":   dueStr,
-				"completed": completed,
-				"inbox":     inboxName,
-				"task":      task,
+				"id":           idStr,
+				"title":        title,
+				"note":         note,
+				"due_raw":      dueStr,
+				"due_has_time": dueHasTime,
+				"completed":    completed,
+				"inbox":        inboxName,
+				"task":         task,
 			},
 		}
 		created = append(created, m)
@@ -374,12 +375,12 @@ func (svc *Service) fetchAndPublish() {
 	messenger := svc.Deps.MustGetMessenger()
 	state := svc.Deps.MustGetStateStore()
 
-	logger.Warn("MACOS REMINDERS: fetchAndPublish started (swift helper only)")
+	logger.Warn("reminders: fetchAndPublish started (swift helper only)")
 
-	stateKey := fmt.Sprintf("macosReminders_%s", svc.Cfg.Name)
+	stateKey := fmt.Sprintf("reminders_%s", svc.Cfg.Name)
 	var prev map[string]reminderState
 	if err := state.Load(stateKey, &prev); err != nil {
-		logger.Error("failed to load state", "error", err)
+		logger.Error("reminders: failed to load state", "error", err)
 		prev = make(map[string]reminderState)
 	}
 	if prev == nil {
@@ -388,51 +389,59 @@ func (svc *Service) fetchAndPublish() {
 
 	out, err := svc.runSwiftFetcher()
 	if err != nil {
-		logger.Error("swift reminders_fetcher not found or failed", "error", err)
+		logger.Error("reminders: swift reminders_fetcher not found or failed", "error", err)
 		return
 	}
 
 	curr, createdMsgs, err := parseSwiftJSONLines(strings.NewReader(string(out)), svc.onlyUncompleted, svc.inboxName)
 	if err != nil {
-		logger.Error("failed to parse swift fetcher output", "error", err)
+		logger.Error("reminders: failed to parse swift fetcher output", "error", err)
 		return
 	}
 
 	// send created messages (dedupe against prev)
 	for _, m := range createdMsgs {
-		id, _ := m.Data.(map[string]interface{})["id"].(string)
-		dueRaw, _ := m.Data.(map[string]interface{})["due_raw"].(string)
+		rawData, _ := m.Data.(map[string]interface{})
+		id, _ := rawData["id"].(string)
+		dueRaw, _ := rawData["due_raw"].(string)
+		dueHasTime, _ := rawData["due_has_time"].(bool)
 		key := id
 		if strings.TrimSpace(key) == "" {
 			key = fmt.Sprintf("anon:%s:%s", m.Summary, dueRaw)
 		}
 		if _, seen := prev[key]; !seen {
-			m.ChannelName = svc.Cfg.Name
-			m.ServiceName = svc.Cfg.Name
-			m.ServiceType = svc.Cfg.Type
-			m.Event = "reminder_created"
-			if data, ok := m.Data.(map[string]interface{}); ok {
-				data["event"] = "created"
-				// set user_id from config, default to 1
-				var userID int64 = 1
-				if v, ok2 := svc.Cfg.Config["user_id"]; ok2 {
-					switch t := v.(type) {
-					case int:
-						userID = int64(t)
-					case int64:
-						userID = t
-					case float64:
-						userID = int64(t)
-					case string:
-						if n, err := strconv.ParseInt(t, 10, 64); err == nil {
-							userID = n
-						}
+			// Resolve user_id from config, default to 1.
+			var userID int64 = 1
+			if v, ok := svc.Cfg.Config["user_id"]; ok {
+				switch t := v.(type) {
+				case int:
+					userID = int64(t)
+				case int64:
+					userID = t
+				case float64:
+					userID = int64(t)
+				case string:
+					if n, err := strconv.ParseInt(t, 10, 64); err == nil {
+						userID = n
 					}
 				}
-				data["user_id"] = userID
 			}
+			m.ChannelName = "tasks"
+			m.ServiceName = svc.Cfg.Name
+			m.ServiceType = svc.Cfg.Type
+			m.Event = "task_create"
+			m.Data = &tasks.TaskCreateEvent{
+				Title:            m.Summary,
+				Note:             m.Text,
+				DueAt:            dueRaw,
+				HasScheduledTime: dueHasTime,
+				UserID:           userID,
+				Source:           "reminders",
+				ExternalID:       id,
+			}
+			logger.Warn("reminder: task_create event", "event", m)
 			if err := messenger.Send(m); err != nil {
-				logger.Error("failed to send reminder message", "error", err, "reminder", m.Summary)
+				logger.Error("reminders: failed to send task_create message", "error", err, "reminder", m.Summary)
 			}
 		}
 	}
@@ -447,21 +456,20 @@ func (svc *Service) fetchAndPublish() {
 				Event:       "reminder_removed",
 				Summary:     prevState.Title,
 				Text:        "(removed)",
-				Data: map[string]interface{}{
-					"id":    k,
-					"title": prevState.Title,
-					"event": "removed",
+				Data: &ReminderRemovedEvent{
+					ID:    k,
+					Title: prevState.Title,
 				},
 			}
 			if err := messenger.Send(msg); err != nil {
-				logger.Error("failed to send reminder removal message", "error", err, "reminder", prevState.Title)
+				logger.Error("reminders: failed to send reminder removal message", "error", err, "reminder", prevState.Title)
 			}
 		}
 	}
 
 	// Save current state
 	if err := state.Save(stateKey, curr); err != nil {
-		logger.Error("failed to save state", "error", err)
+		logger.Error("reminders: failed to save state", "error", err)
 	}
 }
 

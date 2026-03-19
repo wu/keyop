@@ -113,6 +113,7 @@ store.fetchReminders(matching: predicate) { reminders in
             // due date
             if let comps = r.dueDateComponents, let dueDate = Calendar.current.date(from: comps) {
                 dict["due"] = isoFmt.string(from: dueDate)
+                dict["due_has_time"] = comps.hour != nil
             }
             // scheduled / start date
             if let comps = r.startDateComponents, let startDate = Calendar.current.date(from: comps) {

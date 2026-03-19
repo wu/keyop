@@ -1,5 +1,5 @@
 //nolint:revive
-package macosReminders
+package reminders
 
 import (
 	"keyop/core"

@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"keyop/core"
 	"keyop/x/logicalday"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // sqlite driver
 )
 
@@ -99,6 +101,106 @@ func (svc *Service) Initialize() error {
 	// Create logical day calculator
 	svc.logicalCalc = logicalday.NewCalculator(svc.endOfDayTime, loc)
 
+	// Subscribe to configured channels (e.g. to receive task_create events)
+	if len(svc.Cfg.Subs) > 0 {
+		messenger := svc.Deps.MustGetMessenger()
+		ctx := svc.Deps.MustGetContext()
+		for _, subInfo := range svc.Cfg.Subs {
+			if err := messenger.Subscribe(ctx, svc.Cfg.Name, subInfo.Name, svc.Cfg.Type, svc.Cfg.Name, subInfo.MaxAge, svc.handleMessage); err != nil {
+				return fmt.Errorf("tasks: failed to subscribe to %s: %w", subInfo.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleMessage processes incoming messages on subscribed channels.
+func (svc *Service) handleMessage(msg core.Message) error {
+	if msg.Event != "task_create" {
+		return nil
+	}
+
+	event, ok := core.AsType[*TaskCreateEvent](msg.Data)
+	if !ok {
+		return fmt.Errorf("tasks: task_create event has unexpected payload type %T", msg.Data)
+	}
+
+	if err := svc.insertTaskFromEvent(event); err != nil {
+		svc.Deps.MustGetLogger().Error("tasks: failed to insert task from event", "error", err, "source", event.Source)
+		return err
+	}
+
+	svc.Deps.MustGetLogger().Info("tasks: created task from event", "title", event.Title, "source", event.Source)
+	return nil
+}
+
+// insertTaskFromEvent inserts a new task row from a TaskCreateEvent.
+func (svc *Service) insertTaskFromEvent(event *TaskCreateEvent) error {
+	if svc.db == nil {
+		return fmt.Errorf("tasks database not available")
+	}
+
+	title := strings.TrimSpace(event.Title)
+	if title == "" {
+		return fmt.Errorf("task title cannot be empty")
+	}
+
+	// Resolve scheduled date from DueAt or logical today
+	var scheduledDate time.Time
+	hasScheduledTime := 0
+
+	if event.DueAt != "" {
+		t, err := time.Parse(time.RFC3339, event.DueAt)
+		if err == nil {
+			scheduledDate = t
+			if event.HasScheduledTime {
+				hasScheduledTime = 1
+			}
+		}
+	}
+	if scheduledDate.IsZero() {
+		if svc.logicalCalc != nil {
+			scheduledDate = svc.logicalCalc.Today()
+		} else {
+			scheduledDate = time.Now()
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	_, err := svc.db.Exec(
+		`INSERT INTO tasks (uuid, title, note, scheduled_date, scheduled_time, tags, color, importance, user_id, created_at, updated_at, done)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		uuid.New().String(), title, event.Note,
+		scheduledDate.UTC().Format(time.RFC3339Nano), hasScheduledTime,
+		event.Tags, event.Color, event.Importance, event.UserID,
+		now, now,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Notify the browser so the task list refreshes immediately.
+	messenger := svc.Deps.MustGetMessenger()
+	if messenger != nil {
+		notification := core.Message{
+			Version:     "1.0",
+			Timestamp:   time.Now(),
+			ChannelName: "tasks",
+			ServiceType: "tasks",
+			ServiceName: "tasks",
+			Event:       "taskCreated",
+			Status:      "created",
+		}
+		taskDetails := map[string]any{"title": title, "source": event.Source}
+		if body, jsonErr := json.Marshal(taskDetails); jsonErr == nil {
+			notification.Body = string(body)
+		}
+		if sendErr := messenger.Send(notification); sendErr != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to send taskCreated notification", "error", sendErr)
+		}
+	}
 	return nil
 }
 

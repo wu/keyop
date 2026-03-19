@@ -1,7 +1,7 @@
 //go:build darwin
 
 //nolint:revive
-package macosReminders
+package reminders
 
 import (
 	"os"
