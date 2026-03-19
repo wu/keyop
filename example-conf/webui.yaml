@@ -31,20 +31,23 @@ subs:
     name: aurora
     description: process incoming events
 
-  temp-shared:
-    name: temp-shared
+  temp:
+    name: temp
     description: process incoming events
 
   status:
     name: status
     description: process incoming events
 
-  status-shared:
-    name: status-shared
-    description: process incoming events
-
   status-ping:
     name: status-ping
     description: process incoming events
 
+  heartbeat:
+    name: heartbeat
+    description: process incoming events
+
+  tasks:
+    name: tasks
+    description: synchronize task state
 

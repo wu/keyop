@@ -1546,11 +1546,21 @@ function attachTaskItemListeners(container) {
     container.querySelectorAll('.task-item').forEach(item => {
         const checkbox = item.querySelector('.task-checkbox');
         if (checkbox) {
-            checkbox.onclick = async (e) => {
+            let togglePending = false;
+            const handleToggle = async (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                const taskID = parseInt(item.dataset.taskId);
-                await toggleTask(taskID);
+                if (togglePending) return;
+                togglePending = true;
+                try {
+                    const taskID = parseInt(item.dataset.taskId);
+                    await toggleTask(taskID);
+                } finally {
+                    togglePending = false;
+                }
             };
+            checkbox.addEventListener('click', handleToggle);
+            checkbox.addEventListener('touchend', handleToggle, {passive: false});
         }
         const toggle = item.querySelector('.subtask-toggle');
         if (toggle) {
@@ -1717,11 +1727,21 @@ function attachTaskItemListenersForTagsView(container) {
     container.querySelectorAll('.task-item').forEach(item => {
         const checkbox = item.querySelector('.task-checkbox');
         if (checkbox) {
-            checkbox.onclick = async (e) => {
+            let togglePending = false;
+            const handleToggle = async (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                const taskID = parseInt(item.dataset.taskId);
-                await toggleTaskInTagsView(taskID);
+                if (togglePending) return;
+                togglePending = true;
+                try {
+                    const taskID = parseInt(item.dataset.taskId);
+                    await toggleTaskInTagsView(taskID);
+                } finally {
+                    togglePending = false;
+                }
             };
+            checkbox.addEventListener('click', handleToggle);
+            checkbox.addEventListener('touchend', handleToggle, {passive: false});
         }
         const toggle = item.querySelector('.subtask-toggle');
         if (toggle) {
@@ -2335,11 +2355,21 @@ function reorganizeTaskSections() {
     document.querySelectorAll('.task-item').forEach(item => {
         const checkbox = item.querySelector('.task-checkbox');
         if (checkbox) {
-            checkbox.addEventListener('click', async (e) => {
+            let togglePending = false;
+            const handleToggle = async (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                const taskId = parseInt(item.dataset.taskId);
-                await toggleTask(taskId);
-            });
+                if (togglePending) return;
+                togglePending = true;
+                try {
+                    const taskId = parseInt(item.dataset.taskId);
+                    await toggleTask(taskId);
+                } finally {
+                    togglePending = false;
+                }
+            };
+            checkbox.addEventListener('click', handleToggle);
+            checkbox.addEventListener('touchend', handleToggle, {passive: false});
         }
 
         // Subtasks expand/collapse
@@ -2414,22 +2444,33 @@ export function onMessage(msg) {
 function handleTaskUpdate(msg) {
     if (!msg.taskId) return;
 
-    const taskIndex = state.tasks.findIndex(t => t.id === msg.taskId);
-    if (taskIndex === -1) {
+    // Update task state in both regular and tags view tasks
+    const updateTaskInList = (list) => {
+        if (!Array.isArray(list)) return -1;
+        const idx = list.findIndex(t => t.id === msg.taskId);
+        if (idx !== -1) {
+            const task = list[idx];
+            if (msg.done !== undefined) task.done = msg.done;
+            if (msg.title !== undefined) task.title = msg.title;
+            if (msg.tags !== undefined) task.tags = msg.tags;
+            if (msg.color !== undefined) task.color = msg.color;
+            if (msg.scheduledAt !== undefined) task.scheduledAt = msg.scheduledAt;
+        }
+        return idx;
+    };
+
+    const taskIndex = updateTaskInList(state.tasks);
+    updateTaskInList(state.tagsViewTasks);
+    updateTaskInList(state.tagsViewAllTasks);
+
+    if (taskIndex === -1 && (!state.tagsViewTasks || state.tagsViewTasks.findIndex(t => t.id === msg.taskId) === -1)) {
         console.warn('[tasks] Task not found in state:', msg.taskId);
         loadTasks();
         return;
     }
 
-    const task = state.tasks[taskIndex];
+    const task = state.tasks[taskIndex] || state.tagsViewTasks.find(t => t.id === msg.taskId);
     const oldDone = task.done;
-
-    // Update task state
-    if (msg.done !== undefined) task.done = msg.done;
-    if (msg.title !== undefined) task.title = msg.title;
-    if (msg.tags !== undefined) task.tags = msg.tags;
-    if (msg.color !== undefined) task.color = msg.color;
-    if (msg.scheduledAt !== undefined) task.scheduledAt = msg.scheduledAt;
 
     // Update in-progress state if provided in the message
     if (msg.inProgress !== undefined) {
@@ -2501,7 +2542,15 @@ function handleTaskUpdate(msg) {
         const parentUuid = getTaskParentUuid(task);
         if (oldDone !== task.done && parentUuid && state.expandedParents.has(parentUuid)) {
             refreshParentSubtasks(parentUuid);
+        }
+    }
 
+    // If done status changed, we need to refresh the view to move the task to the correct section
+    if (oldDone !== task.done) {
+        if (state.currentView === 'tags') {
+            displayTagsView();
+        } else {
+            renderTasksView();
         }
     }
 }

@@ -1851,6 +1851,31 @@ func (svc *Service) reorderSubtask(taskID int64, newPosition int64, parentUUID s
 		return nil, err
 	}
 
+	// Send SSE message about the subtask reorder
+	messenger := svc.Deps.MustGetMessenger()
+	if messenger != nil {
+		msg := core.Message{
+			Version:     "1.0",
+			Timestamp:   time.Now(),
+			ChannelName: "tasks",
+			ServiceType: "tasks",
+			ServiceName: "tasks",
+			Event:       "taskUpdated",
+			Status:      "updated",
+		}
+		// Add details to Body as JSON
+		taskDetails := map[string]any{
+			"taskId":     taskID,
+			"parentUuid": parentUUID,
+		}
+		if body, err := json.Marshal(taskDetails); err == nil {
+			msg.Body = string(body)
+		}
+		if err := messenger.Send(msg); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
+		}
+	}
+
 	// Return updated subtasks
 	return map[string]any{"status": "ok", "subtasks": newList}, nil
 }
@@ -1968,6 +1993,31 @@ func (svc *Service) reorderParent(taskID int64, newPosition int64) (any, error) 
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
+	}
+
+	// Send SSE message about the task reorder
+	messenger := svc.Deps.MustGetMessenger()
+	if messenger != nil {
+		msg := core.Message{
+			Version:     "1.0",
+			Timestamp:   time.Now(),
+			ChannelName: "tasks",
+			ServiceType: "tasks",
+			ServiceName: "tasks",
+			Event:       "taskUpdated",
+			Status:      "updated",
+		}
+		// Add details to Body as JSON
+		taskDetails := map[string]any{
+			"taskId": taskID,
+			"tags":   currentTag,
+		}
+		if body, err := json.Marshal(taskDetails); err == nil {
+			msg.Body = string(body)
+		}
+		if err := messenger.Send(msg); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
+		}
 	}
 
 	// Return updated parents
@@ -2195,6 +2245,42 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 	_, err := svc.db.Exec(query, updateArgs...)
 	if err != nil {
 		return nil, err
+	}
+
+	// Send SSE message about the task update
+	messenger := svc.Deps.MustGetMessenger()
+	if messenger != nil {
+		msg := core.Message{
+			Version:     "1.0",
+			Timestamp:   time.Now(),
+			ChannelName: "tasks",
+			ServiceType: "tasks",
+			ServiceName: "tasks",
+			Event:       "taskUpdated",
+			Status:      "updated",
+		}
+		// Add task details to Body as JSON
+		taskDetails := map[string]any{
+			"taskId": taskID,
+		}
+		if title, ok := params["title"].(string); ok {
+			taskDetails["title"] = title
+		}
+		if tags, ok := params["tags"].(string); ok {
+			taskDetails["tags"] = tags
+		}
+		if color, ok := params["color"].(string); ok {
+			taskDetails["color"] = color
+		}
+		if done, ok := params["done"].(bool); ok {
+			taskDetails["done"] = done
+		}
+		if body, err := json.Marshal(taskDetails); err == nil {
+			msg.Body = string(body)
+		}
+		if err := messenger.Send(msg); err != nil {
+			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
+		}
 	}
 
 	return map[string]any{"status": "ok"}, nil
