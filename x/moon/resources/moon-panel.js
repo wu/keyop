@@ -13,24 +13,24 @@ function clamp(v, lo, hi) {
 }
 
 function phaseToFile(name) {
-    if (!name) return 'new.jpg';
+    if (!name) return 'new.png';
     // Normalize: lower-case, replace non-alnum with hyphen, trim
     let n = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     // Common aliases
     const aliases = {
-        'new-moon': 'new.jpg',
-        'new': 'new.jpg',
-        'full-moon': 'full.jpg',
-        'full': 'full.jpg',
-        'first-quarter': 'first-quarter.jpg',
-        'last-quarter': 'last-quarter.jpg',
-        'last quarter': 'last-quarter.jpg'
+        'new-moon': 'new.png',
+        'new': 'new.png',
+        'full-moon': 'full.png',
+        'full': 'full.png',
+        'first-quarter': 'first-quarter.png',
+        'last-quarter': 'last-quarter.png',
+        'last quarter': 'last-quarter.png'
     };
     if (aliases[n]) return aliases[n];
     // If it's one of the waxing/waning forms, map directly
-    if (['waxing-crescent', 'waxing-gibbous', 'waning-gibbous', 'waning-crescent'].includes(n)) return n + '.jpg';
+    if (['waxing-crescent', 'waxing-gibbous', 'waning-gibbous', 'waning-crescent'].includes(n)) return n + '.png';
     // fallback: try using normalized name as filename
-    return n + '.jpg';
+    return n + '.png';
 }
 
 function updateImage(name) {
@@ -134,7 +134,7 @@ export function init(el) {
     // Use the same structural classes as the sun panel to keep visual consistency
     body.innerHTML = `
         <div class="sun-wrapper">
-            <div class="sun-icon"><img class="moon-image" src="/images/moon/new.jpg" alt="Moon phase"></div>
+            <div class="sun-icon"><img class="moon-image" src="/images/moon/new.png" alt="Moon phase"></div>
             <div class="sun-event">Loading…</div>
             <div class="sun-remaining">—</div>
             <div class="sun-meta">

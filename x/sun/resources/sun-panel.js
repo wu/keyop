@@ -4,6 +4,7 @@ let elEvent = null;
 let elRemaining = null;
 let elDay = null;
 let elNight = null;
+let elIcon = null;
 let remainingTimer = null;
 let nextEventTime = null;
 
@@ -157,6 +158,7 @@ export function init(el) {
     elRemaining = body.querySelector('.sun-remaining');
     elDay = body.querySelector('.sun-day-value');
     elNight = body.querySelector('.sun-night-value');
+    elIcon = body.querySelector('.sun-icon');
 
     // Resume countdown if a next event was previously stored on the DOM
     if (body.dataset && body.dataset.nextEventTime) {
@@ -203,12 +205,10 @@ export function onMessage(msg) {
     // Prefer server-provided 'now' timestamp when available (typed SunEvent payloads include 'now')
     const now = data.now ? new Date(data.now) : new Date();
 
-    // Determine next event from available times
+    // Determine next event from available times - PRIMARY: dawn/dusk, SECONDARY: sunrise/sunset
     const times = [
-        {name: 'Dawn', key: 'civil_dawn'},
-        {name: 'Sunrise', key: 'sunrise'},
-        {name: 'Sunset', key: 'sunset'},
-        {name: 'Dusk', key: 'civil_dusk'},
+        {name: 'Dawn', key: 'civil_dawn', secondary: 'Sunrise', secondaryKey: 'sunrise'},
+        {name: 'Dusk', key: 'civil_dusk', secondary: 'Sunset', secondaryKey: 'sunset'},
     ];
 
     // Try to find next event time in msg.data using several common key forms
@@ -232,11 +232,44 @@ export function onMessage(msg) {
         return null;
     }
 
+    // Get all times for color coding
+    const times_data = {
+        sunrise: findTimestampForKey('sunrise'),
+        sunset: findTimestampForKey('sunset'),
+        dawn: findTimestampForKey('civil_dawn'),
+        dusk: findTimestampForKey('civil_dusk'),
+    };
+
+    // Determine icon color based on current time
+    if (elIcon) {
+        elIcon.className = 'sun-icon';  // reset
+        if (times_data.sunrise && times_data.sunset) {
+            if (now > times_data.sunrise && now < times_data.sunset) {
+                // Between sunrise and sunset = daytime (yellow)
+                elIcon.classList.add('sun-day-icon');
+            } else if ((times_data.sunset && now > times_data.sunset && times_data.dusk && now < times_data.dusk) ||
+                (times_data.dawn && now > times_data.dawn && times_data.sunrise && now < times_data.sunrise)) {
+                // Between sunset and dusk OR dawn and sunrise = twilight (orange)
+                elIcon.classList.add('sun-twilight-icon');
+            } else if (times_data.dusk && times_data.dawn && (now > times_data.dusk || now < times_data.dawn)) {
+                // Between dusk and dawn = night (purple)
+                elIcon.classList.add('sun-night-icon');
+            }
+        }
+    }
+
     let next = null;
+    let secondary = null;
     for (const t of times) {
         const dt = findTimestampForKey(t.key);
         if (dt && dt > now) {
             next = {name: t.name, time: dt};
+
+            // Add secondary time if available and in the future
+            const secondaryTime = findTimestampForKey(t.secondaryKey);
+            if (secondaryTime && secondaryTime > now) {
+                secondary = {name: t.secondary, time: secondaryTime};
+            }
             break;
         }
     }
@@ -258,10 +291,15 @@ export function onMessage(msg) {
     }
 
     if (next) {
-        // Show only the event/time (avoid duplicating the word "Next")
-        if (elEvent) elEvent.textContent = `${next.name} ${formatTime(next.time)}`;
+        // Show primary event with time, optionally with secondary below
+        let eventText = `${next.name} ${formatTime(next.time)}`;
+        if (secondary) {
+            eventText += `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 2px;">${secondary.name} ${formatTime(secondary.time)}</div>`;
+        }
+        if (elEvent) elEvent.innerHTML = eventText;
 
         // Persist next event on DOM so re-initialization can resume countdown
+        // Countdown uses PRIMARY event (next.time), not secondary
         nextEventTime = new Date(next.time);
         if (body && body.dataset) {
             body.dataset.nextEventTime = nextEventTime.toISOString();
@@ -299,8 +337,15 @@ export function onMessage(msg) {
         }
     }
 
-    // Day length: prefer explicit sunrise/sunset, fall back to provided string
-    if (data.sunrise && data.sunset) {
+    // Day length: based on civil_dawn and civil_dusk (if available), fall back to sunrise/sunset
+    if (data.civil_dawn && data.civil_dusk) {
+        const dawn = new Date(data.civil_dawn);
+        const dusk = new Date(data.civil_dusk);
+        if (!isNaN(dawn) && !isNaN(dusk)) {
+            const dayMs = Math.max(0, dusk - dawn);
+            if (elDay) elDay.textContent = formatDuration(dayMs);
+        }
+    } else if (data.sunrise && data.sunset) {
         const sunrise = new Date(data.sunrise);
         const sunset = new Date(data.sunset);
         if (!isNaN(sunrise) && !isNaN(sunset)) {

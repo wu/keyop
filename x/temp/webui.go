@@ -24,6 +24,20 @@ func (svc *Service) WebUITab() webui.TabInfo {
 	}
 }
 
+// WebUIPanels returns panels provided by the temp service for the dashboard.
+func (svc *Service) WebUIPanels() []webui.PanelInfo {
+	return []webui.PanelInfo{
+		{
+			ID:          "temps",
+			Title:       "Temps",
+			Content:     `<div class="panel" id="panel-temps"><div class="panel-body">Loading...</div></div>`,
+			JSPath:      "/api/assets/temp/temps-panel.js",
+			Event:       "temps",
+			ServiceType: svc.Cfg.Type,
+		},
+	}
+}
+
 // HandleWebUIAction handles actions from the WebUI.
 func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, error) {
 	switch action {

@@ -258,9 +258,9 @@ func filterEntries(entries []TideExtremeEntry, cutoff time.Time) []TideExtremeEn
 
 // TidePeak describes the next high or low tide.
 type TidePeak struct {
-	Time  string  `yaml:"time"`
-	Value float64 `yaml:"value"`
-	Type  string  `yaml:"type"` // "high" or "low"
+	Time  string  `yaml:"time" json:"time"`
+	Value float64 `yaml:"value" json:"value"`
+	Type  string  `yaml:"type" json:"type"` // "high" or "low"
 }
 
 // findCurrentTide returns the most-recent record at or before now and the

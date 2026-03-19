@@ -330,6 +330,19 @@ input[type="date"]:focus {
     border-radius: 8px;
 }
 
+/* Sun icon color states */
+.sun-day-icon svg {
+    color: #FFD700; /* Yellow for daytime */
+}
+
+.sun-twilight-icon svg {
+    color: #FF8C00; /* Orange for twilight */
+}
+
+.sun-night-icon svg {
+    color: #9b5af0; /* Purple for night */
+}
+
 .sun-event {
     font-size: 1.15rem;
     font-weight: 700;
@@ -440,8 +453,21 @@ input[type="date"]:focus {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     align-items: flex-start;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, border-left-color 0.2s;
     margin-bottom: 0;
+    border-left: 4px solid rgba(255, 255, 255, 0.2);
+}
+
+.alert-item[data-severity="warning"] {
+    border-left-color: #fbbf24;
+}
+
+.alert-item[data-severity="error"] {
+    border-left-color: #ef4444;
+}
+
+.alert-item[data-severity="critical"] {
+    border-left-color: #dc2626;
 }
 
 .alert-item.alert-selected {

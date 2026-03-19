@@ -83,7 +83,7 @@ function updatePanel(data) {
     html += '<table style="border-collapse: collapse; font-size: 0.8rem;">';
     html += `<tr><td style="color: var(--accent-green, #10b981); padding: 2px 8px; text-align: right;">Active:</td><td style="padding: 2px 8px; text-align: right;">${formatSeconds(data.totalActiveSeconds)}</td></tr>`;
     html += `<tr><td style="color: var(--accent-blue, #9b5af0); padding: 2px 8px; text-align: right;">Idle:</td><td style="padding: 2px 8px; text-align: right;">${formatSeconds(data.totalIdleSeconds)}</td></tr>`;
-    if (data.totalUnknownSeconds > 0) {
+    if (data.totalUnknownSeconds > 300) {
         html += `<tr><td style="color: var(--text); opacity: 0.7; padding: 2px 8px; text-align: right;">Unknown:</td><td style="padding: 2px 8px; text-align: right;">${formatSeconds(data.totalUnknownSeconds)}</td></tr>`;
     }
     html += '</table>';

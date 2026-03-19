@@ -37,9 +37,25 @@ func (svc *Service) WebUITab() webui.TabInfo {
 	}
 }
 
+// WebUIPanels returns panels provided by the tides service for the dashboard.
+func (svc *Service) WebUIPanels() []webui.PanelInfo {
+	return []webui.PanelInfo{
+		{
+			ID:          "tides",
+			Title:       "Tides",
+			Content:     `<div class="panel" id="panel-tides"><div class="panel-body">Loading...</div></div>`,
+			JSPath:      "/api/assets/tides/tides-panel.js",
+			Event:       "tides",
+			ServiceType: svc.Cfg.Type,
+		},
+	}
+}
+
 // HandleWebUIAction handles actions from the WebUI.
 func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
 	switch action {
+	case "fetch-tides":
+		return svc.fetchCurrentTide()
 	case "refresh-report":
 		// Determine requested date range; fall back to today -> today+7 if absent.
 		var start time.Time
@@ -99,4 +115,76 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+// fetchCurrentTide returns the current tide information including next peak.
+func (svc *Service) fetchCurrentTide() (any, error) {
+	logger := svc.Deps.MustGetLogger()
+	now := time.Now()
+
+	// Ensure tide data files are loaded (just like Check() does)
+	if err := svc.ensureDayFiles(now); err != nil {
+		logger.Error("tides: failed to refresh tide data", "error", err)
+		return nil, err
+	}
+
+	// Get tide records around now
+	svc.mu.RLock()
+	records, err := svc.collectRecordsAroundNow(now)
+	svc.mu.RUnlock()
+	if err != nil {
+		logger.Error("tides: failed to collect tide records", "error", err)
+		return nil, err
+	}
+
+	logger.Debug("tides: fetchCurrentTide", "recordCount", len(records))
+
+	// Find current tide
+	current, next, err := findCurrentTide(records, now)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debug("tides: found current tide", "current", current)
+
+	state := tideState(records, current)
+	peak := nextPeak(records, current)
+
+	logger.Debug("tides: calculated peak", "peak", peak, "peakIsNil", peak == nil)
+
+	// Build the TideEvent structure
+	ev := TideEvent{
+		StationID: svc.stationID,
+		Current:   *current,
+		State:     state,
+		NextPeak:  peak,
+	}
+	if next != nil {
+		ev.Next = next
+	}
+
+	// Extract sparkline data: filter records within 12 hours before and 24 hours after now
+	twelveHoursAgo := now.Add(-12 * time.Hour)
+	twentyFourHoursFromNow := now.Add(24 * time.Hour)
+
+	var sparklineRecords []TideRecord
+	for _, r := range records {
+		recordTime, err := time.Parse(noaaTimeFormat, r.Time)
+		if err != nil {
+			continue
+		}
+		if recordTime.After(twelveHoursAgo) && recordTime.Before(twentyFourHoursFromNow) {
+			sparklineRecords = append(sparklineRecords, r)
+		}
+	}
+
+	logger.Debug("tides: collected sparkline records", "count", len(sparklineRecords))
+
+	return map[string]any{
+		"event":            ev,
+		"sparklineRecords": sparklineRecords,
+		"currentLevel":     current.Value,
+		"peakLevel":        peak.Value,
+		"state":            state,
+	}, nil
 }

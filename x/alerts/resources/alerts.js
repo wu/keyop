@@ -10,7 +10,7 @@ let serviceCounts = {}; // Track alert counts per service
 // Severity levels in order of priority
 const SEVERITY_LEVELS = {info: 0, warning: 1, error: 2, critical: 3};
 const SEVERITY_COLORS = {
-    info: '#3b82f6',      // blue
+    info: '#8a3fd3',      // theme purple
     warning: '#fbbf24',   // yellow
     error: '#ef4444',     // red
     critical: '#dc2626'   // darker red
@@ -69,6 +69,11 @@ export function updateBubble() {
         const badge = document.createElement('span');
         badge.className = 'tab-badge';
         badge.textContent = unreadAlertCount;
+
+        // Colorize badge based on highest severity
+        const color = SEVERITY_COLORS[highestSeverity] || SEVERITY_COLORS.info;
+        badge.style.backgroundColor = color;
+        
         tabLink.appendChild(badge);
     }
 }
@@ -175,6 +180,7 @@ function addAlertToList(msg) {
                 if (alertItem) {
                     alertItem.remove();
                     unreadAlertCount = Math.max(0, unreadAlertCount - 1);
+                    recalculateHighestSeverity();
                     updateBubble();
                 }
                 if (listDiv.children.length === 0) {
@@ -321,11 +327,14 @@ async function refreshAlerts() {
                     listDiv.innerHTML = '<div class="no-alerts">No active alerts</div>';
                     // Rebuild service list to only show "all"
                     rebuildServiceList();
+                    recalculateHighestSeverity();
+                    updateBubble();
                 }
             });
         });
 
         recalculateHighestSeverity();
+        updateBubble();
 
         // Rebuild service list to include counts
         rebuildServiceList();

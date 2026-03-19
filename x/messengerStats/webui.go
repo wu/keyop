@@ -27,3 +27,17 @@ func (svc *Service) WebUITab() webui.TabInfo {
 		JSPath: "/api/assets/messengerStats/messages.js",
 	}
 }
+
+// WebUIPanels returns panels provided by the messengerStats service for the dashboard.
+func (svc *Service) WebUIPanels() []webui.PanelInfo {
+	return []webui.PanelInfo{
+		{
+			ID:          "messages",
+			Title:       "Messages",
+			Content:     `<div class="panel" id="panel-messages"><div class="panel-body">Loading...</div></div>`,
+			JSPath:      "/api/assets/messengerStats/messages-panel.js",
+			Event:       "messenger_stats",
+			ServiceType: svc.Cfg.Type,
+		},
+	}
+}
