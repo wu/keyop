@@ -50,7 +50,7 @@ func mapCacheDir() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(home, ".keyop", "maps")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // user-owned cache dir
 		return "", err
 	}
 	return dir, nil
@@ -63,7 +63,7 @@ func getOrFetchBaseMap(cx, cy int) ([]byte, error) {
 		return nil, err
 	}
 	cacheFile := filepath.Join(cacheDir, fmt.Sprintf("%d_%d_%d.png", mapZoom, cx, cy))
-	if data, err := os.ReadFile(cacheFile); err == nil {
+	if data, err := os.ReadFile(cacheFile); err == nil { //nolint:gosec // path is constructed from trusted tile coords
 		return data, nil
 	}
 
@@ -92,7 +92,7 @@ func getOrFetchBaseMap(cx, cy int) ([]byte, error) {
 		return nil, err
 	}
 	data := buf.Bytes()
-	_ = os.WriteFile(cacheFile, data, 0o644)
+	_ = os.WriteFile(cacheFile, data, 0o600) //nolint:gosec // path is constructed from trusted tile coords
 	return data, nil
 }
 
@@ -158,7 +158,7 @@ func fetchOSMTile(zoom, x, y int) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "keyop/1.0 home-automation (personal use)")
-	resp, err := mapHTTPClient.Do(req)
+	resp, err := mapHTTPClient.Do(req) //nolint:gosec // URL is a fixed OSM tile endpoint
 	if err != nil {
 		return nil, err
 	}
