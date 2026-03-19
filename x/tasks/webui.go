@@ -2163,6 +2163,32 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		}
 	}
 
+	// Handle in_progress_total_seconds
+	if ipSeconds, ok := params["in_progress_total_seconds"].(int64); ok {
+		updateFields = append(updateFields, "in_progress_total_seconds = ?")
+		updateArgs = append(updateArgs, ipSeconds)
+	} else if ipSecondsF, ok := params["in_progress_total_seconds"].(float64); ok {
+		updateFields = append(updateFields, "in_progress_total_seconds = ?")
+		updateArgs = append(updateArgs, int64(ipSecondsF))
+	}
+
+	// Handle in_progress_started_at
+	if _, hasStartedAtKey := params["in_progress_started_at"]; hasStartedAtKey {
+		switch v := params["in_progress_started_at"].(type) {
+		case nil:
+			updateFields = append(updateFields, "in_progress_started_at = ?")
+			updateArgs = append(updateArgs, nil)
+		case string:
+			if v == "" {
+				updateFields = append(updateFields, "in_progress_started_at = ?")
+				updateArgs = append(updateArgs, nil)
+			} else {
+				updateFields = append(updateFields, "in_progress_started_at = ?")
+				updateArgs = append(updateArgs, v)
+			}
+		}
+	}
+
 	updateArgs = append(updateArgs, taskID)
 
 	query := fmt.Sprintf("UPDATE tasks SET %s WHERE id = ?", strings.Join(updateFields, ", ")) // #nosec G201 - field names are hardcoded

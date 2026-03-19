@@ -58,11 +58,49 @@ func parseTimeStringLocal(s string, base time.Time, loc *time.Location) (time.Ti
 	return time.Time{}, false
 }
 
+// parseDurationString parses duration strings like "1h", "30m", "1h5m", "2h30m15s" and returns seconds.
+// Returns 0 if the string is empty or "0", and -1 on parse error.
+func parseDurationString(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0
+	}
+
+	var totalSeconds int64
+
+	// Match all occurrences of number + unit
+	re := regexp.MustCompile(`(\d+)\s*([dhms])`)
+	matches := re.FindAllStringSubmatch(s, -1)
+
+	if len(matches) == 0 {
+		return -1 // parse error
+	}
+
+	for _, m := range matches {
+		val, _ := strconv.ParseInt(m[1], 10, 64)
+		unit := m[2]
+
+		switch unit {
+		case "d":
+			totalSeconds += val * 86400
+		case "h":
+			totalSeconds += val * 3600
+		case "m":
+			totalSeconds += val * 60
+		case "s":
+			totalSeconds += val
+		}
+	}
+
+	return totalSeconds
+}
+
 // runTaskCommand executes a textual command against a task. It supports at least:
 // - "c <color>" or "color <color>" to set task color
 // - "r <expr>" or "reschedule <expr>" to change scheduled date/time
 // - "skip" to advance a recurring task to its next occurrence
 // - "x" to mark the task as done
+// - "p <duration>" or "progress <duration>" to set in-progress accumulated time
 // The function returns an updated TaskRow (if available) or a small map with status and updated fields so callers (UI/TUI) can refresh.
 func (svc *Service) runTaskCommand(taskID int64, command string, view string) (any, error) {
 	if svc.db == nil {
@@ -622,6 +660,43 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 			return t, nil
 		}
 		return map[string]any{"status": "ok", "tags": newTagsCSV}, nil
+
+	case "p", "progress":
+		durStr := strings.TrimSpace(args)
+		if durStr == "" {
+			return nil, fmt.Errorf("duration required (e.g., '0', '1h5m', '30m')")
+		}
+
+		// Parse the duration string
+		seconds := parseDurationString(durStr)
+		if seconds == -1 {
+			return nil, fmt.Errorf("invalid duration format (use e.g., '1h5m', '30m', '0')")
+		}
+
+		// Check if task is running
+		var isRunning sql.NullBool
+		var startedAtStr sql.NullString
+		if err := svc.db.QueryRow("SELECT in_progress, in_progress_started_at FROM tasks WHERE id = ?", taskID).Scan(&isRunning, &startedAtStr); err != nil {
+			return nil, err
+		}
+
+		updateParams := map[string]any{"in_progress_total_seconds": seconds}
+
+		// If task is running, reset startedAt to now
+		if isRunning.Valid && isRunning.Bool {
+			now := time.Now().UTC().Format(time.RFC3339Nano)
+			updateParams["in_progress_started_at"] = now
+		}
+
+		// Update the in_progress_total_seconds field (and startedAt if needed)
+		if _, err := svc.updateTask(taskID, updateParams); err != nil {
+			return nil, err
+		}
+
+		// Always return a plain map (not a full TaskRow) so only the timer handler
+		// in the frontend fires, avoiding unintended side effects from other handlers.
+		return map[string]any{"status": "ok", "inProgressTotalSeconds": seconds}, nil
+
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmd)
 	}

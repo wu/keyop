@@ -1175,6 +1175,18 @@ function displayTasks() {
             inProgressTasks = tasksToShow.filter(t => inProgressIds.has(String(t.id)));
         }
 
+        // Sort in-progress tasks by progress time (least time in progress first)
+        inProgressTasks.sort((a, b) => {
+            const infoA = state.inProgress[a.id] || {startedAt: null, accumulatedMs: 0};
+            const infoB = state.inProgress[b.id] || {startedAt: null, accumulatedMs: 0};
+
+            // Calculate total time in progress for each
+            const timeA = infoA.accumulatedMs + (infoA.running && infoA.startedAt ? (Date.now() - infoA.startedAt) : 0);
+            const timeB = infoB.accumulatedMs + (infoB.running && infoB.startedAt ? (Date.now() - infoB.startedAt) : 0);
+
+            return timeA - timeB; // Ascending: least time first
+        });
+
         const todayIncomplete = tasksToShow.filter(t => !t.done && (!t.category || t.category === 'today') && !inProgressIds.has(String(t.id)));
         const pastIncomplete = tasksToShow.filter(t => !t.done && t.category === 'past' && !inProgressIds.has(String(t.id)));
         const completed = tasksToShow.filter(t => t.done);
@@ -1905,6 +1917,19 @@ async function processCommand(taskId, commandText) {
             }
         }
         if (res.error) throw new Error(res.error);
+
+        // In-progress time handling: update state.inProgress and refresh timer display
+        if (Object.prototype.hasOwnProperty.call(res, 'inProgressTotalSeconds')) {
+            const totalSeconds = res.inProgressTotalSeconds || 0;
+            state.inProgress[taskId] = state.inProgress[taskId] || {startedAt: null, accumulatedMs: 0, running: false};
+            // Reset accumulatedMs and update startedAt to now so timer starts from 0
+            state.inProgress[taskId].accumulatedMs = totalSeconds * 1000;
+            if (state.inProgress[taskId].running) {
+                state.inProgress[taskId].startedAt = Date.now();
+            }
+            saveInProgressState();
+            updateAllInProgressDisplays();
+        }
 
         // Color handling: if server returned a color property (including empty to clear)
         if (Object.prototype.hasOwnProperty.call(res, 'color')) {
