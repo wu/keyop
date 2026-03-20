@@ -4,6 +4,7 @@
 package weatherstation
 
 import (
+	"database/sql"
 	"fmt"
 	"keyop/core"
 	"net/http"
@@ -73,6 +74,7 @@ type Service struct {
 	Cfg              core.ServiceConfig
 	Port             int
 	FieldMetricNames map[string]string
+	db               **sql.DB
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -128,6 +130,24 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
+	return nil
+}
+
+// Name returns the service name for payload registration.
+func (svc *Service) Name() string { return "weatherstation" }
+
+// RegisterPayloads registers the WeatherStationEvent payload type with the messenger registry.
+func (svc *Service) RegisterPayloads(reg core.PayloadRegistry) error {
+	if err := reg.Register("weatherstation", func() any { return &core.WeatherStationEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("weatherstation: failed to register alias: %w", err)
+		}
+	}
+	if err := reg.Register("weatherstation.event.v1", func() any { return &core.WeatherStationEvent{} }); err != nil {
+		if !core.IsDuplicatePayloadRegistration(err) {
+			return fmt.Errorf("weatherstation: failed to register weatherstation.event.v1: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -215,7 +235,7 @@ func (svc *Service) handleWeather(w http.ResponseWriter, r *http.Request) {
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "weather_data",
+		Event:       "weatherstation",
 		Data:        weatherEvent,
 	}
 

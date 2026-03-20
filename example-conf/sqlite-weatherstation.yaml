@@ -1,0 +1,16 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/weatherstation.sql
+
+  payloadTypes:
+    - weatherstation.event.v1
+
+subs:
+
+  weatherstation:
+    name: weatherstation
+    description: process incoming events
+
+

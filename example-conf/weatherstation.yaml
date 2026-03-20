@@ -1,0 +1,46 @@
+x: weatherstation
+config:
+
+  port: 80
+
+  fieldMetricNames:
+    Barometer: weewx.barometer
+    BarometerRel: weewx.barometerRel
+    DailyRain: weewx.rain
+    EventRain: weewx.eventRain
+    HourlyRain: weewx.hourlyRain
+    OutHumidity: weewx.outHumidity
+    InHumidity: weewx.inHumidity
+    MaxDailyGust: weewx.maxDailyGust
+    MonthlyRain: weewx.monthlyRain
+    RainRate: weewx.rainRate
+    SolarRadiation: weewx.solarRadiation
+    OutTemp: temp.outside
+    InTemp: temp.inside
+    TotalRain: weewx.totalRain
+    UV: weewx.uv
+    WeeklyRain: weewx.weeklyRain
+    Wh65Batt: weewx.wh65Batt
+    WindDir: weewx.windDir
+    WindGust: weewx.windGust
+    WindSpeed: weewx.windSpeed
+
+  pub_preprocess:
+
+    - when: 'event eq "weatherstation"'
+      updates:
+        channelName: weatherstation
+
+    - when: 'event eq "temp_metric"'
+      updates:
+        channelName: temp
+
+    - when: 'event eq "rain_metric"'
+      updates:
+        channelName: rain
+
+    - when: 'event matches /^weather_metric/'
+      updates:
+        channelName: metrics
+
+

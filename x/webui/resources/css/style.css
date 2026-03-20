@@ -448,6 +448,29 @@ input[type="date"]:focus {
     white-space: nowrap;
 }
 
+/* Weatherstation panel */
+.ws-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1.2rem;
+    width: 100%;
+    padding: 0 0.25rem;
+}
+
+.ws-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.ws-updated {
+    font-size: 0.7rem;
+    opacity: 0.45;
+    margin-top: 0.25rem;
+    text-align: center;
+}
+
 /* Alerts Styles */
 #alerts-container {
     width: 100%;
