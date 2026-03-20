@@ -397,3 +397,35 @@
     padding: 0;
     margin: 0;
 }
+
+/* Back button hidden on desktop */
+.notes-back-btn {
+    display: none;
+}
+
+/* Mobile: single-column notes layout */
+@media (max-width: 640px) {
+    .notes-sidebar {
+        width: 100%;
+        border-right: none;
+    }
+
+    /* On mobile, main panel is hidden until a note is selected */
+    .notes-main {
+        display: none;
+    }
+
+    /* When a note is selected, swap: hide list, show main */
+    .notes-container.note-selected .notes-sidebar {
+        display: none;
+    }
+
+    .notes-container.note-selected .notes-main {
+        display: flex;
+    }
+
+    /* Show back button on mobile */
+    .notes-back-btn {
+        display: inline-block;
+    }
+}

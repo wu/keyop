@@ -8,6 +8,7 @@
         search: document.getElementById('notes-search'),
         searchContent: document.getElementById('notes-search-content'),
         newBtn: document.getElementById('notes-new-btn'),
+        backBtn: document.getElementById('notes-back-btn'),
         list: document.getElementById('notes-list'),
         view: document.getElementById('notes-view'),
         edit: document.getElementById('notes-edit'),
@@ -19,7 +20,20 @@
         deleteBtn: document.getElementById('notes-delete-btn'),
         cancelBtn: document.getElementById('notes-cancel-btn'),
         importZone: document.getElementById('notes-import-zone'),
+        container: document.getElementById('notes-container'),
     };
+
+    function showNotePanel() {
+        elements.container && elements.container.classList.add('note-selected');
+    }
+
+    function showListPanel() {
+        elements.container && elements.container.classList.remove('note-selected');
+    }
+
+    if (elements.backBtn) {
+        elements.backBtn.addEventListener('click', () => showListPanel());
+    }
 
     async function callAction(action, params) {
         try {
@@ -79,6 +93,7 @@
 
         currentNoteId = id;
         isEditing = false;
+        showNotePanel();
         updateEditMode();
         renderNotesList();
 
