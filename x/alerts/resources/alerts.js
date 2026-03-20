@@ -26,7 +26,7 @@ function updateHighestSeverity(severity) {
 
 function recalculateHighestSeverity() {
     highestSeverity = 'info';
-    const alertItems = document.querySelectorAll('.alert-item');
+    const alertItems = alertsContainer.querySelectorAll('.alert-item');
     alertItems.forEach(item => {
         const severity = item.dataset.severity?.toLowerCase() || 'info';
         updateHighestSeverity(severity);
@@ -362,7 +362,7 @@ function rebuildServiceList() {
     if (!sidebar || !navController) return;
 
     // Get all unique services that still have items visible (not filtered out)
-    const items = document.querySelectorAll('.alert-item');
+    const items = alertsContainer.querySelectorAll('.alert-item');
     const serviceNames = new Set();
     items.forEach(item => {
         // Only include services that would be visible if filtering was applied

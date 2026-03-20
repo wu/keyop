@@ -136,20 +136,20 @@ export function init(el) {
         <div class="sun-wrapper">
             <div class="sun-icon"><img class="moon-image" src="/images/moon/new.png" alt="Moon phase"></div>
             <div class="sun-event">Loading…</div>
-            <div class="sun-meta" style="flex-direction: column; gap: 12px;">
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div class="sun-meta" style="flex-direction: column; gap: 12px; text-align: center;">
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <div class="sun-label">Phase</div>
                     <div class="sun-value sun-day-value">—</div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <div class="sun-label">Illumination</div>
                     <div class="sun-value sun-night-value">—</div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <div class="sun-label">Full Moon</div>
                     <div class="sun-value moon-full-remaining">—</div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <div class="sun-label">New Moon</div>
                     <div class="sun-value moon-new-remaining">—</div>
                 </div>

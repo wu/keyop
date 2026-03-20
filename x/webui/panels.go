@@ -70,7 +70,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() TabInfo {
 	return TabInfo{
 		ID:      "dashboard",
-		Title:   "Dashboard",
+		Title:   "keyop",
 		Content: `<div id="dashboard-container"><h3>Dashboard</h3><div id="dashboard-panels">Loading dashboard...</div></div>`,
 		JSPath:  "/api/assets/webui/js/dashboard.js",
 	}

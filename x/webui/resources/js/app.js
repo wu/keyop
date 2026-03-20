@@ -39,9 +39,20 @@ async function loadTabs() {
         // Create tab link
         const link = document.createElement('div');
         link.className = 'tab-link';
-        link.textContent = tab.title;
         link.dataset.tabId = tab.id;
         link.onclick = () => switchTab(tab.id);
+        if (tab.id === 'dashboard') {
+            const label = document.createElement('span');
+            label.textContent = tab.title;
+            const dot = document.createElement('span');
+            dot.className = 'sse-dot sse-disconnected';
+            dot.id = 'sse-status';
+            dot.title = 'SSE: disconnected';
+            link.appendChild(label);
+            link.appendChild(dot);
+        } else {
+            link.textContent = tab.title;
+        }
         tabsNav.appendChild(link);
 
         // Create tab content container
@@ -166,9 +177,8 @@ function setupTabKeyboardNavigation() {
     });
 }
 
-const sseStatusEl = document.getElementById('sse-status');
-
 function setSseStatus(state) {
+    const sseStatusEl = document.getElementById('sse-status');
     if (!sseStatusEl) return;
     sseStatusEl.classList.remove('connected', 'disconnected', 'reconnecting');
     if (state === 'open' || state === 'connected') {

@@ -149,13 +149,15 @@ type Events struct {
 //
 //nolint:revive
 type SunEvent struct {
-	Now         time.Time `json:"now"`
-	Sunrise     time.Time `json:"sunrise"`
-	Sunset      time.Time `json:"sunset"`
-	CivilDawn   time.Time `json:"civil_dawn"`
-	CivilDusk   time.Time `json:"civil_dusk"`
-	DayLength   string    `json:"day_length"`
-	NightLength string    `json:"night_length"`
+	Now             time.Time `json:"now"`
+	Sunrise         time.Time `json:"sunrise"`
+	Sunset          time.Time `json:"sunset"`
+	CivilDawn       time.Time `json:"civil_dawn"`
+	CivilDusk       time.Time `json:"civil_dusk"`
+	DayLength       string    `json:"day_length"`
+	NightLength     string    `json:"night_length"`
+	TomorrowSunrise time.Time `json:"tomorrow_sunrise"`
+	TomorrowDawn    time.Time `json:"tomorrow_dawn"`
 }
 
 // PayloadType returns the registered payload type name for SunEvent.
@@ -210,17 +212,22 @@ func (svc *Service) Check() error {
 		nextEventTime = tomorrowEvents.CivilDawn
 	}
 
+	// Always compute tomorrow's events for the payload
+	tomorrowForPayload := svc.calculateSunEvents(lat, lon, alt, now.AddDate(0, 0, 1))
+
 	// Send event message
 	messenger := svc.Deps.MustGetMessenger()
 
 	se := SunEvent{
-		Now:         now,
-		Sunrise:     events.Sunrise,
-		Sunset:      events.Sunset,
-		CivilDawn:   events.CivilDawn,
-		CivilDusk:   events.CivilDusk,
-		DayLength:   events.DayLength,
-		NightLength: events.NightLength,
+		Now:             now,
+		Sunrise:         events.Sunrise,
+		Sunset:          events.Sunset,
+		CivilDawn:       events.CivilDawn,
+		CivilDusk:       events.CivilDusk,
+		DayLength:       events.DayLength,
+		NightLength:     events.NightLength,
+		TomorrowSunrise: tomorrowForPayload.Sunrise,
+		TomorrowDawn:    tomorrowForPayload.CivilDawn,
 	}
 
 	eventMsg := core.Message{

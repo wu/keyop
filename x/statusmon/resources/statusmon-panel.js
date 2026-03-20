@@ -85,23 +85,23 @@ function updatePanel(statuses) {
         let problemsHtml = '';
 
         if (criticalServices.length > 0) {
-            problemsHtml += `<div style="font-size: 0.85em; color: #ef4444; font-weight: bold;">Critical: ${criticalServices.length}</div>`;
+            problemsHtml += `<div style="font-size: 0.85em; color: #ef4444; font-weight: bold; text-align: center;">Critical: ${criticalServices.length}</div>`;
             for (const service of criticalServices) {
-                problemsHtml += `<div style="font-size: 0.8em; color: #ef4444;">${service.name}</div>`;
+                problemsHtml += `<div style="font-size: 0.8em; color: #ef4444; text-align: center;">${service.name}</div>`;
             }
         }
 
         if (warningServices.length > 0) {
-            if (problemsHtml) problemsHtml += '<div style="margin-top: 4px;"></div>';
-            problemsHtml += `<div style="font-size: 0.85em; color: #f59e0b; font-weight: bold;">Warnings: ${warningServices.length}</div>`;
+            if (problemsHtml) problemsHtml += '<div style="margin-top: 12px;"></div>';
+            problemsHtml += `<div style="font-size: 0.85em; color: #f59e0b; font-weight: bold; text-align: center;">Warnings: ${warningServices.length}</div>`;
             for (const service of warningServices) {
-                problemsHtml += `<div style="font-size: 0.8em; color: #f59e0b;">${service.name}</div>`;
+                problemsHtml += `<div style="font-size: 0.8em; color: #f59e0b; text-align: center;">${service.name}</div>`;
             }
         }
 
         if (ackedProblems.length > 0) {
-            if (problemsHtml) problemsHtml += '<div style="margin-top: 4px;"></div>';
-            problemsHtml += `<div style="font-size: 0.85em; color: var(--accent-pink); font-weight: bold;">Acked: ${ackedProblems.length}</div>`;
+            if (problemsHtml) problemsHtml += '<div style="margin-top: 12px;"></div>';
+            problemsHtml += `<div style="font-size: 0.85em; color: var(--accent); font-weight: bold; text-align: center;">Acked: ${ackedProblems.length}</div>`;
         }
 
         html += '<div style="font-size: 0.8em;">' + problemsHtml + '</div>';

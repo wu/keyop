@@ -338,7 +338,7 @@ input[type="date"]:focus {
 .sun-icon svg {
     width: 80px;
     height: 80px;
-    color: var(--accent);
+    color: #000000; /* Black when no data */
 }
 
 .sun-icon img {
@@ -358,7 +358,7 @@ input[type="date"]:focus {
 }
 
 .sun-night-icon svg {
-    color: #000000; /* Black for night */
+    color: #7c3aed; /* Purple for night */
 }
 
 .sun-event {

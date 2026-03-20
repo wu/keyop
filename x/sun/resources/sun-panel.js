@@ -274,6 +274,18 @@ export function onMessage(msg) {
         }
     }
 
+    // At night (after dusk), today's times are all past — use tomorrow's dawn+sunrise
+    if (!next) {
+        const tomorrowDawn = findTimestampForKey('tomorrow_dawn');
+        const tomorrowSunrise = findTimestampForKey('tomorrow_sunrise');
+        if (tomorrowDawn && tomorrowDawn > now) {
+            next = {name: 'Dawn', time: tomorrowDawn};
+            if (tomorrowSunrise && tomorrowSunrise > now) {
+                secondary = {name: 'Sunrise', time: tomorrowSunrise};
+            }
+        }
+    }
+
     if (!next) {
         // Try parsing summary text like "Next: Dawn 06:56" or "Dawn 06:56"
         const summary = (msg.summary || msg.text || '').replace(/^Next:\s*/i, '');
