@@ -1,0 +1,4 @@
+x: flashcards
+
+config:
+  db_path: ~/.keyop/sqlite/flashcards.sql

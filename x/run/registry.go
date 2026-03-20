@@ -7,6 +7,7 @@ import (
 	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
 	"keyop/x/errorevents"
+	"keyop/x/flashcards"
 	"keyop/x/git"
 	"keyop/x/githubNotification"
 	"keyop/x/graphite"
@@ -153,6 +154,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"sun": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return sun.NewService(deps, cfg)
+	},
+	"flashcards": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return flashcards.NewService(deps, cfg)
 	},
 	"tasks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return tasks.NewService(deps, cfg)

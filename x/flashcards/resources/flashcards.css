@@ -1,0 +1,406 @@
+/* Flashcards tab layout — mirrors the alerts/tasks sidebar layout */
+
+.flashcards-layout {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+.flashcards-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.flashcards-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Card list — mirrors #alerts-list */
+#fc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.fc-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text, #888);
+    font-size: 0.95em;
+}
+
+/* Individual card — alert-item provides the card frame; fc-item stacks content vertically */
+.fc-item {
+    flex-direction: column;
+    align-items: stretch;
+    cursor: pointer;
+}
+
+.fc-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.fc-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.fc-question-text {
+    flex: 1;
+    font-size: 0.95em;
+    color: var(--text, #e0e0e0);
+}
+
+.fc-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Tags */
+.fc-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.fc-tag {
+    font-size: 0.75em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--tag-bg, #2d2d3a);
+    color: var(--tag-color, #a78bfa);
+    border: 1px solid var(--tag-border, #4c3d7a);
+}
+
+/* Due indicator */
+.fc-due {
+    font-size: 0.72em;
+    color: var(--text-muted, #666);
+    white-space: nowrap;
+}
+
+.fc-due-new {
+    color: #a78bfa;
+}
+
+/* Delete button */
+.fc-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted, #555);
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 0.8em;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.fc-item:hover .fc-delete-btn {
+    opacity: 1;
+}
+
+.fc-delete-btn:hover {
+    color: #ef4444;
+}
+
+/* Answer section (revealed on click) */
+.fc-answer {
+    margin-top: 10px;
+    padding: 12px 0 40px 0;
+    border-top: 1px solid var(--border);
+}
+
+.fc-answer-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #666);
+    margin-top: 24px;
+    margin-bottom: 32px;
+}
+
+.fc-answer-text {
+    font-size: 0.93em;
+    color: var(--text, #e0e0e0);
+    margin-bottom: 48px;
+    padding: 0 48px;
+}
+
+/* Rating buttons */
+.fc-ratings {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.fc-rating-btn {
+    padding: 5px 14px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 0.82em;
+    font-weight: 500;
+    transition: opacity 0.15s, transform 0.1s;
+}
+
+.fc-rating-btn:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
+
+.fc-again {
+    background: #7f1d1d;
+    color: #fca5a5;
+    border-color: #b91c1c;
+}
+
+.fc-hard {
+    background: #78350f;
+    color: #fcd34d;
+    border-color: #b45309;
+}
+
+.fc-correct {
+    background: #14532d;
+    color: #86efac;
+    border-color: #16a34a;
+}
+
+.fc-easy {
+    background: #1e3a5f;
+    color: #93c5fd;
+    border-color: #2563eb;
+}
+
+/* New card button */
+.fc-new-btn {
+    padding: 5px 14px;
+    background: #4c1d95;
+    color: #e9d5ff;
+    border: 1px solid #7c3aed;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+.fc-new-btn:hover {
+    background: #5b21b6;
+}
+
+/* Modal */
+.fc-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.fc-modal-box {
+    background: var(--header-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 520px;
+    max-width: 95vw;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fc-modal-box h3 {
+    margin: 0 0 8px;
+    color: var(--text-primary, #e0e0e0);
+    font-size: 1em;
+}
+
+.fc-modal-box label {
+    font-size: 0.8em;
+    color: var(--text-muted, #888);
+    margin-top: 4px;
+}
+
+.fc-hint {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.fc-modal-box textarea,
+.fc-modal-box input[type="text"] {
+    width: 100%;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary, #e0e0e0);
+    padding: 7px 10px;
+    font-size: 0.88em;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.fc-modal-box textarea:focus,
+.fc-modal-box input[type="text"]:focus {
+    outline: none;
+    border-color: #7c3aed;
+}
+
+.fc-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
+}
+
+.fc-btn {
+    padding: 6px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    border: 1px solid var(--border);
+    background: var(--header-bg);
+    color: var(--text-primary, #e0e0e0);
+    transition: background 0.15s;
+}
+
+.fc-btn:hover {
+    background: var(--btn-hover, #3a3a4a);
+}
+
+.fc-btn-primary {
+    background: #4c1d95;
+    color: #e9d5ff;
+    border-color: #7c3aed;
+}
+
+.fc-btn-primary:hover {
+    background: #5b21b6;
+}
+
+/* Markdown content inside card question/answer — mirrors .notes-view rules exactly */
+.fc-md {
+    line-height: 1.6;
+}
+
+.fc-md p {
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+}
+
+.fc-md p:last-child {
+    margin-bottom: 0;
+}
+
+.fc-md li > p, .fc-md li > p:first-child {
+    margin: 0;
+}
+
+.fc-md ul, .fc-md ol {
+    margin: 0 0 16px 0;
+    padding-left: 24px;
+}
+
+.fc-md li > ul, .fc-md li > ol {
+    margin: 0;
+}
+
+.fc-md li {
+    margin-bottom: 4px;
+    line-height: 1.6;
+}
+
+.fc-md code {
+    background-color: var(--tab-content-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    font-size: 13px;
+    color: var(--pre-text);
+}
+
+.fc-md pre {
+    background-color: var(--tab-content-bg);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+    border: 1px solid var(--border);
+}
+
+.fc-md pre code {
+    background-color: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.fc-md strong {
+    font-weight: 600;
+}
+
+.fc-md em {
+    font-style: italic;
+}
+
+.fc-md a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.fc-md a:hover {
+    text-decoration: underline;
+}
+
+.fc-md .chroma {
+    background-color: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+}
+
+.fc-md .list-group-gap {
+    height: 10px;
+    background: transparent;
+}
+
+/* Edit button — shown inline with "Answer" label */
+.fc-answer-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fc-edit-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    padding: 1px 7px;
+    font-size: 0.75em;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.fc-edit-btn:hover {
+    color: #a78bfa;
+    border-color: #7c3aed;
+}
