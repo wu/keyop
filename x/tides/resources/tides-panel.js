@@ -57,7 +57,7 @@ export function onMessage(msg) {
                 if (data && data.event) {
                     // Merge the new sparkline data with the message data
                     lastTideData = {
-                        event: msg.data || msg,
+                        event: data.event,
                         sparklineRecords: data.sparklineRecords || [],
                         currentLevel: data.currentLevel,
                         peakLevel: data.peakLevel,
@@ -130,9 +130,59 @@ function updatePanel() {
     }
 
     html += `</div>`;
+
+    // Next daylight low tide period
+    const periods = event.periods || [];
+    if (periods.length > 0) {
+        const p = periods[0];
+        const start = new Date(p.start);
+        const now2 = new Date();
+        const diffMs = start - now2;
+
+        let relStr;
+        if (diffMs <= 0) {
+            // Period is ongoing
+            const endT = new Date(p.end);
+            const remMs = endT - now2;
+            if (remMs > 0) {
+                relStr = 'now · ' + fmtDuration(remMs) + ' left';
+            } else {
+                relStr = 'today';
+            }
+        } else {
+            relStr = 'in ' + fmtDuration(diffMs);
+        }
+
+        const durStr = fmtDuration(p.duration / 1e6); // Go duration in ns → ms
+        const minFt = (p.minValue || 0).toFixed(1);
+
+        // Day label: "Today", "Tomorrow", or day of week
+        const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const todayDay = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate());
+        const dayDiff = Math.round((startDay - todayDay) / 86400000);
+        const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : p.dayOfWeek || '';
+
+        const timeStr = start.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+
+        html += `<div style="width: 100%; text-align: center; margin-top: 6px;">`;
+        html += `<div class="sun-label" style="margin-bottom: 2px;">Daylight Low</div>`;
+        html += `<div class="sun-value" style="font-size: 0.85rem;">${relStr}</div>`;
+        html += `<div class="sun-label" style="font-size: 0.7rem;">${dayLabel} ${timeStr} · ${durStr}</div>`;
+        html += `</div>`;
+    }
+
     html += `</div>`;
 
     panelBody.innerHTML = html;
+}
+
+function fmtDuration(ms) {
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
 }
 
 // Compute civil dawn and dusk for a given date at lat/lon (NOAA algorithm).

@@ -163,6 +163,39 @@ func (svc *Service) fetchCurrentTide() (any, error) {
 		ev.Next = next
 	}
 
+	// Compute daylight low-tide periods (same logic as Check).
+	if svc.lat != 0 || svc.lon != 0 {
+		const reportDays = 7
+		var allPeriods []LowTidePeriod
+		today := localMidnight(now)
+		for i := 0; i < reportDays; i++ {
+			day := today.AddDate(0, 0, i)
+			f, err2 := svc.loadDayFile(day)
+			if err2 != nil || len(f.Records) == 0 {
+				continue
+			}
+			var dayRecords []TideRecord
+			dayRecords = append(dayRecords, f.Records...)
+			if nextDay, err3 := svc.loadDayFile(day.AddDate(0, 0, 1)); err3 == nil {
+				dayRecords = append(dayRecords, nextDay.Records...)
+			}
+			stationLoc := day.Location()
+			if svc.tz != nil {
+				stationLoc = svc.tz
+			}
+			dayInStation := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, stationLoc)
+			sunrise, sunset := sunriseSunset(svc.lat, svc.lon, svc.alt, dayInStation)
+			svc.mu.RLock()
+			threshold := svc.lowTideThreshold
+			svc.mu.RUnlock()
+			allPeriods = append(allPeriods, daylightLowPeriods(dayRecords, dayInStation, sunrise, sunset, threshold)...)
+		}
+		if len(allPeriods) > 0 {
+			ev.Periods = allPeriods
+			ev.Threshold = svc.lowTideThreshold
+		}
+	}
+
 	// Extract sparkline data: filter records within 12 hours before and 24 hours after now
 	twelveHoursAgo := now.Add(-12 * time.Hour)
 	twentyFourHoursFromNow := now.Add(24 * time.Hour)
