@@ -1,22 +1,24 @@
 # Simple Dockerfile for prebuilt binary
-FROM gcr.io/distroless/static-debian11
+FROM ubuntu:24.04
+
+# Avoid interactive prompts during package install
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Expose web UI port
 EXPOSE 8823
 
-# Create config directories and copy example-conf
-COPY example-conf /root/.keyop/conf
-COPY example-conf /.keyop/conf
+# Copy selected example config files
+COPY example-conf/heartbeat.yaml      /root/.keyop/conf/heartbeat.yaml
+COPY example-conf/moon.yaml            /root/.keyop/conf/moon.yaml
+COPY example-conf/cpu-monitor.yaml     /root/.keyop/conf/cpu-monitor.yaml
+COPY example-conf/memory-monitor.yaml  /root/.keyop/conf/memory-monitor.yaml
+COPY example-conf/webui.yaml           /root/.keyop/conf/webui.yaml
 
-# Copy any prepared .keyop files (plugins, etc)
-COPY .keyop /root/.keyop
-
-# Copy web UI static assets into the image root so the web UI can serve them
-COPY plugins/webUiPlugin/static /webui-static
-
-# Ensure webui directory exists so the web UI can store its DB file
-RUN mkdir -p /root/.keyop/webui /.keyop/webui && \
-    chown -R 0:0 /root/.keyop/webui /.keyop/webui || true
+RUN mkdir -p /root/.keyop/webui
 
 # Copy prebuilt binary
 COPY keyop /keyop

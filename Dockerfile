@@ -12,30 +12,30 @@ RUN go mod download
 # Copy the rest of the sources
 COPY . .
 
-# Build static linux binary (no git calls inside the Dockerfile)
+# Build static linux binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags "-s -w" -o /keyop ./
 
-# Final image: use distroless static Debian to include CA certs for TLS-heavy apps
-FROM gcr.io/distroless/static-debian11
+FROM ubuntu:24.04
+
+# Avoid interactive prompts during package install
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Expose web UI port
 EXPOSE 8823
 
-# Create expected config directories and copy example config
-# Copy to root and /root for safety so the app can find ~/.keyop/conf
-COPY --chown=0:0 example-conf /root/.keyop/conf
-COPY --chown=0:0 example-conf /.keyop/conf
+# Copy selected example config files
+COPY --chown=0:0 example-conf/heartbeat.yaml      /root/.keyop/conf/heartbeat.yaml
+COPY --chown=0:0 example-conf/moon.yaml            /root/.keyop/conf/moon.yaml
+COPY --chown=0:0 example-conf/cpu-monitor.yaml     /root/.keyop/conf/cpu-monitor.yaml
+COPY --chown=0:0 example-conf/memory-monitor.yaml  /root/.keyop/conf/memory-monitor.yaml
+COPY --chown=0:0 example-conf/webui.yaml           /root/.keyop/conf/webui.yaml
 
-# Copy any prepared .keyop files (plugins, etc) if present
-COPY --chown=0:0 .keyop /root/.keyop
-
-# Copy web UI static assets into the image root so the web UI can serve them
-COPY --chown=0:0 plugins/webUiPlugin/static /webui-static
-
-# Ensure webui directory exists so the web UI can store its DB file
-RUN mkdir -p /root/.keyop/webui /.keyop/webui && \
-    chown -R 0:0 /root/.keyop/webui /.keyop/webui || true
+RUN mkdir -p /root/.keyop/webui
 
 COPY --from=builder /keyop /keyop
 

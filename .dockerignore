@@ -20,10 +20,3 @@ output
 
 # Secrets and env
 .env
-
-# Plugins build artifacts
-plugins/*/*.so
-
-# Allow web UI static assets to be included in the build context
-!plugins/webUiPlugin/static
-!plugins/webUiPlugin/static/**
