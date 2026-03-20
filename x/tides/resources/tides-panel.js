@@ -292,24 +292,18 @@ function renderSparkline(records, lat = null, lon = null) {
         }
     }
 
-    // Draw vertical line at current time (based on actual time position in range)
-    const currentX = padding + (currentPosition * graphWidth);
-    svg += `<line x1="${currentX}" y1="${padding}" x2="${currentX}" y2="${height - padding}" stroke="var(--accent-blue, #9b5af0)" stroke-width="2" opacity="0.3"/>`;
-
     // Draw the main line
     svg += `<path d="${pathData}" stroke="var(--accent-blue, #9b5af0)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 
     // Draw all points
     for (let i = 0; i < points.length; i++) {
-        const point = points[i];
-        if (i === currentIndex) {
-            // Current point: larger and more prominent
-            svg += `<circle cx="${point.x}" cy="${point.y}" r="2.5" fill="var(--accent-blue, #9b5af0)"/>`;
-        } else {
-            // Other points: smaller
-            svg += `<circle cx="${point.x}" cy="${point.y}" r="1.5" fill="var(--accent-blue, #9b5af0)"/>`;
-        }
+        if (i === currentIndex) continue; // draw last
+        svg += `<circle cx="${points[i].x}" cy="${points[i].y}" r="1.5" fill="var(--accent-blue, #9b5af0)"/>`;
     }
+    // Draw current point last so it sits on top of everything
+    const cp = points[currentIndex];
+    svg += `<circle cx="${cp.x}" cy="${cp.y}" r="5" fill="none" stroke="#c49cf8" stroke-width="1.5"/>`;
+    svg += `<circle cx="${cp.x}" cy="${cp.y}" r="3" fill="#c49cf8"/>`;
     svg += `</svg>`;
 
     return svg;
