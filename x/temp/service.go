@@ -14,13 +14,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// MetricConfig holds display customisation for one sensor/service.
+type MetricConfig struct {
+	DisplayName string `json:"displayName"`
+	Color       string `json:"color"`
+}
+
 // Service represents a Service used by the package.
 type Service struct {
-	Deps       core.Dependencies
-	Cfg        core.ServiceConfig
-	DevicePath string
-	MaxTemp    *float64
-	db         **sql.DB
+	Deps          core.Dependencies
+	Cfg           core.ServiceConfig
+	DevicePath    string
+	MaxTemp       *float64
+	db            **sql.DB
+	metricConfigs map[string]MetricConfig
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -59,7 +66,7 @@ func (svc Service) ValidateConfig() []error {
 }
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
-func (svc Service) Initialize() error {
+func (svc *Service) Initialize() error {
 
 	if svc.DevicePath == "" {
 		return fmt.Errorf("temp: devicePath not set")
@@ -67,6 +74,17 @@ func (svc Service) Initialize() error {
 
 	if _, err := os.Stat(svc.DevicePath); err != nil {
 		return fmt.Errorf("temp: device path %s does not exist: %w", svc.DevicePath, err)
+	}
+
+	// Load persisted metric display configs.
+	var state struct {
+		MetricConfigs map[string]MetricConfig `json:"metricConfigs"`
+	}
+	if err := svc.Deps.MustGetStateStore().Load(svc.Cfg.Name, &state); err == nil && state.MetricConfigs != nil {
+		svc.metricConfigs = state.MetricConfigs
+	}
+	if svc.metricConfigs == nil {
+		svc.metricConfigs = make(map[string]MetricConfig)
 	}
 
 	return nil

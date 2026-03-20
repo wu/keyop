@@ -11,13 +11,19 @@ const PALETTE = [
 ];
 const serviceColors = {};
 let colorIndex = 0;
+let metricConfigs = {}; // loaded from backend; key = serviceName
 
 function getServiceColor(serviceName) {
+    if (metricConfigs[serviceName]?.color) return metricConfigs[serviceName].color;
     if (!serviceColors[serviceName]) {
         serviceColors[serviceName] = PALETTE[colorIndex % PALETTE.length];
         colorIndex++;
     }
     return serviceColors[serviceName];
+}
+
+function getServiceLabel(serviceName) {
+    return metricConfigs[serviceName]?.displayName || serviceName;
 }
 
 export async function init(container) {
@@ -30,6 +36,16 @@ export async function init(container) {
     // ResizeObserver for responsive canvas
     const ro = new ResizeObserver(() => resizeCanvas());
     ro.observe(tempsContainer);
+
+    // Load saved configs before rendering
+    try {
+        const res = await fetch('/api/tabs/temps/action/get-metric-configs', {method: 'POST'});
+        if (res.ok) {
+            const data = await res.json();
+            metricConfigs = data.configs || {};
+        }
+    } catch (e) { /* use defaults */
+    }
 
     await refreshTemps();
 }
@@ -110,11 +126,100 @@ async function refreshTemps() {
             });
         });
 
+        ensureSettingsPanel();
         resizeCanvas();
     } catch (err) {
         console.error('Failed to refresh temps:', err);
         tempsContainer.innerHTML = `<div class="error">Error loading temps: ${err.message}</div>`;
     }
+}
+
+// --- Settings panel ---
+
+function ensureSettingsPanel() {
+    if (tempsContainer.querySelector('#temps-settings')) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'temps-settings';
+    panel.style.cssText = 'padding: 6px 0; font-size: 0.8rem;';
+    panel.innerHTML = `
+        <button id="temps-settings-toggle" style="background:none;border:none;color:var(--text);opacity:0.6;cursor:pointer;font-size:0.8rem;padding:2px 6px;">⚙ Sensors</button>
+        <div id="temps-settings-panel" style="display:none;margin-top:8px;"></div>
+    `;
+    tempsContainer.appendChild(panel);
+
+    panel.querySelector('#temps-settings-toggle').addEventListener('click', () => {
+        const p = panel.querySelector('#temps-settings-panel');
+        if (p.style.display === 'none') {
+            renderSettingsPanel(p);
+            p.style.display = 'block';
+        } else {
+            p.style.display = 'none';
+        }
+    });
+}
+
+function renderSettingsPanel(container) {
+    const services = [...new Set(history.map(h => h.serviceName))];
+
+    let html = `<table style="border-collapse:collapse;width:100%;max-width:480px;">
+        <thead><tr>
+            <th style="text-align:left;padding:4px 8px;opacity:0.6;font-weight:normal;">Sensor</th>
+            <th style="text-align:left;padding:4px 8px;opacity:0.6;font-weight:normal;">Display Name</th>
+            <th style="text-align:left;padding:4px 8px;opacity:0.6;font-weight:normal;">Color</th>
+        </tr></thead><tbody>`;
+
+    services.forEach(svc => {
+        const cfg = metricConfigs[svc] || {};
+        const color = cfg.color || getServiceColor(svc);
+        const name = cfg.displayName || '';
+        html += `<tr data-service="${svc}">
+            <td style="padding:4px 8px;opacity:0.7;">${svc}</td>
+            <td style="padding:4px 8px;"><input type="text" class="mc-name" placeholder="${svc}" value="${name}"
+                style="background:var(--surface,#2a2a3e);border:1px solid var(--border,#444);color:var(--text);padding:2px 6px;border-radius:4px;width:140px;font-size:0.8rem;"></td>
+            <td style="padding:4px 8px;"><input type="color" class="mc-color" value="${color}"
+                style="width:36px;height:24px;border:none;cursor:pointer;background:none;"></td>
+        </tr>`;
+    });
+
+    html += `</tbody></table>
+        <button id="temps-settings-save" style="margin-top:8px;padding:4px 14px;background:var(--accent-blue,#9b5af0);border:none;border-radius:4px;color:#fff;cursor:pointer;font-size:0.8rem;">Save</button>
+        <span id="temps-settings-status" style="margin-left:8px;opacity:0.6;font-size:0.75rem;"></span>`;
+
+    container.innerHTML = html;
+
+    container.querySelector('#temps-settings-save').addEventListener('click', async () => {
+        const rows = container.querySelectorAll('tbody tr[data-service]');
+        const configs = {};
+        rows.forEach(row => {
+            const svc = row.dataset.service;
+            configs[svc] = {
+                displayName: row.querySelector('.mc-name').value.trim(),
+                color: row.querySelector('.mc-color').value,
+            };
+        });
+
+        const status = container.querySelector('#temps-settings-status');
+        try {
+            const res = await fetch('/api/tabs/temps/action/save-metric-configs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({configs}),
+            });
+            if (res.ok) {
+                metricConfigs = configs;
+                status.textContent = 'Saved ✓';
+                setTimeout(() => {
+                    status.textContent = '';
+                }, 2000);
+                resizeCanvas(); // redraw with new colors/names
+            } else {
+                status.textContent = 'Error saving';
+            }
+        } catch (e) {
+            status.textContent = 'Error saving';
+        }
+    });
 }
 
 function render() {
@@ -196,11 +301,9 @@ function render() {
         const isHour = t.getMinutes() === 0;
 
         if (isHour) {
-            // Full hour: darker line
             ctx.strokeStyle = '#666';
             ctx.lineWidth = 1.5;
         } else {
-            // Half hour: lighter line
             ctx.strokeStyle = '#555';
             ctx.lineWidth = 1;
         }
@@ -238,7 +341,7 @@ function render() {
         const servicePoints = history.filter(pt => pt.serviceName === serviceName);
 
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
 
         servicePoints.forEach((pt, i) => {
@@ -261,10 +364,12 @@ function render() {
         ctx.fillStyle = color;
         ctx.fillRect(legendX, legendY, 12, 12);
         ctx.fillStyle = '#ccc';
-        const label = serviceName.length > 18 ? serviceName.slice(0, 16) + '…' : serviceName;
-        ctx.fillText(label, legendX + 16, legendY + 10);
+        const label = getServiceLabel(serviceName);
+        const truncated = label.length > 18 ? label.slice(0, 16) + '…' : label;
+        ctx.fillText(truncated, legendX + 16, legendY + 10);
         legendY += 18;
     });
 
     ctx.restore();
 }
+

@@ -39,10 +39,14 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 }
 
 // HandleWebUIAction handles actions from the WebUI.
-func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, error) {
+func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
 	switch action {
 	case "fetch-temps":
 		return svc.fetchTemps()
+	case "get-metric-configs":
+		return svc.getMetricConfigs()
+	case "save-metric-configs":
+		return svc.saveMetricConfigs(params)
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
@@ -98,4 +102,44 @@ func (svc *Service) fetchTemps() (any, error) {
 	}
 
 	return map[string]any{"readings": readings}, nil
+}
+
+// getMetricConfigs returns the current per-sensor display configuration.
+func (svc *Service) getMetricConfigs() (any, error) {
+	return map[string]any{"configs": svc.metricConfigs}, nil
+}
+
+// saveMetricConfigs persists per-sensor display configuration to the state store.
+func (svc *Service) saveMetricConfigs(params map[string]any) (any, error) {
+	raw, ok := params["configs"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("save-metric-configs: missing or invalid 'configs' param")
+	}
+
+	configs := make(map[string]MetricConfig, len(raw))
+	for k, v := range raw {
+		m, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		cfg := MetricConfig{}
+		if s, ok := m["displayName"].(string); ok {
+			cfg.DisplayName = s
+		}
+		if s, ok := m["color"].(string); ok {
+			cfg.Color = s
+		}
+		configs[k] = cfg
+	}
+
+	svc.metricConfigs = configs
+
+	state := struct {
+		MetricConfigs map[string]MetricConfig `json:"metricConfigs"`
+	}{MetricConfigs: configs}
+	if err := svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, state); err != nil {
+		return nil, fmt.Errorf("save-metric-configs: %w", err)
+	}
+
+	return map[string]any{"status": "ok"}, nil
 }
