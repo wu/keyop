@@ -1,14 +1,16 @@
 let container = null;
+let historyMode = false;
 
 export function init(el) {
     container = el;
+    historyMode = false;
     loadData();
 }
 
 export function onMessage(msg) {
     if (!container) return;
     if (msg.event === 'gps' || msg.event === 'region_enter' || msg.event === 'region_exit') {
-        loadData();
+        if (!historyMode) loadData();
     }
 }
 
@@ -31,6 +33,38 @@ function loadMap() {
             if (img) img.src = 'data:image/png;base64,' + data.map;
         })
         .catch(err => console.error('GPS: failed to load map', err));
+}
+
+function loadHistoryMap() {
+    const placeholder = container.querySelector('#gps-history-map');
+    if (placeholder) placeholder.style.opacity = '0.3';
+    fetch('/api/tabs/gps/action/get-history-map', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            const img = container.querySelector('#gps-history-map');
+            if (!img) return;
+            if (data.map) {
+                img.src = 'data:image/png;base64,' + data.map;
+                img.style.opacity = '1';
+            } else {
+                img.style.display = 'none';
+                const p = container.querySelector('#gps-history-empty');
+                if (p) p.style.display = '';
+            }
+        })
+        .catch(err => console.error('GPS: failed to load history map', err));
+}
+
+function toggleHistory() {
+    historyMode = !historyMode;
+    if (historyMode) {
+        fetch('/api/tabs/gps/action/get-current', {method: 'POST'})
+            .then(r => r.json())
+            .then(data => renderHistory(data))
+            .catch(err => console.error('GPS: failed to load data for history', err));
+    } else {
+        loadData();
+    }
 }
 
 function formatTs(isoStr) {
@@ -63,6 +97,11 @@ function render(data) {
     const events = data.events || [];
 
     let html = '<div style="padding: 16px; max-width: 800px;">';
+
+    // Toolbar
+    html += '<div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px;">';
+    html += `<button id="gps-history-btn" onclick="(function(){window._gpsToggleHistory();})()" style="background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 0.88em; cursor: pointer; font-weight: 500;">History</button>`;
+    html += '</div>';
 
     // Current location card
     html += '<div style="margin-bottom: 24px;">';
@@ -116,6 +155,48 @@ function render(data) {
 
     html += '</div>';
     container.innerHTML = html;
+
+    window._gpsToggleHistory = toggleHistory;
+}
+
+function renderHistory(data) {
+    if (!container) return;
+    const loc = data.location;
+
+    let html = '<div style="padding: 16px; max-width: 800px;">';
+
+    // Toolbar
+    html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">';
+    html += '<h3 style="margin: 0; font-size: 1em; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.05em; flex: 1;">GPS History</h3>';
+    html += `<button onclick="(function(){window._gpsToggleHistory();})()" style="background: var(--task-row-bg); color: var(--text); border: 1px solid var(--task-row-border); border-radius: 6px; padding: 6px 16px; font-size: 0.88em; cursor: pointer;">← Current</button>`;
+    html += '</div>';
+
+    html += '<div style="background: var(--task-row-bg); border: 1px solid var(--task-row-border); border-radius: 8px; padding: 16px;">';
+
+    // Legend
+    html += '<div style="display: flex; align-items: center; gap: 16px; font-size: 0.82em; opacity: 0.7; margin-bottom: 12px;">';
+    html += '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block;"></span> Start</span>';
+    html += '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;"></span> End</span>';
+    html += '<span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:3px;background:#8b5cf6;display:inline-block;border-radius:2px;"></span> Track</span>';
+    html += '</div>';
+
+    html += `<div style="border-radius: 6px; overflow: hidden; line-height: 0; position: relative;">`;
+    html += `<img id="gps-history-map" alt="History Map" style="width: 100%; max-width: 100%; border-radius: 6px; opacity: 0.3;" onload="this.style.opacity=1" />`;
+    html += `<div id="gps-history-empty" style="display:none; padding: 12px; opacity: 0.5;">No GPS history available.</div>`;
+    html += `</div>`;
+
+    if (loc) {
+        html += `<div style="margin-top: 10px; font-size: 0.82em; opacity: 0.5;">Most recent: ${formatCoords(loc.lat, loc.lon)} · ${formatTs(loc.timestamp)}</div>`;
+    }
+
+    html += '</div>';
+    html += '</div>';
+
+    container.innerHTML = html;
+    window._gpsToggleHistory = toggleHistory;
+
+    // Trigger history map load after render
+    loadHistoryMap();
 }
 
 function escHtml(str) {

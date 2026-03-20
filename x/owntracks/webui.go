@@ -32,6 +32,8 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 		return svc.getCurrentGPS()
 	case "get-map":
 		return svc.getMapForCurrentLocation()
+	case "get-history-map":
+		return svc.getHistoryMap()
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
