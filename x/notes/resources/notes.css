@@ -1,6 +1,24 @@
+/*
+ * The notes tab needs to fill the full browser window. The ancestor chain
+ * (main → .tab-content) uses padding and no fixed height, so we break out
+ * by measuring the full viewport and subtracting the chrome above the tab body.
+ * --notes-chrome-height is the sum of: header (~46px) + tab-nav (~36px) +
+ * main padding top (16px) + tab-content padding top (16px) = ~114px.
+ * We use dvh so it tracks the dynamic viewport on mobile too.
+ */
+:root {
+    --notes-chrome-height: 114px;
+}
+
+/* Pull the notes tab-content out of the normal flow padding */
+#notes-container {
+    /* Escape the tab-content padding so the container truly fills the window */
+    margin: -1rem;
+}
+
 .notes-container {
     display: flex;
-    height: 100%;
+    height: calc(100dvh - var(--notes-chrome-height));
     background-color: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
