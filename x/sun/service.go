@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"keyop/util"
+	"math"
 	"sync"
 	"time"
 
@@ -158,6 +159,10 @@ type SunEvent struct {
 	NightLength     string    `json:"night_length"`
 	TomorrowSunrise time.Time `json:"tomorrow_sunrise"`
 	TomorrowDawn    time.Time `json:"tomorrow_dawn"`
+	// NextEquinoxSolstice is the name of the next solstice/equinox (e.g. "Summer Solstice").
+	NextEquinoxSolstice string `json:"next_equinox_solstice"`
+	// NextEquinoxSolsticeDays is days until the next event (0 = today).
+	NextEquinoxSolsticeDays int `json:"next_equinox_solstice_days"`
 }
 
 // PayloadType returns the registered payload type name for SunEvent.
@@ -215,19 +220,24 @@ func (svc *Service) Check() error {
 	// Always compute tomorrow's events for the payload
 	tomorrowForPayload := svc.calculateSunEvents(lat, lon, alt, now.AddDate(0, 0, 1))
 
+	// Compute next solstice/equinox
+	eqSolName, _, eqSolDays := nextEquinoxSolstice(now)
+
 	// Send event message
 	messenger := svc.Deps.MustGetMessenger()
 
 	se := SunEvent{
-		Now:             now,
-		Sunrise:         events.Sunrise,
-		Sunset:          events.Sunset,
-		CivilDawn:       events.CivilDawn,
-		CivilDusk:       events.CivilDusk,
-		DayLength:       events.DayLength,
-		NightLength:     events.NightLength,
-		TomorrowSunrise: tomorrowForPayload.Sunrise,
-		TomorrowDawn:    tomorrowForPayload.CivilDawn,
+		Now:                     now,
+		Sunrise:                 events.Sunrise,
+		Sunset:                  events.Sunset,
+		CivilDawn:               events.CivilDawn,
+		CivilDusk:               events.CivilDusk,
+		DayLength:               events.DayLength,
+		NightLength:             events.NightLength,
+		TomorrowSunrise:         tomorrowForPayload.Sunrise,
+		TomorrowDawn:            tomorrowForPayload.CivilDawn,
+		NextEquinoxSolstice:     eqSolName,
+		NextEquinoxSolsticeDays: eqSolDays,
 	}
 
 	eventMsg := core.Message{
@@ -252,6 +262,64 @@ func formatDuration(s string) string {
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60
 	return fmt.Sprintf("%dh %dm", h, m)
+}
+
+// nextEquinoxSolstice returns the name and date of the next solstice or equinox after now,
+// and the number of days until it (0 = today).
+// Dates use the standard astronomical approximations (accurate to within 1-2 days).
+func nextEquinoxSolstice(now time.Time) (name string, date time.Time, days int) {
+	year := now.Year()
+	loc := now.Location()
+
+	// Approximate dates for a given year (all times are ~noon UTC on those days).
+	type event struct {
+		name  string
+		month time.Month
+		day   int
+	}
+	eventsForYear := func(y int) []struct {
+		name string
+		t    time.Time
+	} {
+		// Approximations accurate to ±2 days across 1901–2099.
+		// March equinox:    ~Mar 20
+		// June solstice:    ~Jun 21
+		// September equinox: ~Sep 22
+		// December solstice: ~Dec 21
+		evs := []event{
+			{"Spring Equinox", time.March, 20},
+			{"Summer Solstice", time.June, 21},
+			{"Autumn Equinox", time.September, 22},
+			{"Winter Solstice", time.December, 21},
+		}
+		var out []struct {
+			name string
+			t    time.Time
+		}
+		for _, e := range evs {
+			out = append(out, struct {
+				name string
+				t    time.Time
+			}{e.name, time.Date(y, e.month, e.day, 12, 0, 0, 0, loc)})
+		}
+		return out
+	}
+
+	// Check current year and next year to always find the next event.
+	candidates := append(eventsForYear(year), eventsForYear(year+1)...)
+
+	// Truncate now to the start of today so events on today show 0 days.
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+
+	for _, c := range candidates {
+		eventDay := time.Date(c.t.Year(), c.t.Month(), c.t.Day(), 0, 0, 0, 0, loc)
+		if !eventDay.Before(today) {
+			diff := int(math.Round(eventDay.Sub(today).Hours() / 24))
+			return c.name, c.t, diff
+		}
+	}
+	// Fallback (should never happen)
+	return "Winter Solstice", time.Date(year+1, time.December, 21, 12, 0, 0, 0, loc), 365
 }
 
 func (svc *Service) scheduleAlerts() {

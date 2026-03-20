@@ -5,6 +5,7 @@ let elRemaining = null;
 let elDay = null;
 let elNight = null;
 let elIcon = null;
+let elEquinox = null;
 let remainingTimer = null;
 let nextEventTime = null;
 
@@ -151,6 +152,7 @@ export function init(el) {
                     <div class="sun-value sun-night-value">—</div>
                 </div>
             </div>
+            <div class="sun-equinox"></div>
         </div>
     `;
 
@@ -159,6 +161,7 @@ export function init(el) {
     elDay = body.querySelector('.sun-day-value');
     elNight = body.querySelector('.sun-night-value');
     elIcon = body.querySelector('.sun-icon');
+    elEquinox = body.querySelector('.sun-equinox');
 
     // Resume countdown if a next event was previously stored on the DOM
     if (body.dataset && body.dataset.nextEventTime) {
@@ -384,6 +387,21 @@ export function onMessage(msg) {
             }
             const nightMs = Math.max(0, nextDawn - dusk);
             if (elNight) elNight.textContent = formatDuration(nightMs);
+        }
+    }
+
+    // Solstice / equinox countdown
+    if (elEquinox && data.next_equinox_solstice) {
+        const evtName = data.next_equinox_solstice;
+        const days = data.next_equinox_solstice_days;
+        if (days === 0) {
+            elEquinox.textContent = `Happy ${evtName}! 🎉`;
+            elEquinox.style.color = 'var(--accent-pink)';
+            elEquinox.style.opacity = '1';
+        } else {
+            elEquinox.textContent = `${days}d until ${evtName}`;
+            elEquinox.style.color = '';
+            elEquinox.style.opacity = '';
         }
     }
 }
