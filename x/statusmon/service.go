@@ -129,6 +129,9 @@ func (svc *Service) Initialize() error {
 				if ac, ok := m["alertCount"].(float64); ok {
 					st.AlertCount = int(ac)
 				}
+				if ack, ok := m["acknowledged"].(bool); ok {
+					st.Acknowledged = ack
+				}
 				svc.states[k] = st
 			}
 		}
