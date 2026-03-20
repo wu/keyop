@@ -96,10 +96,24 @@ func (svc *Service) initSchema() error {
 			interval     INTEGER NOT NULL DEFAULT 0,
 			repetitions  INTEGER NOT NULL DEFAULT 0,
 			due_date     DATETIME,
+			card_state   TEXT NOT NULL DEFAULT 'new',
+			current_step INTEGER NOT NULL DEFAULT 0,
 			created_at   DATETIME NOT NULL,
 			updated_at   DATETIME NOT NULL
 		)
 	`)
+	if err != nil {
+		return err
+	}
+	// Migrate older DBs that predate card_state/current_step columns.
+	for _, col := range []string{
+		"ALTER TABLE flashcards ADD COLUMN card_state TEXT NOT NULL DEFAULT 'new'",
+		"ALTER TABLE flashcards ADD COLUMN current_step INTEGER NOT NULL DEFAULT 0",
+	} {
+		_, _ = svc.db.Exec(col) // ignore "duplicate column" errors
+	}
+	// Cards that already have repetitions > 0 but no card_state set are graduated review cards.
+	_, err = svc.db.Exec(`UPDATE flashcards SET card_state='review' WHERE card_state='new' AND repetitions > 0`)
 	return err
 }
 
@@ -258,7 +272,30 @@ func (svc *Service) listTags() (any, error) {
 	return map[string]any{"tags": result, "allTotal": allTotal, "allDue": allDue}, nil
 }
 
-// reviewCard applies the SM-2 algorithm and updates the card.
+// previewSchedule returns the projected due date for each rating option without modifying the card.
+func (svc *Service) previewSchedule(id int64) (any, error) {
+	if svc.db == nil {
+		return nil, fmt.Errorf("flashcards database not available")
+	}
+	var ef float64
+	var interval, reps int64
+	var cardState string
+	var currentStep int64
+	err := svc.db.QueryRow(
+		`SELECT ease_factor, interval, repetitions, card_state, current_step FROM flashcards WHERE id = ?`, id,
+	).Scan(&ef, &interval, &reps, &cardState, &currentStep)
+	if err != nil {
+		return nil, fmt.Errorf("flashcards: card %d not found: %w", id, err)
+	}
+	result := map[string]string{}
+	for _, rating := range []string{"show_again", "hard", "correct", "easy"} {
+		dueDate, _, _, _, _, _ := scheduleAnki(ef, interval, reps, cardState, currentStep, rating)
+		result[rating] = dueDate
+	}
+	return result, nil
+}
+
+// reviewCard applies Anki-style scheduling and updates the card.
 // rating must be one of: "show_again", "hard", "correct", "easy"
 func (svc *Service) reviewCard(id int64, rating string) (any, error) {
 	if svc.db == nil {
@@ -267,28 +304,21 @@ func (svc *Service) reviewCard(id int64, rating string) (any, error) {
 
 	var ef float64
 	var interval, reps int64
+	var cardState string
+	var currentStep int64
 	err := svc.db.QueryRow(
-		`SELECT ease_factor, interval, repetitions FROM flashcards WHERE id = ?`, id,
-	).Scan(&ef, &interval, &reps)
+		`SELECT ease_factor, interval, repetitions, card_state, current_step FROM flashcards WHERE id = ?`, id,
+	).Scan(&ef, &interval, &reps, &cardState, &currentStep)
 	if err != nil {
 		return nil, fmt.Errorf("flashcards: card %d not found: %w", id, err)
 	}
 
-	quality := ratingToQuality(rating)
-	ef, interval, reps = sm2(ef, interval, reps, quality)
+	dueDate, ef, interval, reps, cardState, currentStep := scheduleAnki(ef, interval, reps, cardState, currentStep, rating)
 
-	// Schedule due date at local midnight N days from now.
-	// Using AddDate + time.Date correctly handles DST transitions.
-	loc := time.Local
-	nowLocal := time.Now().In(loc)
-	future := nowLocal.AddDate(0, 0, int(interval))
-	dueLocal := time.Date(future.Year(), future.Month(), future.Day(), 0, 0, 0, 0, loc)
-	dueDate := dueLocal.UTC().Format(time.RFC3339Nano)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-
 	_, err = svc.db.Exec(
-		`UPDATE flashcards SET ease_factor=?, interval=?, repetitions=?, due_date=?, updated_at=? WHERE id=?`,
-		ef, interval, reps, dueDate, now, id,
+		`UPDATE flashcards SET ease_factor=?, interval=?, repetitions=?, due_date=?, card_state=?, current_step=?, updated_at=? WHERE id=?`,
+		ef, interval, reps, dueDate, cardState, currentStep, now, id,
 	)
 	if err != nil {
 		return nil, err
@@ -328,47 +358,141 @@ func (svc *Service) updateCard(id int64, question, answer, tags string) (any, er
 	return map[string]any{"status": "ok"}, nil
 }
 
-// ratingToQuality maps UI rating names to SM-2 quality scores (0–4).
-func ratingToQuality(rating string) int {
-	switch rating {
-	case "show_again":
-		return 0
-	case "hard":
-		return 2
-	case "correct":
-		return 3
-	case "easy":
-		return 4
-	default:
-		return 3
+// scheduleAnki implements Anki's phase-based scheduling:
+//
+//	New/Learning phases use minute-based steps: [1min, 10min].
+//	Review phase uses day-based intervals aligned to local midnight.
+//	Relearning phase (lapsed review card) uses a 10-minute step before returning to review.
+//
+// Card states: "new" → "learning" → "review" ↔ "relearning"
+//
+// Returns: dueDate (RFC3339Nano UTC), and updated ef/interval/reps/cardState/currentStep.
+func scheduleAnki(ef float64, interval, reps int64, cardState string, currentStep int64, rating string) (
+	dueDate string, newEF float64, newInterval, newReps int64, newState string, newStep int64,
+) {
+	// Learning steps in minutes (standard Anki defaults).
+	const (
+		learnStep0   = 1 * time.Minute  // first step
+		learnStep1   = 10 * time.Minute // second / final step
+		relearnStep  = 10 * time.Minute // single relearn step after lapse
+		gradInterval = 1                // days after completing learning
+		easyInterval = 4                // days for Easy on new/learning card
+	)
+
+	now := time.Now()
+	newEF, newInterval, newReps, newState, newStep = ef, interval, reps, cardState, currentStep
+
+	midnightInDays := func(days int) string {
+		loc := time.Local
+		future := now.In(loc).AddDate(0, 0, days)
+		due := time.Date(future.Year(), future.Month(), future.Day(), 0, 0, 0, 0, loc)
+		return due.UTC().Format(time.RFC3339Nano)
 	}
+	inMinutes := func(d time.Duration) string {
+		return now.Add(d).UTC().Format(time.RFC3339Nano)
+	}
+	clampEF := func(v float64) float64 {
+		if v < 1.3 {
+			return 1.3
+		}
+		return v
+	}
+
+	switch cardState {
+	case "new", "learning":
+		newState = "learning"
+		switch rating {
+		case "show_again":
+			newStep = 0
+			dueDate = inMinutes(learnStep0)
+		case "hard":
+			// Anki hard during learning = average of current step and next step.
+			// Step 0: (1min + 10min) / 2 = 5.5min → 5min
+			// Step 1 (final): no next step, stay at step 1 duration
+			if currentStep == 0 {
+				dueDate = inMinutes((learnStep0 + learnStep1) / 2)
+			} else {
+				dueDate = inMinutes(learnStep1)
+			}
+		case "correct":
+			if currentStep == 0 {
+				// Advance to step 1
+				newStep = 1
+				dueDate = inMinutes(learnStep1)
+			} else {
+				// Completed all steps → graduate to review
+				newState = "review"
+				newStep = 0
+				newReps = reps + 1
+				newInterval = gradInterval
+				dueDate = midnightInDays(gradInterval)
+			}
+		case "easy":
+			// Skip all steps, graduate immediately
+			newState = "review"
+			newStep = 0
+			newReps = reps + 1
+			newInterval = easyInterval
+			dueDate = midnightInDays(easyInterval)
+		}
+
+	case "review":
+		switch rating {
+		case "show_again":
+			// Lapse: enter relearning, penalise ease factor, shrink interval
+			newEF = clampEF(ef - 0.20)
+			newInterval = max64(1, int64(math.Round(float64(interval)*0.0))) // resets to 1 after relearn
+			if newInterval < 1 {
+				newInterval = 1
+			}
+			newState = "relearning"
+			newStep = 0
+			dueDate = inMinutes(relearnStep)
+		case "hard":
+			newEF = clampEF(ef - 0.15)
+			newInterval = max64(interval+1, int64(math.Round(float64(interval)*1.2)))
+			dueDate = midnightInDays(int(newInterval))
+		case "correct":
+			newInterval = max64(interval+1, int64(math.Round(float64(interval)*ef)))
+			dueDate = midnightInDays(int(newInterval))
+		case "easy":
+			newEF = clampEF(ef + 0.15)
+			newInterval = max64(interval+1, int64(math.Round(float64(interval)*ef*1.3)))
+			dueDate = midnightInDays(int(newInterval))
+		}
+		newReps = reps + 1
+
+	case "relearning":
+		switch rating {
+		case "show_again", "hard":
+			// Repeat the single relearn step
+			newStep = 0
+			dueDate = inMinutes(relearnStep)
+		case "correct", "easy":
+			// Completed relearning → back to review
+			newState = "review"
+			newStep = 0
+			newReps = reps + 1
+			// interval was already reduced when the lapse was recorded
+			if newInterval < 1 {
+				newInterval = 1
+			}
+			dueDate = midnightInDays(int(newInterval))
+		}
+	}
+
+	// Fallback safety: ensure due date is set
+	if dueDate == "" {
+		dueDate = now.UTC().Format(time.RFC3339Nano)
+	}
+	return
 }
 
-// sm2 applies the SM-2 algorithm and returns updated (easeFactor, interval, repetitions).
-func sm2(ef float64, interval, reps int64, quality int) (float64, int64, int64) {
-	if quality < 2 {
-		// Failed: reset
-		return ef, 1, 0
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
 	}
-
-	// Update ease factor
-	ef = ef + 0.1 - float64(3-quality)*(0.08+float64(3-quality)*0.02)
-	if ef < 1.3 {
-		ef = 1.3
-	}
-
-	// Update interval
-	var newInterval int64
-	switch reps {
-	case 0:
-		newInterval = 1
-	case 1:
-		newInterval = 6
-	default:
-		newInterval = int64(math.Round(float64(interval) * ef))
-	}
-
-	return ef, newInterval, reps + 1
+	return b
 }
 
 func normalizeTags(tags string) string {

@@ -124,6 +124,11 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 			return svc.deleteCard(int64(id))
 		}
 		return nil, fmt.Errorf("missing card id")
+	case "preview-schedule":
+		if id, ok := params["id"].(float64); ok {
+			return svc.previewSchedule(int64(id))
+		}
+		return nil, fmt.Errorf("missing card id")
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}

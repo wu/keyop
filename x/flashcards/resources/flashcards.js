@@ -211,10 +211,22 @@ function buildCardShell(card, expanded) {
     const answerHtml = expanded ? `
         <div class="fc-answer">
             <div class="fc-ratings">
-                <button class="fc-rating-btn fc-again" data-rating="show_again">Show Again</button>
-                <button class="fc-rating-btn fc-hard" data-rating="hard">Hard</button>
-                <button class="fc-rating-btn fc-correct" data-rating="correct">Correct</button>
-                <button class="fc-rating-btn fc-easy" data-rating="easy">Easy</button>
+                <button class="fc-rating-btn fc-again" data-rating="show_again">
+                    <span class="fc-btn-label">Show Again</span>
+                    <span class="fc-btn-time"></span>
+                </button>
+                <button class="fc-rating-btn fc-hard" data-rating="hard">
+                    <span class="fc-btn-label">Hard</span>
+                    <span class="fc-btn-time"></span>
+                </button>
+                <button class="fc-rating-btn fc-correct" data-rating="correct">
+                    <span class="fc-btn-label">Correct</span>
+                    <span class="fc-btn-time"></span>
+                </button>
+                <button class="fc-rating-btn fc-easy" data-rating="easy">
+                    <span class="fc-btn-label">Easy</span>
+                    <span class="fc-btn-time"></span>
+                </button>
             </div>
             <div class="fc-answer-label">
                 Answer
@@ -240,6 +252,43 @@ async function toggleCard(cardId) {
     expandedCardId = expandedCardId === cardId ? null : cardId;
     await renderCards(allCards);
     setupNav();
+    if (expandedCardId === cardId) {
+        loadSchedulePreviews(cardId);
+    }
+}
+
+function relativeTime(isoStr) {
+    const diffMs = new Date(isoStr) - Date.now();
+    if (diffMs <= 0) return 'now';
+    const totalSec = Math.round(diffMs / 1000);
+    const parts = [
+        {unit: 'd', val: Math.floor(totalSec / 86400)},
+        {unit: 'h', val: Math.floor((totalSec % 86400) / 3600)},
+        {unit: 'm', val: Math.floor((totalSec % 3600) / 60)},
+        {unit: 's', val: totalSec % 60},
+    ].filter(p => p.val > 0).slice(0, 2);
+    return parts.length ? parts.map(p => p.val + p.unit).join(' ') : 'now';
+}
+
+async function loadSchedulePreviews(cardId) {
+    try {
+        const data = await fetch('/api/tabs/flashcards/action/preview-schedule', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: cardId}),
+        }).then(r => r.json());
+        const item = container.querySelector(`[data-card-id="${cardId}"]`);
+        if (!item) return;
+        item.querySelectorAll('.fc-rating-btn').forEach(btn => {
+            const rating = btn.dataset.rating;
+            const timeEl = btn.querySelector('.fc-btn-time');
+            if (timeEl && data[rating]) {
+                timeEl.textContent = relativeTime(data[rating]);
+            }
+        });
+    } catch (err) {
+        console.error('[flashcards] preview-schedule failed:', err);
+    }
 }
 
 async function handleRating(cardId, rating) {
