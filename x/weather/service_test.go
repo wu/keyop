@@ -1,11 +1,11 @@
-//nolint:revive
-package nwsWeather
+package weather
 
 import (
 	"context"
 	"encoding/json"
 	"keyop/core"
 	"keyop/core/testutil"
+	"keyop/x/owntracks"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNwsWeatherService(t *testing.T) {
+func TestWeatherService(t *testing.T) {
 	// Setup mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/points/45.0000,-93.0000" {
@@ -94,7 +94,7 @@ func TestNwsWeatherService(t *testing.T) {
 
 	cfg := core.ServiceConfig{
 		Name: "test-weather",
-		Type: "nwsWeather",
+		Type: "weather",
 		Pubs: map[string]core.ChannelInfo{
 			"events": {Name: "weather"},
 		},
@@ -131,10 +131,7 @@ func TestNwsWeatherService(t *testing.T) {
 		// Trigger GPS update
 		gpsMsg := core.Message{
 			ChannelName: "gps-channel",
-			Data: map[string]interface{}{
-				"lat": 46.0,
-				"lon": -94.0,
-			},
+			Data:        owntracks.LocationEvent{Lat: 46.0, Lon: -94.0},
 		}
 		handler := handlers["gps-channel"]
 		assert.NotNil(t, handler)

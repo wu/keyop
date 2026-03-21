@@ -1,0 +1,12 @@
+x: sqlite
+
+config:
+  dbPath: sqlite/weather.sql
+
+  payloadTypes:
+    - service.weather.v1
+
+subs:
+  weather:
+    name: weather
+    description: store weather forecast events

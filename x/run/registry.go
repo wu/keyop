@@ -25,7 +25,6 @@ import (
 	"keyop/x/moon"
 	"keyop/x/notes"
 	"keyop/x/notify"
-	"keyop/x/nwsWeather"
 	"keyop/x/ollama"
 	"keyop/x/owntracks"
 	"keyop/x/pingMonitor"
@@ -42,6 +41,7 @@ import (
 	"keyop/x/thermostat"
 	"keyop/x/tides"
 	"keyop/x/txtmsg"
+	"keyop/x/weather"
 	"keyop/x/weatherstation"
 	"keyop/x/webSocketClient"
 	"keyop/x/webSocketServer"
@@ -162,9 +162,8 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 		return tasks.NewService(deps, cfg)
 	},
 	"weather": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
-		return nwsWeather.NewService(deps, cfg)
+		return weather.NewService(deps, cfg)
 	},
-
 	"temp": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service { return temp.NewService(deps, cfg) },
 	"thermostat": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return thermostat.NewService(deps, cfg)

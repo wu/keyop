@@ -1,0 +1,81 @@
+#weather-container {
+    padding: 16px;
+    color: var(--text);
+    max-width: 860px;
+}
+
+.weather-updated {
+    font-size: 0.72rem;
+    opacity: 0.45;
+    margin-bottom: 14px;
+}
+
+.weather-days {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.weather-day-row {
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+}
+
+.weather-day-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+}
+
+.weather-day-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    min-width: 90px;
+}
+
+.weather-day-short {
+    flex: 1;
+    font-size: 0.88rem;
+    opacity: 0.85;
+}
+
+.weather-day-temps {
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.weather-temp-high {
+    color: var(--accent-orange, #ff8a3d);
+    font-weight: 600;
+}
+
+.weather-temp-sep {
+    opacity: 0.4;
+}
+
+.weather-temp-low {
+    color: var(--accent-blue, #9b5af0);
+    font-weight: 600;
+}
+
+.weather-precip {
+    font-size: 0.82rem;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+.weather-wind {
+    font-size: 0.82rem;
+    opacity: 0.6;
+    white-space: nowrap;
+}
+
+.weather-detail {
+    font-size: 0.78rem;
+    opacity: 0.55;
+    line-height: 1.45;
+    margin-top: 5px;
+}

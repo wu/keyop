@@ -1,0 +1,17 @@
+x: weather
+freq: 4h
+
+config:
+  # Observer coordinates (required).
+  lat: 50.0000
+  lon: -100.0000
+
+  pub_preprocess:
+    - when: 'event eq "weather_forecast"'
+      updates:
+        channelName: weather
+
+subs:
+  gps:
+    name: gps
+    description: subscribe to location updates

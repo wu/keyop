@@ -1,19 +1,19 @@
-// Package nwsWeather fetches weather data and alerts from NOAA/NWS and converts them into internal events and metrics.
-// nolint:revive
-package nwsWeather
+package weather
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"keyop/core"
 	"keyop/util"
+	"keyop/x/owntracks"
 	"net/http"
 	"sync"
 	"time"
 )
 
-// Service polls NWS endpoints for alerts and current conditions, publishing structured events for consumers.
+// Service polls NWS endpoints for forecasts, publishing structured events for consumers.
 type Service struct {
 	Deps        core.Dependencies
 	Cfg         core.ServiceConfig
@@ -24,6 +24,7 @@ type Service struct {
 	apiBaseURL  string
 	forecastURL string
 	mu          sync.RWMutex
+	db          **sql.DB
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
@@ -50,16 +51,16 @@ func (svc *Service) ValidateConfig() []error {
 	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"gps"}, logger)
 
 	if _, ok := svc.Cfg.Config["lat"].(float64); !ok {
-		errs = append(errs, fmt.Errorf("nwsWeather: lat not set or not a float in config"))
+		errs = append(errs, fmt.Errorf("weather: lat not set or not a float in config"))
 	}
 	if _, ok := svc.Cfg.Config["lon"].(float64); !ok {
-		errs = append(errs, fmt.Errorf("nwsWeather: lon not set or not a float in config"))
+		errs = append(errs, fmt.Errorf("weather: lon not set or not a float in config"))
 	}
 
 	return errs
 }
 
-// Initialize performs one-time startup required by the service (resource loading or connectivity checks).
+// Initialize performs one-time startup required by the service.
 func (svc *Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	gpsChan, ok := svc.Cfg.Subs["gps"]
@@ -75,24 +76,24 @@ func (svc *Service) Initialize() error {
 }
 
 func (svc *Service) gpsHandler(msg core.Message) error {
-	data, ok := msg.Data.(map[string]interface{})
-	if !ok {
+	var lat, lon float64
+
+	if loc, ok := core.AsType[owntracks.LocationEvent](msg.Data); ok {
+		lat, lon = loc.Lat, loc.Lon
+	} else if locPtr, ok := core.AsType[*owntracks.LocationEvent](msg.Data); ok && locPtr != nil {
+		lat, lon = locPtr.Lat, locPtr.Lon
+	} else {
 		return nil
 	}
 
-	lat, okLat := data["lat"].(float64)
-	lon, okLon := data["lon"].(float64)
-
-	if okLat && okLon {
-		svc.mu.Lock()
-		if svc.cachedLat == nil || svc.cachedLon == nil || *svc.cachedLat != lat || *svc.cachedLon != lon {
-			svc.forecastURL = ""
-		}
-		svc.cachedLat = &lat
-		svc.cachedLon = &lon
-		svc.mu.Unlock()
-		svc.Deps.MustGetLogger().Debug("nwsWeather: updated cached gps coordinates", "lat", lat, "lon", lon)
+	svc.mu.Lock()
+	if svc.cachedLat == nil || svc.cachedLon == nil || *svc.cachedLat != lat || *svc.cachedLon != lon {
+		svc.forecastURL = ""
 	}
+	svc.cachedLat = &lat
+	svc.cachedLon = &lon
+	svc.mu.Unlock()
+	svc.Deps.MustGetLogger().Debug("weather: updated cached gps coordinates", "lat", lat, "lon", lon)
 	return nil
 }
 
@@ -124,12 +125,12 @@ func (svc *Service) fetchForecastURL() error {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			logger.Warn("nwsWeather: failed to close response body", "err", err)
+			logger.Warn("weather: failed to close response body", "err", err)
 		}
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("nwsWeather: failed to fetch points: status %d", resp.StatusCode)
+		return fmt.Errorf("weather: failed to fetch points: status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -148,7 +149,7 @@ func (svc *Service) fetchForecastURL() error {
 	}
 
 	if data.Properties.Forecast == "" {
-		return fmt.Errorf("nwsWeather: forecast URL not found in response")
+		return fmt.Errorf("weather: forecast URL not found in response")
 	}
 
 	svc.mu.Lock()
@@ -158,7 +159,7 @@ func (svc *Service) fetchForecastURL() error {
 	return nil
 }
 
-// Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
+// Check performs the service's periodic work: fetch the NWS forecast and publish a ForecastEvent.
 func (svc *Service) Check() error {
 	svc.mu.RLock()
 	forecastURL := svc.forecastURL
@@ -188,16 +189,15 @@ func (svc *Service) Check() error {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			logger.Warn("nwsWeather: failed to close response body", "err", err)
+			logger.Warn("weather: failed to close response body", "err", err)
 		}
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		// If forecast URL failed, maybe it expired or is wrong, try to refetch it next time
 		svc.mu.Lock()
 		svc.forecastURL = ""
 		svc.mu.Unlock()
-		return fmt.Errorf("nwsWeather: failed to fetch forecast: status %d", resp.StatusCode)
+		return fmt.Errorf("weather: failed to fetch forecast: status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -207,7 +207,7 @@ func (svc *Service) Check() error {
 
 	var forecastData struct {
 		Properties struct {
-			Periods []map[string]interface{} `json:"periods"`
+			Periods []ForecastPeriod `json:"periods"`
 		} `json:"properties"`
 	}
 
@@ -216,10 +216,11 @@ func (svc *Service) Check() error {
 	}
 
 	if len(forecastData.Properties.Periods) == 0 {
-		return fmt.Errorf("nwsWeather: no forecast periods found")
+		return fmt.Errorf("weather: no forecast periods found")
 	}
 
-	currentPeriod := forecastData.Properties.Periods[0]
+	periods := forecastData.Properties.Periods
+	event := ForecastEvent{Periods: periods, FetchedAt: time.Now()}
 
 	messenger := svc.Deps.MustGetMessenger()
 	msg := core.Message{
@@ -227,9 +228,9 @@ func (svc *Service) Check() error {
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
 		Event:       "weather_forecast",
-		Text:        fmt.Sprintf("%v", currentPeriod["detailedForecast"]),
-		Summary:     fmt.Sprintf("Weather: %v, %v°%v", currentPeriod["shortForecast"], currentPeriod["temperature"], currentPeriod["temperatureUnit"]),
-		Data:        currentPeriod,
+		Text:        periods[0].DetailedForecast,
+		Summary:     fmt.Sprintf("Weather: %s, %.0f°%s", periods[0].ShortForecast, periods[0].Temperature, periods[0].TemperatureUnit),
+		Data:        event,
 	}
 
 	return messenger.Send(msg)
