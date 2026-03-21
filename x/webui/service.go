@@ -70,6 +70,9 @@ type Service struct {
 	// Panel order persistence
 	panelOrder   []string
 	panelOrderMu sync.RWMutex
+
+	// Passkey authentication (nil when auth is disabled)
+	auth *authManager
 }
 
 // NewService creates a new Service.
@@ -130,7 +133,36 @@ func (svc *Service) Initialize() error {
 		}
 	}
 
+	// Initialise passkey auth if enabled in config.
+	if enabled, _ := svc.Cfg.Config["auth_enabled"].(bool); enabled {
+		rpID, _ := svc.Cfg.Config["passkey_rp_id"].(string)
+		rpOrigin, _ := svc.Cfg.Config["passkey_rp_origin"].(string)
+		rpDisplayName, _ := svc.Cfg.Config["passkey_rp_display_name"].(string)
+		if rpDisplayName == "" {
+			rpDisplayName = "keyop"
+		}
+		am, err := newAuthManager(rpID, rpOrigin, rpDisplayName, svc.Deps.GetStateStore(), logger)
+		if err != nil {
+			logger.Warn("passkey auth disabled: init failed", "error", err)
+		} else {
+			svc.auth = am
+			logger.Info("passkey auth enabled", "rp_id", rpID)
+		}
+	}
+
 	mux := http.NewServeMux()
+
+	// Auth endpoints (always accessible regardless of session state).
+	if svc.auth != nil {
+		mux.HandleFunc("GET /login", handleLoginPage)
+		mux.HandleFunc("GET /auth/status", svc.auth.handleStatus)
+		mux.HandleFunc("POST /auth/register/begin", svc.auth.handleRegisterBegin)
+		mux.HandleFunc("POST /auth/register/finish", svc.auth.handleRegisterFinish)
+		mux.HandleFunc("POST /auth/login/begin", svc.auth.handleLoginBegin)
+		mux.HandleFunc("POST /auth/login/finish", svc.auth.handleLoginFinish)
+		mux.HandleFunc("GET /auth/logout", svc.auth.handleLogout)
+	}
+
 	mux.HandleFunc("GET /api/tabs", svc.handleGetTabs)
 	mux.HandleFunc("GET /api/panels", svc.handleGetPanels)
 	mux.HandleFunc("GET /api/dashboard/panel-order", svc.handleGetPanelOrder)
@@ -138,8 +170,8 @@ func (svc *Service) Initialize() error {
 	mux.HandleFunc("POST /api/tabs/{id}/action/{action}", svc.handleTabAction)
 	mux.HandleFunc("GET /events", svc.handleEvents)
 	mux.HandleFunc("GET /api/assets/{type}/{path...}", svc.handleGetAsset)
-	// Serve project images (e.g., /images/keyop.png)
-	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("images"))))
+	// Serve project images from embedded filesystem.
+	mux.Handle("/images/", http.FileServer(http.FS(resourcesFS())))
 	// Add no-cache headers for JS and CSS files
 	mux.HandleFunc("GET /js/{path...}", svc.handleJSAsset)
 	mux.HandleFunc("GET /css/{path...}", svc.handleCSSAsset)
@@ -155,9 +187,15 @@ func (svc *Service) Initialize() error {
 		fileServer.ServeHTTP(w, r)
 	}))
 
+	// Wrap the entire mux with auth middleware when auth is enabled.
+	var handler http.Handler = mux
+	if svc.auth != nil {
+		handler = svc.auth.middleware(mux)
+	}
+
 	svc.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", svc.port),
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		BaseContext: func(net.Listener) context.Context {
 			return ctx

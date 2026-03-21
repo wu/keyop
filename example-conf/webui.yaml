@@ -3,6 +3,9 @@ x: webui
 config:
   port: 8080
 
+  auth_enabled: true
+  passkey_rp_id: "homelab.example.com"
+  passkey_rp_origin: "https://homelab.example.com"
 
 
 subs:
