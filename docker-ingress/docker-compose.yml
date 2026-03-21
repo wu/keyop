@@ -1,0 +1,47 @@
+services:
+
+  keyop:
+    container_name: keyop
+    image: ghcr.io/main/keyop:latest
+    restart: unless-stopped
+    networks:
+      hidden_network:
+        ipv4_address: 172.18.0.3
+    ports:
+      - 8080:8080
+    volumes:
+      - /home/ubuntu/.keyop:/root/.keyop
+    command: run -o
+
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    restart: unless-stopped
+    networks:
+      - hidden_network
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - keyop
+    volumes:
+      - /root/ingress/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /root/ingress/conf/:/etc/nginx/conf.d/:ro
+      - /root/ingress/certs:/etc/nginx/certs
+      - /root/certbot/conf/live/keyop.geekfarm.org/:/var/www/certbot/
+      - /root/certbot/conf:/etc/nginx/certbot
+      - /etc/localtime:/etc/localtime:ro
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - /root/certbot/www:/var/www/certbot/
+      - /root/certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"  # Renew certificates every 12 hours
+
+
+
+networks:
+  hidden_network:
+
