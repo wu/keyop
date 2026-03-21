@@ -1,5 +1,6 @@
 let panelBody = null;
 const tempReadings = {}; // Map of serviceName -> tempF
+let metricConfigs = {};  // Map of serviceName -> {displayName, color}
 
 export async function init(el) {
     panelBody = el.querySelector('.panel-body') || el;
@@ -7,22 +8,31 @@ export async function init(el) {
 
     panelBody.innerHTML = '<div style="text-align: center; color: var(--text); opacity: 0.7;">Temps loading...</div>';
 
-    // Fetch initial temps from database
     try {
-        const res = await fetch('/api/tabs/temps/action/fetch-temps', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({})
-        });
-        if (res.ok) {
-            const data = await res.json();
+        const [tempsRes, configRes] = await Promise.all([
+            fetch('/api/tabs/temps/action/fetch-temps', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({}),
+            }),
+            fetch('/api/tabs/temps/action/get-metric-configs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({}),
+            }),
+        ]);
+
+        if (configRes.ok) {
+            const cfg = await configRes.json();
+            if (cfg.configs) metricConfigs = cfg.configs;
+        }
+
+        if (tempsRes.ok) {
+            const data = await tempsRes.json();
             if (data.readings && Array.isArray(data.readings)) {
-                // Get the latest reading for each service
-                const latestByService = {};
                 for (const reading of data.readings) {
-                    latestByService[reading.serviceName] = reading.tempF;
+                    tempReadings[reading.serviceName] = reading.tempF;
                 }
-                Object.assign(tempReadings, latestByService);
                 updatePanel();
             }
         }
@@ -62,9 +72,12 @@ function updatePanel() {
 
     let html = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
     for (const [serviceName, tempF] of entries) {
+        const cfg = metricConfigs[serviceName] || {};
+        const label = cfg.displayName || serviceName;
+        const color = cfg.color || 'var(--accent-orange, #ff8a3d)';
         html += `<tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));">`;
-        html += `<td style="padding: 4px 6px; text-align: left; color: var(--text);">${serviceName}</td>`;
-        html += `<td style="padding: 4px 6px; text-align: right; font-weight: bold; color: var(--accent-orange, #ff8a3d);">${tempF.toFixed(1)}°F</td>`;
+        html += `<td style="padding: 4px 6px; text-align: left; color: ${color};">${label}</td>`;
+        html += `<td style="padding: 4px 6px; text-align: right; font-weight: bold; color: ${color};">${tempF.toFixed(1)}°F</td>`;
         html += `</tr>`;
     }
     html += '</table>';

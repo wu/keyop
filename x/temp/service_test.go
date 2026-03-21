@@ -1,21 +1,50 @@
 package temp
 
 import (
+	"encoding/json"
 	"keyop/core"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+type mockStateStore struct {
+	mu   sync.Mutex
+	data map[string][]byte
+}
+
+func (m *mockStateStore) Save(key string, value interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	m.data[key] = b
+	return nil
+}
+
+func (m *mockStateStore) Load(key string, value interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.data[key]
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(b, value)
+}
+
 // helper to build dependencies
 func testDeps(t *testing.T) core.Dependencies {
+	t.Helper()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	deps := core.Dependencies{}
 
-	tmpDir, err := os.MkdirTemp("", "httpPost_test")
+	tmpDir, err := os.MkdirTemp("", "temp_test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +58,8 @@ func testDeps(t *testing.T) core.Dependencies {
 	deps.SetLogger(logger)
 	messenger := core.NewMessenger(logger, deps.MustGetOsProvider())
 	messenger.SetDataDir(tmpDir)
-
 	deps.SetMessenger(messenger)
+	deps.SetStateStore(&mockStateStore{data: make(map[string][]byte)})
 
 	return deps
 }
