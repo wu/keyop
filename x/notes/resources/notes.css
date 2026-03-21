@@ -166,8 +166,17 @@
 }
 
 .notes-item-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     font-size: 12px;
     opacity: 0.6;
+}
+
+.notes-item-meta .task-tags {
+    opacity: 1;
+    margin-left: auto;
 }
 
 .notes-import {

@@ -77,9 +77,12 @@
         allNotes.forEach(note => {
             const item = document.createElement('div');
             item.className = 'notes-item' + (note.id === currentNoteId ? ' active' : '');
+            const tagsHtml = note.tags
+                ? `<div class="task-tags">${note.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+                : '';
             item.innerHTML = `
                 <div class="notes-item-title">${escapeHtml(note.title)}</div>
-                <div class="notes-item-meta">${formatAge(note.updated_at)}</div>
+                <div class="notes-item-meta">${formatAge(note.updated_at)}${tagsHtml}</div>
             `;
             item.onclick = () => selectNote(note.id);
             elements.list.appendChild(item);
