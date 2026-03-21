@@ -71,7 +71,7 @@ func (svc *Service) WebUITab() TabInfo {
 	return TabInfo{
 		ID:      "dashboard",
 		Title:   "keyop",
-		Content: `<div id="dashboard-container"><h3>Dashboard</h3><div id="dashboard-panels">Loading dashboard...</div></div>`,
+		Content: `<div id="dashboard-container"><div id="dashboard-panels">Loading dashboard...</div></div>`,
 		JSPath:  "/api/assets/webui/js/dashboard.js",
 	}
 }
