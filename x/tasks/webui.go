@@ -2,14 +2,14 @@ package tasks
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"keyop/core"
 	"keyop/x/recurrence"
 	"keyop/x/webui"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,16 +18,19 @@ import (
 	_ "modernc.org/sqlite" // sqlite driver
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the tasks service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/tasks/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the tasks service.
 func (svc *Service) WebUITab() webui.TabInfo {
 	// Load HTML from resources directory
-	htmlPath := filepath.Join("x/tasks/resources", "tasks.html")
-	htmlContent, err := os.ReadFile(htmlPath) // #nosec G304: path is fixed at compile time
+	htmlContent, err := embeddedAssets.ReadFile("resources/tasks.html")
 	if err != nil {
 		// Fallback if file not found
 		htmlContent = []byte(`<div id="tasks-container">

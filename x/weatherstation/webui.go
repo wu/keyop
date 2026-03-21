@@ -1,13 +1,19 @@
 package weatherstation
 
 import (
+	"embed"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets serves static assets for the weatherstation dashboard panel.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/weatherstation/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUIPanels returns the dashboard panel definition for the weatherstation service.

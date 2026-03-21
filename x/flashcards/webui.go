@@ -1,23 +1,26 @@
 package flashcards
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/util"
 	"keyop/x/webui"
 	"net/http"
-	"os"
-	"path/filepath"
 )
+
+//go:embed resources
+var embeddedAssets embed.FS
 
 // WebUIAssets returns the static assets for the flashcards service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/flashcards/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the flashcards service.
 func (svc *Service) WebUITab() webui.TabInfo {
-	cssPath := filepath.Join("x/flashcards/resources", "flashcards.css")
-	cssContent, err := os.ReadFile(cssPath) // #nosec G304: path is fixed at compile time
+	cssContent, err := embeddedAssets.ReadFile("resources/flashcards.css")
 	if err != nil {
 		cssContent = []byte{}
 	}

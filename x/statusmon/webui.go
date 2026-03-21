@@ -1,14 +1,20 @@
 package statusmon
 
 import (
+	"embed"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 	"time"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the statusmon service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/statusmon/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the statusmon service.

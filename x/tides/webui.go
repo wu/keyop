@@ -1,15 +1,21 @@
 package tides
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 	"time"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the tides service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/tides/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the tides service.

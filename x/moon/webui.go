@@ -1,13 +1,19 @@
 package moon
 
 import (
+	"embed"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the moon service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/moon/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUIPanels returns panels provided by the moon service for the dashboard.

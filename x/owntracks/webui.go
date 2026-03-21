@@ -2,15 +2,21 @@ package owntracks
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 	"time"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the owntracks/gps service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/owntracks/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab definition for the GPS tab.

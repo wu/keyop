@@ -1,14 +1,20 @@
 package alerts
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the alerts service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/alerts/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the alerts service.

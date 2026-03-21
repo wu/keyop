@@ -2,13 +2,19 @@
 package messengerStats
 
 import (
+	"embed"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the messengerStats service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/messengerStats/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the messengerStats service.

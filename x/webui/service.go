@@ -143,7 +143,7 @@ func (svc *Service) Initialize() error {
 	// Add no-cache headers for JS and CSS files
 	mux.HandleFunc("GET /js/{path...}", svc.handleJSAsset)
 	mux.HandleFunc("GET /css/{path...}", svc.handleCSSAsset)
-	fileServer := http.FileServer(http.Dir("x/webui/resources"))
+	fileServer := http.FileServer(http.FS(resourcesFS()))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// If requesting HTML, JS, or CSS, set no-cache headers so browsers will revalidate.
 		path := r.URL.Path
@@ -447,9 +447,8 @@ func (svc *Service) handleJSAsset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	// Serve from x/webui/resources/js/
-	filePath := fmt.Sprintf("x/webui/resources/js/%s", path)
-	http.ServeFile(w, r, filePath)
+	// Serve from embedded resources/js/
+	http.ServeFileFS(w, r, resourcesFS(), "js/"+path)
 }
 
 // handleCSSAsset serves CSS files with no-cache headers to prevent stale styles
@@ -461,9 +460,8 @@ func (svc *Service) handleCSSAsset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	// Serve from x/webui/resources/css/
-	filePath := fmt.Sprintf("x/webui/resources/css/%s", path)
-	http.ServeFile(w, r, filePath)
+	// Serve from embedded resources/css/
+	http.ServeFileFS(w, r, resourcesFS(), "css/"+path)
 }
 
 // handleGetPanelOrder returns the saved panel order.

@@ -1,17 +1,21 @@
 package idle
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
 	"time"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the idle service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	// Return a file system serving from x/idle/resources
-	// In production, we might want to use embed.FS
-	return http.Dir("x/idle/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // WebUITab returns the tab configuration for the idle service.

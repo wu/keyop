@@ -1,18 +1,20 @@
 package journal
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
-	"os"
-	"path/filepath"
 )
+
+//go:embed resources
+var embeddedAssets embed.FS
 
 // WebUITab implements webui.TabProvider.
 func (svc *Service) WebUITab() webui.TabInfo {
 	// Load HTML from resources directory
-	htmlPath := filepath.Join("x/journal/resources", "journal.html")
-	htmlContent, err := os.ReadFile(htmlPath) // #nosec G304: path is fixed at compile time
+	htmlContent, err := embeddedAssets.ReadFile("resources/journal.html")
 	if err != nil {
 		// Fallback if file not found
 		htmlContent = []byte(`<div id="journal-container" class="journal-container">
@@ -35,8 +37,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 	}
 
 	// Load CSS from resources directory
-	cssPath := filepath.Join("x/journal/resources", "journal.css")
-	cssContent, err := os.ReadFile(cssPath) // #nosec G304: path is fixed at compile time
+	cssContent, err := embeddedAssets.ReadFile("resources/journal.css")
 	if err != nil {
 		cssContent = []byte{}
 	}
@@ -55,7 +56,8 @@ func (svc *Service) WebUITab() webui.TabInfo {
 
 // WebUIAssets returns the static assets for the journal service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/journal/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
 }
 
 // HandleWebUIAction handles actions from the WebUI.

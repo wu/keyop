@@ -63,7 +63,7 @@ func (svc *Service) handleGetPanels(w http.ResponseWriter, _ *http.Request) {
 
 // WebUIAssets returns webui's own static assets so the dashboard module can be loaded via /api/assets/webui/...
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/webui/resources")
+	return http.FS(resourcesFS())
 }
 
 // WebUITab returns the dashboard tab owned by the webui service.

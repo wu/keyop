@@ -2,22 +2,47 @@ package weather
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"keyop/x/webui"
 	"net/http"
-	"os"
 	"time"
 )
 
+//go:embed resources
+var embeddedAssets embed.FS
+
 // WebUIAssets returns the static assets for the weather service.
 func (svc *Service) WebUIAssets() http.FileSystem {
-	return http.Dir("x/weather/resources")
+	sub, _ := fs.Sub(embeddedAssets, "resources")
+	return http.FS(sub)
+}
+
+// WebUIPanels returns panels provided by the weather service for the dashboard.
+func (svc *Service) WebUIPanels() []webui.PanelInfo {
+	css, _ := embeddedAssets.ReadFile("resources/weather-panel.css")
+	content := `<link rel="stylesheet" href="/api/assets/weather/weather-icons/css/weather-icons.min.css">` +
+		"\n" + `<div class="panel" id="panel-weather"><div class="panel-body"></div></div>`
+	if len(css) > 0 {
+		content += "\n<style>\n" + string(css) + "\n</style>"
+	}
+	return []webui.PanelInfo{
+		{
+			ID:          "weather",
+			Title:       "Weather",
+			Content:     content,
+			JSPath:      "/api/assets/weather/weather-panel.js",
+			Event:       "weather_forecast",
+			ServiceType: svc.Cfg.Type,
+		},
+	}
 }
 
 // WebUITab returns the tab configuration for the weather service.
 func (svc *Service) WebUITab() webui.TabInfo {
-	css, _ := os.ReadFile("x/weather/resources/weather.css") // #nosec G304
+	css, _ := embeddedAssets.ReadFile("resources/weather.css")
 	content := "<div id=\"weather-container\">\n<div id=\"weather-forecast\">Loading forecast...</div>\n</div>"
 	if len(css) > 0 {
 		content += "\n<style>\n" + string(css) + "\n</style>"
