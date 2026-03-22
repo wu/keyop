@@ -39,11 +39,14 @@
     font-size: 0.95em;
 }
 
-/* Individual card — alert-item provides the card frame; fc-item stacks content vertically */
+/* Individual card — alert-item provides the card frame; fc-item stacks content vertically.
+   Override the faint rgba borders from .alert-item with the theme border color. */
 .fc-item {
     flex-direction: column;
     align-items: stretch;
     cursor: pointer;
+    border-color: var(--border);
+    border-left-color: var(--border);
 }
 
 .fc-item:hover {
