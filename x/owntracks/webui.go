@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"keyop/x/webui"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -46,8 +47,9 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 }
 
 func (svc *Service) getCurrentGPS() (map[string]any, error) {
+	empty := map[string]any{"status": "ok", "location": nil, "events": []any{}}
 	if svc.db == nil || *svc.db == nil {
-		return map[string]any{"status": "ok", "location": nil, "events": []any{}}, nil
+		return empty, nil
 	}
 	db := *svc.db
 
@@ -67,13 +69,16 @@ func (svc *Service) getCurrentGPS() (map[string]any, error) {
 			"acc":       acc,
 			"batt":      batt,
 		}
-	} else if err != sql.ErrNoRows {
+	} else if err != sql.ErrNoRows && !isTableNotFoundError(err) {
 		return nil, fmt.Errorf("gps: failed to query location: %w", err)
 	}
 
 	// Recent region events
 	rows, err := db.Query(`SELECT timestamp, device, event_type, region, lat, lon FROM gps_region_events ORDER BY timestamp DESC LIMIT 50`)
 	if err != nil {
+		if isTableNotFoundError(err) {
+			return map[string]any{"status": "ok", "location": location, "events": []any{}}, nil
+		}
 		return nil, fmt.Errorf("gps: failed to query region events: %w", err)
 	}
 	defer rows.Close() //nolint:errcheck
@@ -102,4 +107,12 @@ func (svc *Service) getCurrentGPS() (map[string]any, error) {
 		"location": location,
 		"events":   events,
 	}, nil
+}
+
+func isTableNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no such table") || strings.Contains(msg, "no such column")
 }

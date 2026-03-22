@@ -16,8 +16,9 @@ export function onMessage(msg) {
 
 function loadData() {
     fetch('/api/tabs/gps/action/get-current', {method: 'POST'})
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(data => {
+            if (!data) return;
             render(data);
             if (data.location) loadMap();
         })
@@ -26,9 +27,9 @@ function loadData() {
 
 function loadMap() {
     fetch('/api/tabs/gps/action/get-map', {method: 'POST'})
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(data => {
-            if (!data.map) return;
+            if (!data || !data.map) return;
             const img = container.querySelector('#gps-map');
             if (img) img.src = 'data:image/png;base64,' + data.map;
         })
@@ -39,11 +40,11 @@ function loadHistoryMap() {
     const placeholder = container.querySelector('#gps-history-map');
     if (placeholder) placeholder.style.opacity = '0.3';
     fetch('/api/tabs/gps/action/get-history-map', {method: 'POST'})
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(data => {
             const img = container.querySelector('#gps-history-map');
             if (!img) return;
-            if (data.map) {
+            if (data && data.map) {
                 img.src = 'data:image/png;base64,' + data.map;
                 img.style.opacity = '1';
             } else {
@@ -59,8 +60,10 @@ function toggleHistory() {
     historyMode = !historyMode;
     if (historyMode) {
         fetch('/api/tabs/gps/action/get-current', {method: 'POST'})
-            .then(r => r.json())
-            .then(data => renderHistory(data))
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data) renderHistory(data);
+            })
             .catch(err => console.error('GPS: failed to load data for history', err));
     } else {
         loadData();
