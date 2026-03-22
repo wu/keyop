@@ -64,8 +64,9 @@ func (svc *Service) fetchTemps() (any, error) {
 		return nil, fmt.Errorf("temps database not available")
 	}
 
-	// Query temps from the last 4 hours
-	fourHoursAgo := time.Now().Add(-4 * time.Hour)
+	// Query temps from the last 4 hours. Use UTC for the comparison threshold so
+	// that string comparison against UTC-normalized stored timestamps is correct.
+	fourHoursAgo := time.Now().UTC().Add(-4 * time.Hour)
 
 	rows, err := (*svc.db).Query(`
 		SELECT id, timestamp, service_name, service_type, temp_c, temp_f

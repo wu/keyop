@@ -1,0 +1,10 @@
+x: temp
+
+# Webui-only configuration for the temp service.
+# Use this when temperature data arrives via a shared channel (e.g. temp-shared)
+# rather than from a local physical sensor. No devicePath is required; the service
+# acts as a SQLite consumer and serves the temps tab UI.
+
+config: { }
+
+subs: { }

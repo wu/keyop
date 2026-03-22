@@ -52,10 +52,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 func (svc Service) ValidateConfig() []error {
 	var errs []error
 
-	if _, ok := svc.Cfg.Config["devicePath"].(string); !ok {
-		errs = append(errs, fmt.Errorf("temp: devicePath not set in config"))
-	}
-
 	if val, ok := svc.Cfg.Config["maxTemp"]; ok {
 		if _, ok := val.(float64); !ok {
 			errs = append(errs, fmt.Errorf("temp: maxTemp must be a float"))
@@ -67,13 +63,10 @@ func (svc Service) ValidateConfig() []error {
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
 func (svc *Service) Initialize() error {
-
-	if svc.DevicePath == "" {
-		return fmt.Errorf("temp: devicePath not set")
-	}
-
-	if _, err := os.Stat(svc.DevicePath); err != nil {
-		return fmt.Errorf("temp: device path %s does not exist: %w", svc.DevicePath, err)
+	if svc.DevicePath != "" {
+		if _, err := os.Stat(svc.DevicePath); err != nil {
+			return fmt.Errorf("temp: device path %s does not exist: %w", svc.DevicePath, err)
+		}
 	}
 
 	// Load persisted metric display configs.
@@ -100,6 +93,9 @@ type Event struct {
 
 // Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc Service) Check() error {
+	if svc.DevicePath == "" {
+		return nil
+	}
 	_, err := svc.temp()
 	return err
 }
@@ -234,9 +230,7 @@ func (svc *Service) SQLiteSchema() string {
 		temp_c REAL,
 		temp_f REAL,
 		data TEXT
-	);
-	ALTER TABLE temps ADD COLUMN temp_c REAL;
-	ALTER TABLE temps ADD COLUMN temp_f REAL;`
+	);`
 }
 
 // SQLiteInsert prepares an INSERT for incoming messages with temperature data.
