@@ -156,11 +156,11 @@ async function renderCards(cards) {
 
         listDiv.appendChild(item);
 
-        // Render question markdown into placeholder
+        // Render question as plain text in the list view
         const qEl = item.querySelector('.fc-question-text');
-        if (qEl) qEl.innerHTML = await renderMarkdown(card.question);
+        if (qEl) qEl.innerHTML = escapeHtml(card.question);
 
-        // Render answer markdown if expanded
+        // Render answer markdown only when card is expanded
         if (isExpanded) {
             const aEl = item.querySelector('.fc-answer-text');
             if (aEl) aEl.innerHTML = await renderMarkdown(card.answer);
