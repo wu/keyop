@@ -141,31 +141,35 @@ func (svc *Service) handleMessage(msg core.Message) error {
 		return nil
 	}
 
-	logger.Warn("sqlite: processing message", "datatype", msg.DataType, "msg", msg)
+	// Normalize timestamp to UTC so SQLite string comparisons work correctly
+	// regardless of the sender's local timezone.
+	if !msg.Timestamp.IsZero() {
+		msg.Timestamp = msg.Timestamp.UTC()
+	}
 
 	svc.mu.RLock()
 	provider, ok := svc.providers[msg.DataType]
 	svc.mu.RUnlock()
 
 	if !ok {
-		logger.Warn("sqlite: No provider registered for this payload type", "dataType", msg.DataType)
+		logger.Debug("sqlite: no provider registered for this payload type", "dataType", msg.DataType)
 		return nil
 	}
 
 	query, args := provider.SQLiteInsert(msg)
 	if query == "" {
-		logger.Warn("sqlite: No insert query provided by provider", "dataType", msg.DataType)
+		logger.Debug("sqlite: no insert query provided by provider", "dataType", msg.DataType)
 		return nil
 	}
 
-	logger.Warn("sqlite: Inserting data", "dataType", msg.DataType)
+	logger.Debug("sqlite: inserting data", "dataType", msg.DataType)
 	_, err := svc.db.Exec(query, args...)
 	if err != nil {
 		logger.Error("sqlite: failed to insert message", "error", err, "dataType", msg.DataType, "query", query)
 		return err
 	}
 
-	logger.Warn("Insertion successful", "dataType", msg.DataType)
+	logger.Debug("sqlite: insertion successful", "dataType", msg.DataType)
 	return nil
 }
 

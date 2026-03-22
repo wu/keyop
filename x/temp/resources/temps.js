@@ -65,8 +65,8 @@ function resizeCanvas() {
 export function onMessage(msg) {
     if (!tempsContainer) return;
 
-    // Only process temp-type messages
-    if (msg.dataType !== 'core.temp.v1') return;
+    // Only process temp-type messages; JSON field is "data-type" (hyphenated)
+    if (msg['data-type'] !== 'core.temp.v1') return;
 
     // Check if the temps tab content is visible
     const tabContent = tempsContainer.closest('.tab-content');

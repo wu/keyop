@@ -33,9 +33,9 @@ export async function init(el) {
                 for (const reading of data.readings) {
                     tempReadings[reading.serviceName] = reading.tempF;
                 }
-                updatePanel();
             }
         }
+        updatePanel();
     } catch (e) {
         console.error('Failed to fetch temps:', e);
     }
@@ -44,13 +44,12 @@ export async function init(el) {
 export function onMessage(msg) {
     if (!panelBody) return;
 
-    // Listen for temp-related messages
-    if (msg.dataType === 'core.temp.v1' || msg.event === 'temp') {
+    // Listen for temp-related messages; JSON field is "data-type" (hyphenated)
+    if (msg['data-type'] === 'core.temp.v1' || msg.event === 'temp_reading') {
         const data = msg.data || {};
         const serviceName = msg.serviceName || 'Unknown';
 
-        // Store the temperature (convert if needed)
-        let tempF = data.temp_f !== undefined ? data.temp_f : (data.tempF !== undefined ? data.tempF : null);
+        const tempF = data.tempF !== undefined ? data.tempF : null;
         if (tempF !== null) {
             tempReadings[serviceName] = tempF;
             updatePanel();

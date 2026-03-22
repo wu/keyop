@@ -7,7 +7,7 @@ export async function init(container) {
 
 export function onMessage(msg) {
     if (!weatherContainer) return;
-    if (msg.event !== 'weather_forecast' && msg.dataType !== 'service.weather.v1' && msg.dataType !== 'weather_forecast') return;
+    if (msg.event !== 'weather_forecast' && msg['data-type'] !== 'service.weather.v1' && msg['data-type'] !== 'weather_forecast') return;
     refreshForecast();
 }
 

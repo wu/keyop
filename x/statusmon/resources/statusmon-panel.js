@@ -1,15 +1,19 @@
 let panelBody = null;
+const panelStatuses = {}; // local cache: name -> status object
 
 export function init(el) {
     panelBody = el.querySelector('.panel-body') || el;
     if (!panelBody) return;
 
-    // Fetch status data and render panel
+    // Initial load from server to populate the cache
     fetch('/api/tabs/statusmon/action/fetch-status', {method: 'POST'})
-        .then(resp => resp.json())
+        .then(resp => resp.ok ? resp.json() : null)
         .then(data => {
             if (data && data.statuses) {
-                updatePanel(data.statuses);
+                data.statuses.forEach(s => {
+                    panelStatuses[s.name] = s;
+                });
+                updatePanel(Object.values(panelStatuses));
             }
         })
         .catch(err => console.error('Failed to fetch status for panel:', err));
@@ -18,16 +22,18 @@ export function init(el) {
 export function onMessage(msg) {
     if (!panelBody) return;
 
-    // Refetch status on any status message
-    if (msg.event === 'statusmon' || msg['data-type'] === 'core.status.v1') {
-        fetch('/api/tabs/statusmon/action/fetch-status', {method: 'POST'})
-            .then(resp => resp.json())
-            .then(data => {
-                if (data && data.statuses) {
-                    updatePanel(data.statuses);
-                }
-            })
-            .catch(err => console.error('Failed to refresh status panel:', err));
+    // Update local cache directly from SSE — no server fetch needed
+    if (msg['data-type'] === 'core.status.v1' && msg.data && msg.data.name) {
+        const s = msg.data;
+        panelStatuses[s.name] = {
+            ...panelStatuses[s.name],
+            name: s.name,
+            status: s.status,
+            level: s.level,
+            details: s.details,
+            hostname: s.hostname,
+        };
+        updatePanel(Object.values(panelStatuses));
     }
 }
 

@@ -82,7 +82,7 @@ export function onMessage(msg) {
     if (!alertsContainer) return;
 
     // Filter for alert-related messages: check channelName, event, or dataType
-    if (msg.channelName !== 'alerts' && !msg.event?.includes('alert') && msg.dataType !== 'core.alert.v1' && msg.dataType !== 'alert') {
+    if (msg.channelName !== 'alerts' && !msg.event?.includes('alert') && msg['data-type'] !== 'core.alert.v1' && msg['data-type'] !== 'alert') {
         return;
     }
 

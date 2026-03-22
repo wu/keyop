@@ -17,19 +17,13 @@ export async function init(el) {
         });
         if (res.ok) {
             const data = await res.json();
-            console.log('=== Tides Panel Fetch ===');
-            console.log('Full response:', JSON.stringify(data, null, 2));
             if (data && data.event) {
                 lastTideData = data;
                 updatePanel();
             } else {
-                console.warn('No event in tide response:', data);
                 panelBody.innerHTML = '<div style="text-align: center; color: var(--text); opacity: 0.7;">Waiting for tide data...</div>';
             }
         } else {
-            console.error('Tide fetch failed:', res.status, res.statusText);
-            const errorText = await res.text();
-            console.error('Error response:', errorText);
             panelBody.innerHTML = '<div style="text-align: center; color: var(--text); opacity: 0.7;">Tide data unavailable</div>';
         }
     } catch (e) {
@@ -43,7 +37,6 @@ export function onMessage(msg) {
 
     // Listen for tide event messages
     if (msg.event && msg.event.includes('tide')) {
-        console.log('Tides panel received message:', msg);
         lastTideData = msg.data || msg;
 
         // Fetch fresh sparkline data when tide updates come in
@@ -74,7 +67,6 @@ export function onMessage(msg) {
 
 function updatePanel() {
     if (!panelBody || !lastTideData) {
-        console.log('updatePanel: missing data');
         return;
     }
 
@@ -83,12 +75,6 @@ function updatePanel() {
     const state = lastTideData.state || event.state || '';
     const lat = lastTideData.lat != null ? lastTideData.lat : null;
     const lon = lastTideData.lon != null ? lastTideData.lon : null;
-
-    console.log('=== updatePanel ===');
-    console.log('Current level:', lastTideData.currentLevel);
-    console.log('Peak level:', lastTideData.peakLevel);
-    console.log('State:', state);
-    console.log('Sparkline records:', sparklineRecords.length);
 
     // Use sun-wrapper layout similar to aurora panel
     let html = `<div class="sun-wrapper">`;

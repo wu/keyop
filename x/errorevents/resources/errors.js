@@ -48,7 +48,7 @@ export function onMessage(msg) {
     if (!errorsContainer) return;
 
     // Filter for error-related messages: check channelName, event, or dataType
-    if (msg.channelName !== 'errors' && !msg.event?.includes('error') && msg.dataType !== 'core.error.v1' && msg.dataType !== 'error') {
+    if (msg.channelName !== 'errors' && !msg.event?.includes('error') && msg['data-type'] !== 'core.error.v1' && msg['data-type'] !== 'error') {
         return;
     }
 
