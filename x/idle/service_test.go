@@ -435,9 +435,9 @@ func TestMaybeSendIdleReport(t *testing.T) {
 	t.Run("CustomRange", func(t *testing.T) {
 		messenger.Reset()
 
-		// Insert data for the custom range
-		start := time.Date(2026, 3, 9, 10, 0, 0, 0, time.Local)
-		end := time.Date(2026, 3, 9, 12, 0, 0, 0, time.Local)
+		// Insert data for the custom range using UTC (matching production storage format)
+		start := time.Date(2026, 3, 9, 10, 0, 0, 0, time.UTC)
+		end := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
 		_, err = db.Exec(`INSERT INTO idle_events (timestamp, hostname, status, idle_seconds, active_seconds) VALUES (?, ?, ?, ?, ?)`,
 			start.Add(30*time.Minute), "test-host", "active", 0.0, 1800.0)
 		assert.NoError(t, err)

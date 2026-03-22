@@ -36,26 +36,35 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	// Default time range logic
 	if start.IsZero() && end.IsZero() {
 		// Last 24 hours
-		end = now
+		end = now.UTC()
 		start = end.Add(-24 * time.Hour)
 	} else if end.IsZero() {
 		// From start to now
-		end = now
+		end = now.UTC()
 	} else if start.IsZero() {
 		// 24 hours before end
 		start = end.Add(-24 * time.Hour)
 	}
 
+	// Normalize to UTC so string comparisons against UTC-stored timestamps work correctly.
+	start = start.UTC()
+	end = end.UTC()
+
 	logger.Info("Generating idle report", "start", start, "end", end)
 
 	db := *svc.db
-	// Query messages from SQLite
+	// Expand the SQL query window by ±14 hours to tolerate any stored timezone offset
+	// (timestamps may have been stored in local time on older deployments).
+	// The Go-level safety filter below enforces the exact [start, end) range using
+	// proper time.Time comparison, which is timezone-aware.
+	queryStart := start.Add(-14 * time.Hour)
+	queryEnd := end.Add(14 * time.Hour)
 	rows, err := db.Query(`
 		SELECT timestamp, hostname, status, idle_seconds, active_seconds 
 		FROM idle_events 
 		WHERE timestamp >= ? AND timestamp < ? 
 		ORDER BY timestamp ASC`,
-		start, end)
+		queryStart, queryEnd)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to query idle events: %w", err)
 	}
