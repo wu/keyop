@@ -414,10 +414,19 @@ func (svc *Service) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	logger := svc.Deps.MustGetLogger()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			// SSE comment — ignored by clients but resets nginx proxy_read_timeout.
+			if _, err := fmt.Fprintf(w, ": keep-alive\n\n"); err != nil {
+				logger.Warn("webui: failed to write SSE keep-alive", "error", err)
+				return
+			}
+			flusher.Flush()
 		case msg := <-messageChan:
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", msg); err != nil {
 				logger.Warn("webui: failed to write SSE message", "error", err)
