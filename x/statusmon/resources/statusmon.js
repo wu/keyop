@@ -1,6 +1,5 @@
 let statusmonContainer = null;
 let currentStatuses = {}; // Cache of current status items keyed by name
-let lastRefreshTime = 0; // Prevent too-frequent refreshes
 
 import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
 
@@ -27,42 +26,21 @@ export function onMessage(msg) {
         return;
     }
 
-    // Extract the status data from the message
+    // Update cache directly from SSE data — no server fetch needed.
+    // Acknowledged state is preserved from cache; it is only changed by explicit user action.
     if (msg.data && msg.data.name) {
         const statusData = msg.data;
-
-        // If this is a new service (not in cache), refresh from sqlite to get all current services
-        if (!currentStatuses.hasOwnProperty(statusData.name)) {
-            refreshStatus();
-            return;
-        }
-
         const oldStatus = currentStatuses[statusData.name];
-
-        // Always refresh if we haven't recently to ensure acknowledged state is correct
-        const now = Date.now();
-        const timeSinceLastRefresh = now - lastRefreshTime;
-
-        // If status/level hasn't changed AND we've refreshed recently, preserve the acknowledged state
-        // Otherwise, refresh from server to get the correct acknowledged state
-        if ((oldStatus?.status === statusData.status &&
-                oldStatus?.level === statusData.level) &&
-            timeSinceLastRefresh < 2000) {
-            // Status unchanged and recent refresh - preserve acknowledged state
-            currentStatuses[statusData.name] = {
-                name: statusData.name,
-                status: statusData.status,
-                details: statusData.details,
-                level: statusData.level,
-                hostname: statusData.hostname,
-                acknowledged: oldStatus.acknowledged || false,
-                lastSeen: new Date().toISOString()
-            };
-            renderStatusList();
-        } else {
-            // Status changed or refresh is old - get the correct state from server
-            refreshStatus();
-        }
+        currentStatuses[statusData.name] = {
+            name: statusData.name,
+            status: statusData.status,
+            details: statusData.details,
+            level: statusData.level,
+            hostname: statusData.hostname,
+            acknowledged: oldStatus?.acknowledged || false,
+            lastSeen: new Date().toISOString(),
+        };
+        renderStatusList();
     }
 }
 
@@ -238,17 +216,10 @@ async function handleAckClick(event) {
     const statusName = btn.dataset.name;
     const isCurrentlyAcked = btn.classList.contains('unacked-btn');
 
-    console.log('[statusmon] Ack click:', {
-        statusName,
-        isCurrentlyAcked,
-        action: isCurrentlyAcked ? 'unacknowledge' : 'acknowledge'
-    });
-
     try {
         const action = isCurrentlyAcked ? 'unacknowledge-status' : 'acknowledge-status';
         const payload = {statusName};
         const url = '/api/tabs/statusmon/action/' + action;
-        console.log('[statusmon] Sending request:', {action, url, payload});
 
         const response = await fetch(url, {
             method: 'POST',
@@ -256,12 +227,8 @@ async function handleAckClick(event) {
             body: JSON.stringify(payload)
         });
 
-        console.log('[statusmon] Response status:', response.status, response.ok);
-        console.log('[statusmon] Response headers:', response.headers.get('content-type'));
-
         if (response.ok) {
-            const result = await response.json();
-            console.log('[statusmon] Response result:', result);
+            await response.json();
             // Refresh from server to ensure we have the correct state
             await refreshStatus();
         } else {
