@@ -169,17 +169,20 @@ function updatePanel() {
     if (sortColumn === 'lastSeen') html += sortAscending ? ' ▲' : ' ▼';
     html += '</th>';
 
+    html += '<th style="padding: 8px; width: 24px;"></th>';
     html += '</tr>';
 
     for (const hb of sorted) {
         const diff = hb.lastSeenTime ? (now - hb.lastSeenTime) : 0;
         const isStale = diff > 5 * 60 * 1000; // > 5 minutes
         const rowBg = isStale ? 'background-color: rgba(255, 220, 0, 0.15);' : '';
+        const safeHostname = hb.hostname.replace(/'/g, "\\'");
 
         html += `<tr style="border-bottom: 1px solid var(--border, #333); ${rowBg}">`;
         html += `<td style="padding: 8px; color: var(--text);">${hb.hostname}</td>`;
         html += `<td style="padding: 8px; color: var(--text);">${formatUptime(hb.uptime)}</td>`;
         html += `<td style="padding: 8px; color: var(--text); opacity: 0.7;">${hb.lastSeen}</td>`;
+        html += `<td style="padding: 4px 8px; text-align: right;"><button onclick="removeHost('${safeHostname}')" style="background: none; border: none; color: var(--text); opacity: 0.4; cursor: pointer; font-size: 0.9rem; padding: 0 2px; line-height: 1;" title="Remove from list">✕</button></td>`;
         html += '</tr>';
     }
 
@@ -187,7 +190,7 @@ function updatePanel() {
     container.innerHTML = html;
 }
 
-// Make sortBy available globally for onclick handlers
+// Make sortBy and removeHost available globally for onclick handlers
 window.sortBy = function (column) {
     if (sortColumn === column) {
         sortAscending = !sortAscending;
@@ -195,6 +198,12 @@ window.sortBy = function (column) {
         sortColumn = column;
         sortAscending = column === 'uptime'; // Default ascending for uptime
     }
+    persistState();
+    updatePanel();
+};
+
+window.removeHost = function (hostname) {
+    delete heartbeats[hostname];
     persistState();
     updatePanel();
 };
