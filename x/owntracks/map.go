@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // mapZoom is the OSM zoom level used for map downloads.
@@ -24,7 +25,7 @@ const mapZoom = 15
 const mapTileSize = 256
 const mapGridHalf = 1 // 1 → 3×3 grid of tiles
 
-var mapHTTPClient = &http.Client{}
+var mapHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // latLonToTile converts geographic coordinates to OSM tile indices at the given zoom.
 func latLonToTile(lat, lon float64, zoom int) (int, int) {
@@ -201,7 +202,7 @@ func (svc *Service) getMapForCurrentLocation() (map[string]any, error) {
 
 	data, err := getOrFetchMap(lat, lon)
 	if err != nil {
-		return nil, fmt.Errorf("gps map: build map: %w", err)
+		return map[string]any{"map": ""}, nil
 	}
 	return map[string]any{"map": base64.StdEncoding.EncodeToString(data)}, nil
 }
