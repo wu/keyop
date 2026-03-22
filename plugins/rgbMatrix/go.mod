@@ -17,7 +17,7 @@ require (
 	github.com/jezek/xgb v1.1.1 // indirect
 	golang.org/x/exp/shiny v0.0.0-20260212183809-81e46e3db34a // indirect
 	golang.org/x/mobile v0.0.0-20260217195705-b56b3793a9c4 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
