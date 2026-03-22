@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"keyop/util"
 	"keyop/x/webui"
 	"net/http"
 	"time"
@@ -117,7 +118,15 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 			return nil, fmt.Errorf("aurora: failed to query forecast: %w", err)
 		}
 
-		return map[string]any{"status": "ok", "current": current, "forecast": forecastResp}, nil
+		// Compute solar days covering the 3-day forecast window using server-side astral library.
+		// This eliminates the need for JS to recalculate civil dawn/dusk.
+		var solarDays []util.SolarDay
+		if lat != 0 || lon != 0 {
+			now := time.Now().UTC()
+			solarDays = util.SolarDaysForRange(lat, lon, now, now.Add(72*time.Hour))
+		}
+
+		return map[string]any{"status": "ok", "current": current, "forecast": forecastResp, "solar_days": solarDays}, nil
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}

@@ -1,6 +1,30 @@
 let container = null;
 let body = null;
 
+// Returns 'day', 'night', or 'mixed' for the period [startDate, endDate) using
+// server-provided solar_days (array of {date, dawn, dusk} ISO strings from Go).
+function getLightType(startDate, endDate, solarDays) {
+    if (!solarDays || solarDays.length === 0) return 'night';
+    const s = startDate.getTime(), e = endDate.getTime();
+    const dateKey = startDate.toISOString().slice(0, 10);
+    const prevKey = new Date(startDate.getTime() - 86400000).toISOString().slice(0, 10);
+    const today = solarDays.find(d => d.date === dateKey);
+    const prev = solarDays.find(d => d.date === prevKey);
+    const dawnMs = today ? new Date(today.dawn).getTime() : null;
+    const duskMs = today ? new Date(today.dusk).getTime() : null;
+    const prevDuskMs = prev ? new Date(prev.dusk).getTime() : null;
+    if (dawnMs !== null && e <= dawnMs) {
+        if (prevDuskMs === null) return 'night';
+        if (s >= prevDuskMs) return 'night';
+        if (e <= prevDuskMs) return 'day';
+        return 'mixed';
+    }
+    if (dawnMs === null || duskMs === null) return 'night';
+    if (s >= dawnMs && e <= duskMs) return 'day';
+    if (s >= duskMs) return 'night';
+    return 'mixed';
+}
+
 function formatRemaining(ms) {
     if (ms == null || isNaN(ms)) return '—';
     ms = Math.max(0, ms);
@@ -71,7 +95,7 @@ function extractKpEntries(forecast, futureOnly = true) {
             const endDate = parseUtcDate(dayStr, endHour);
             if (endHour < startHour) endDate.setDate(endDate.getDate() + 1);
 
-            if (futureOnly && startDate < now) continue;
+            if (futureOnly && endDate <= now) continue;
 
             if (entry.kp !== null && entry.kp !== undefined) {
                 entries.push({kp: entry.kp, startDate, endDate});
@@ -82,46 +106,8 @@ function extractKpEntries(forecast, futureOnly = true) {
     return entries;
 }
 
-// Compute civil dawn and dusk for a given date at lat/lon (NOAA algorithm).
-// Returns {dawn: Date, dusk: Date} as UTC Date objects.
-function computeCivilDawnDusk(date, lat, lon) {
-    const rad = Math.PI / 180;
-    const deg = 180 / Math.PI;
-    const jd = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + 2440587.5;
-    const n = jd - 2451545.0;
-    const L = (280.460 + 0.9856474 * n) % 360;
-    const g = (357.528 + 0.9856003 * n) % 360;
-    const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
-    const epsilon = 23.439 - 0.0000004 * n;
-    const sinDec = Math.sin(epsilon * rad) * Math.sin(lambda * rad);
-    const dec = Math.asin(sinDec) * deg;
-    const depression = 6;
-    const cosH = (Math.cos((90 + depression) * rad) - Math.sin(lat * rad) * Math.sin(dec * rad))
-        / (Math.cos(lat * rad) * Math.cos(dec * rad));
-    const baseMs = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-    if (cosH < -1) return {dawn: new Date(baseMs), dusk: new Date(baseMs + 86399000)};
-    if (cosH > 1) return {dawn: new Date(baseMs + 43200000), dusk: new Date(baseMs + 43200000)};
-    const H = Math.acos(cosH) * deg;
-    const eqTime = 4 * (L - lambda);
-    const solarNoonUTC = 720 - 4 * lon - eqTime;
-    return {
-        dawn: new Date(baseMs + (solarNoonUTC - H * 4) * 60000),
-        dusk: new Date(baseMs + (solarNoonUTC + H * 4) * 60000),
-    };
-}
-
-// Returns 'day', 'night', or 'mixed' for the given period at lat/lon.
-function getLightType(startDate, endDate, lat, lon) {
-    const {dawn, dusk} = computeCivilDawnDusk(startDate, lat, lon);
-    const s = startDate.getTime(), e = endDate.getTime();
-    const d = dawn.getTime(), k = dusk.getTime();
-    if (s >= d && e <= k) return 'day';
-    if (e <= d || s >= k) return 'night';
-    return 'mixed';
-}
-
 // Render a sparkline showing KP values
-function renderSparkline(forecast, width = 200, lat = null, lon = null) {
+function renderSparkline(forecast, width = 200, solarDays = null) {
     const kpEntries = extractKpEntries(forecast, true);
     if (kpEntries.length === 0) {
         return '';
@@ -151,12 +137,12 @@ function renderSparkline(forecast, width = 200, lat = null, lon = null) {
 
     let svg = `<svg width="${width}" height="${height}" style="margin-top: 8px;">`;
 
-    // Draw daylight/night background rects if lat/lon available
-    if (lat != null && lon != null && kpEntries.length > 1) {
+    // Draw daylight/night background rects using server-provided solar day segments
+    if (solarDays && solarDays.length > 0 && kpEntries.length > 1) {
         const totalMs = kpEntries[kpEntries.length - 1].endDate - kpEntries[0].startDate;
         const startMs = kpEntries[0].startDate.getTime();
         for (const {startDate, endDate} of kpEntries) {
-            const lightType = getLightType(startDate, endDate, lat, lon);
+            const lightType = getLightType(startDate, endDate, solarDays);
             const color = lightType === 'day'
                 ? 'rgba(255,255,255,0.10)'
                 : lightType === 'night'
@@ -306,9 +292,8 @@ function updatePanel(data) {
     // Render sparkline
     const sparklineEl = body.querySelector('#aurora-panel-sparkline');
     if (sparklineEl && forecast && forecast.data) {
-        const lat = current.lat != null ? current.lat : null;
-        const lon = current.lon != null ? current.lon : null;
-        const sparklineHtml = renderSparkline(forecast, 200, lat, lon);
+        const solarDays = data.solar_days || [];
+        const sparklineHtml = renderSparkline(forecast, 200, solarDays);
         sparklineEl.innerHTML = sparklineHtml || '';
     }
 

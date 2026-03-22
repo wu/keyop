@@ -55,8 +55,7 @@ export function onMessage(msg) {
                         currentLevel: data.currentLevel,
                         peakLevel: data.peakLevel,
                         state: data.state,
-                        lat: data.lat,
-                        lon: data.lon,
+                        solar_days: data.solar_days || [],
                     };
                     updatePanel();
                 }
@@ -73,8 +72,7 @@ function updatePanel() {
     const event = lastTideData.event || lastTideData;
     const sparklineRecords = lastTideData.sparklineRecords || [];
     const state = lastTideData.state || event.state || '';
-    const lat = lastTideData.lat != null ? lastTideData.lat : null;
-    const lon = lastTideData.lon != null ? lastTideData.lon : null;
+    const solarDays = lastTideData.solarDays || lastTideData.solar_days || [];
 
     // Use sun-wrapper layout similar to aurora panel
     let html = `<div class="sun-wrapper">`;
@@ -84,7 +82,7 @@ function updatePanel() {
     html += `<div style="font-weight: bold; margin-bottom: 6px;">Tide Forecast</div>`;
     if (sparklineRecords.length > 0) {
         html += `<div id="tides-sparkline" style="margin-top: 0px; margin-bottom: 12px;">`;
-        html += renderSparkline(sparklineRecords, lat, lon);
+        html += renderSparkline(sparklineRecords, solarDays);
         html += `</div>`;
     }
     html += `</div>`;
@@ -171,34 +169,31 @@ function fmtDuration(ms) {
     return `${m}m`;
 }
 
-// Compute civil dawn and dusk for a given date at lat/lon (NOAA algorithm).
-// Returns {dawn: Date, dusk: Date} as UTC Date objects.
-function computeCivilDawnDusk(date, lat, lon) {
-    const rad = Math.PI / 180;
-    const deg = 180 / Math.PI;
-    const jd = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + 2440587.5;
-    const n = jd - 2451545.0;
-    const L = (280.460 + 0.9856474 * n) % 360;
-    const g = (357.528 + 0.9856003 * n) % 360;
-    const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
-    const epsilon = 23.439 - 0.0000004 * n;
-    const sinDec = Math.sin(epsilon * rad) * Math.sin(lambda * rad);
-    const dec = Math.asin(sinDec) * deg;
-    const cosH = (Math.cos(96 * rad) - Math.sin(lat * rad) * Math.sin(dec * rad))
-        / (Math.cos(lat * rad) * Math.cos(dec * rad));
-    const baseMs = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-    if (cosH < -1) return {dawn: new Date(baseMs), dusk: new Date(baseMs + 86399000)};
-    if (cosH > 1) return {dawn: new Date(baseMs + 43200000), dusk: new Date(baseMs + 43200000)};
-    const H = Math.acos(cosH) * deg;
-    const eqTime = 4 * (L - lambda);
-    const solarNoonUTC = 720 - 4 * lon - eqTime;
-    return {
-        dawn: new Date(baseMs + (solarNoonUTC - H * 4) * 60000),
-        dusk: new Date(baseMs + (solarNoonUTC + H * 4) * 60000),
-    };
+// Returns 'day', 'night', or 'mixed' for the period [startDate, endDate) using
+// server-provided solar_days (array of {date, dawn, dusk} ISO strings from Go).
+function getLightType(startDate, endDate, solarDays) {
+    if (!solarDays || solarDays.length === 0) return 'night';
+    const s = startDate.getTime(), e = endDate.getTime();
+    const dateKey = startDate.toISOString().slice(0, 10);
+    const prevKey = new Date(startDate.getTime() - 86400000).toISOString().slice(0, 10);
+    const today = solarDays.find(d => d.date === dateKey);
+    const prev = solarDays.find(d => d.date === prevKey);
+    const dawnMs = today ? new Date(today.dawn).getTime() : null;
+    const duskMs = today ? new Date(today.dusk).getTime() : null;
+    const prevDuskMs = prev ? new Date(prev.dusk).getTime() : null;
+    if (dawnMs !== null && e <= dawnMs) {
+        if (prevDuskMs === null) return 'night';
+        if (s >= prevDuskMs) return 'night';
+        if (e <= prevDuskMs) return 'day';
+        return 'mixed';
+    }
+    if (dawnMs === null || duskMs === null) return 'night';
+    if (s >= dawnMs && e <= duskMs) return 'day';
+    if (s >= duskMs) return 'night';
+    return 'mixed';
 }
 
-function renderSparkline(records, lat = null, lon = null) {
+function renderSparkline(records, solarDays = null) {
     const values = records.map(r => parseFloat(r.v || r.value || 0));
     if (values.length === 0) return '';
 
@@ -252,21 +247,15 @@ function renderSparkline(records, lat = null, lon = null) {
     // Create SVG with fixed dimensions (matching aurora panel pattern)
     let svg = `<svg width="${width}" height="${height}" style="margin-top: 8px;">`;
 
-    // Draw daylight/night background if lat/lon available
-    if (lat != null && lon != null && timeRange > 0) {
+    // Draw daylight/night background using server-provided solar day segments
+    if (solarDays && solarDays.length > 0 && timeRange > 0) {
         // Sample background in ~30-min slices across the time range
         const slices = 48;
         const sliceMs = timeRange / slices;
         for (let i = 0; i < slices; i++) {
             const sliceStart = new Date(minTime + i * sliceMs);
             const sliceEnd = new Date(minTime + (i + 1) * sliceMs);
-            const {dawn, dusk} = computeCivilDawnDusk(sliceStart, lat, lon);
-            const s = sliceStart.getTime(), e = sliceEnd.getTime();
-            const d = dawn.getTime(), k = dusk.getTime();
-            let lightType;
-            if (s >= d && e <= k) lightType = 'day';
-            else if (e <= d || s >= k) lightType = 'night';
-            else lightType = 'mixed';
+            const lightType = getLightType(sliceStart, sliceEnd, solarDays);
             const color = lightType === 'day'
                 ? 'rgba(255,255,255,0.10)'
                 : lightType === 'night'

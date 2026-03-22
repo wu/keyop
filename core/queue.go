@@ -58,7 +58,7 @@ func NewPersistentQueue(name string, dir string, osProvider OsProviderApi, logge
 }
 
 func (pq *PersistentQueue) Enqueue(entry string) error {
-	dateStr := time.Now().Format("20060102")
+	dateStr := time.Now().UTC().Format("20060102")
 	fileName := filepath.Join(pq.dir, fmt.Sprintf("%s_queue_%s.log", pq.name, dateStr))
 
 	f, err := pq.osProvider.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
@@ -115,7 +115,7 @@ func (pq *PersistentQueue) Dequeue(ctx context.Context, readerName string) (stri
 
 			if err == io.EOF {
 				// Reached end of file. Check if we should move to next file.
-				dateStr := time.Now().Format("20060102")
+				dateStr := time.Now().UTC().Format("20060102")
 				currentFileDate := pq.extractDate(state.FileName)
 
 				if currentFileDate != "" && currentFileDate < dateStr {

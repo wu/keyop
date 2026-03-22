@@ -1,64 +1,36 @@
 let container = null;
 
-// Compute civil dawn and dusk for a given date and location using the NOAA algorithm.
-// Returns {dawn: Date, dusk: Date} as UTC Date objects.
-function computeCivilDawnDusk(date, lat, lon) {
-    const rad = Math.PI / 180;
-    const deg = 180 / Math.PI;
+// Returns 'day', 'night', or 'mixed' for the period [startDate, endDate) using
+// server-provided solar_days (array of {date, dawn, dusk} ISO strings from Go).
+// Falls back to 'night' if no matching day is found.
+function getLightType(startDate, endDate, solarDays) {
+    if (!solarDays || solarDays.length === 0) return 'night';
+    const s = startDate.getTime(), e = endDate.getTime();
 
-    const jd = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + 2440587.5;
-    const n = jd - 2451545.0;
-    const L = (280.460 + 0.9856474 * n) % 360;
-    const g = (357.528 + 0.9856003 * n) % 360;
-    const lambda = L + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
-    const epsilon = 23.439 - 0.0000004 * n;
-    const sinDec = Math.sin(epsilon * rad) * Math.sin(lambda * rad);
-    const dec = Math.asin(sinDec) * deg;
+    // Find the solar day whose UTC date matches the start of the period.
+    // We also check the previous day's dusk for periods that straddle UTC midnight
+    // (e.g. 00:00–03:00 UTC may still be in the previous day's daylight for western locations).
+    const dateKey = startDate.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    const prevKey = new Date(startDate.getTime() - 86400000).toISOString().slice(0, 10);
 
-    // Civil twilight depression = 6 degrees below horizon
-    const depression = 6;
-    const cosH = (Math.cos((90 + depression) * rad) - Math.sin(lat * rad) * Math.sin(dec * rad))
-        / (Math.cos(lat * rad) * Math.cos(dec * rad));
+    const today = solarDays.find(d => d.date === dateKey);
+    const prev = solarDays.find(d => d.date === prevKey);
 
-    const baseMs = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-    if (cosH < -1) {
-        // Polar day — always light
-        return {dawn: new Date(baseMs), dusk: new Date(baseMs + 86399000)};
-    }
-    if (cosH > 1) {
-        // Polar night — always dark; dawn == dusk == noon (no light)
-        return {dawn: new Date(baseMs + 43200000), dusk: new Date(baseMs + 43200000)};
+    const dawnMs = today ? new Date(today.dawn).getTime() : null;
+    const duskMs = today ? new Date(today.dusk).getTime() : null;
+    const prevDuskMs = prev ? new Date(prev.dusk).getTime() : null;
+
+    // Period ends before today's dawn — check against previous day's dusk
+    if (dawnMs !== null && e <= dawnMs) {
+        if (prevDuskMs === null) return 'night';
+        if (s >= prevDuskMs) return 'night';  // between prev dusk and today's dawn
+        if (e <= prevDuskMs) return 'day';    // still in prev day's daylight
+        return 'mixed';
     }
 
-    const H = Math.acos(cosH) * deg;
-
-    // Solar noon UTC: 720 - 4*lon - eqTime (eqTime = 4*(L-lambda), minutes)
-    const eqTime = 4 * (L - lambda);
-    const solarNoonUTC = 720 - 4 * lon - eqTime; // minutes from UTC midnight
-
-    const dawnUTC = solarNoonUTC - H * 4; // minutes
-    const duskUTC = solarNoonUTC + H * 4;
-
-    return {
-        dawn: new Date(baseMs + dawnUTC * 60000),
-        dusk: new Date(baseMs + duskUTC * 60000),
-    };
-}
-
-// Returns 'day', 'night', or 'mixed' for the period (startDate..endDate) at lat/lon.
-function getLightType(startDate, endDate, lat, lon) {
-    // Compute dawn/dusk for the day containing the start of the period
-    const {dawn, dusk} = computeCivilDawnDusk(startDate, lat, lon);
-    const periodStart = startDate.getTime();
-    const periodEnd = endDate.getTime();
-    const dawnMs = dawn.getTime();
-    const duskMs = dusk.getTime();
-
-    // Period is entirely in daylight
-    if (periodStart >= dawnMs && periodEnd <= duskMs) return 'day';
-    // Period is entirely in darkness
-    if (periodEnd <= dawnMs || periodStart >= duskMs) return 'night';
-    // Otherwise mixed (spans dawn or dusk)
+    if (dawnMs === null || duskMs === null) return 'night';
+    if (s >= dawnMs && e <= duskMs) return 'day';
+    if (s >= duskMs) return 'night';
     return 'mixed';
 }
 
@@ -104,12 +76,12 @@ function convertUtcToLocal(utcHour, dateStr) {
     return utcDate;
 }
 
-function renderForecastTable(forecast, lat, lon) {
+function renderForecastTable(forecast, solarDays) {
     if (!forecast || !forecast.data) return '';
     const pf = forecast.data;
     if (!pf.days || !pf.periods || !pf.table) return '';
 
-    const hasSolar = lat != null && lon != null;
+    const hasSolar = solarDays && solarDays.length > 0;
 
     let html = '<table style="border-collapse: collapse; width: 100%;"><thead><tr>';
     html += '<th style="border: 1px solid var(--task-row-border); padding: 8px;">Date</th>';
@@ -153,7 +125,7 @@ function renderForecastTable(forecast, lat, lon) {
             // Determine daylight/night background
             let rowBg = '';
             if (hasSolar) {
-                const lightType = getLightType(startUtcDate, endUtcDate, lat, lon);
+                const lightType = getLightType(startUtcDate, endUtcDate, solarDays);
                 if (lightType === 'day') {
                     rowBg = 'background-color: rgba(255,255,255,0.10);';
                 } else if (lightType === 'night') {
@@ -240,11 +212,11 @@ function extractKpValues(forecast, futureOnly = false) {
                 continue;
             }
 
-            // If filtering for future only, skip past entries
+            // If filtering for future only, skip periods that have already ended
             if (futureOnly) {
-                const {start: startHour} = parseUtcHours(period);
-                const startDate = convertUtcToLocal(startHour, dayStr);
-                if (startDate < now) {
+                const {end: endHour} = parseUtcHours(period);
+                const endDate = convertUtcToLocal(endHour, dayStr);
+                if (endDate <= now) {
                     continue;
                 }
             }
@@ -284,7 +256,7 @@ function extractKpEntries(forecast, futureOnly = false) {
             const endDate = convertUtcToLocal(endHour, dayStr);
             if (endHour < startHour) endDate.setDate(endDate.getDate() + 1);
 
-            if (futureOnly && startDate < now) continue;
+            if (futureOnly && endDate <= now) continue;
 
             entries.push({kp: entry.kp, startDate, endDate});
         }
@@ -294,7 +266,7 @@ function extractKpEntries(forecast, futureOnly = false) {
 }
 
 // Render a sparkline graph showing KP values over time
-function renderSparkline(forecast, width = 300, futureOnly = true, lat = null, lon = null) {
+function renderSparkline(forecast, width = 300, futureOnly = true, solarDays = null) {
     const kpEntries = extractKpEntries(forecast, futureOnly);
     if (kpEntries.length === 0) {
         return '';
@@ -328,13 +300,13 @@ function renderSparkline(forecast, width = 300, futureOnly = true, lat = null, l
     // Create SVG
     let svg = `<svg width="${width}" height="${height}" style="margin-bottom: 12px;">`;
 
-    // Draw daylight/night background rects if lat/lon available
-    if (lat != null && lon != null && kpEntries.length > 1) {
+    // Draw daylight/night background rects using server-provided solar day segments
+    if (solarDays && solarDays.length > 0 && kpEntries.length > 1) {
         const totalMs = kpEntries[kpEntries.length - 1].endDate - kpEntries[0].startDate;
         const startMs = kpEntries[0].startDate.getTime();
         for (let i = 0; i < kpEntries.length; i++) {
             const {startDate, endDate} = kpEntries[i];
-            const lightType = getLightType(startDate, endDate, lat, lon);
+            const lightType = getLightType(startDate, endDate, solarDays);
             const color = lightType === 'day'
                 ? 'rgba(255,255,255,0.10)'
                 : lightType === 'night'
@@ -409,10 +381,9 @@ export function init(el) {
                 forecastEl = pre;
             }
             if (data.forecast && data.forecast.data) {
-                const lat = cur && cur.lat != null ? cur.lat : (data.forecast.data.lat ?? null);
-                const lon = cur && cur.lon != null ? cur.lon : (data.forecast.data.lon ?? null);
-                const sparklineHtml = renderSparkline(data.forecast, 300, true, lat, lon);
-                const tableHtml = renderForecastTable(data.forecast, lat, lon);
+                const solarDays = data.solar_days || [];
+                const sparklineHtml = renderSparkline(data.forecast, 300, true, solarDays);
+                const tableHtml = renderForecastTable(data.forecast, solarDays);
                 forecastEl.innerHTML = (sparklineHtml || '') + (tableHtml || 'No forecast available');
             }
         })
@@ -460,30 +431,29 @@ export function onMessage(msg) {
         }
     }
 
-    // Handle aurora_forecast events (3-day forecast table)
+    // Handle aurora_forecast events (3-day forecast table) — re-fetch to get updated solar_days
     if (msg.event === 'aurora_forecast') {
-        let forecastEl = container.querySelector('#aurora-forecast');
-        if (!forecastEl) {
-            const historyEl = container.querySelector('#aurora-history');
-            const div = document.createElement('div');
-            div.id = 'aurora-forecast';
-            if (historyEl && historyEl.parentNode) {
-                historyEl.parentNode.insertBefore(div, historyEl);
-            } else {
-                container.appendChild(div);
-            }
-            forecastEl = div;
-        }
-        let dataObj = null;
-        if (msg.data && typeof msg.data === 'object') {
-            dataObj = msg.data.data ?? msg.data;
-        } else {
-            dataObj = msg.data;
-        }
-        const sparklineHtml = renderSparkline({data: dataObj}, 300, true, lat, lon);
-        const lat = msg.data && msg.data.lat != null ? msg.data.lat : (dataObj && dataObj.lat != null ? dataObj.lat : null);
-        const lon = msg.data && msg.data.lon != null ? msg.data.lon : (dataObj && dataObj.lon != null ? dataObj.lon : null);
-        const tableHtml = renderForecastTable({data: dataObj}, lat, lon);
-        forecastEl.innerHTML = (sparklineHtml || '') + (tableHtml || 'No forecast available');
+        fetch('/api/tabs/aurora/action/get-current', {method: 'POST'})
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data || !data.forecast || !data.forecast.data) return;
+                let forecastEl = container.querySelector('#aurora-forecast');
+                if (!forecastEl) {
+                    const historyEl = container.querySelector('#aurora-history');
+                    const div = document.createElement('div');
+                    div.id = 'aurora-forecast';
+                    if (historyEl && historyEl.parentNode) {
+                        historyEl.parentNode.insertBefore(div, historyEl);
+                    } else {
+                        container.appendChild(div);
+                    }
+                    forecastEl = div;
+                }
+                const solarDays = data.solar_days || [];
+                const sparklineHtml = renderSparkline(data.forecast, 300, true, solarDays);
+                const tableHtml = renderForecastTable(data.forecast, solarDays);
+                forecastEl.innerHTML = (sparklineHtml || '') + (tableHtml || 'No forecast available');
+            })
+            .catch(err => console.error('Failed to refresh aurora forecast:', err));
     }
 }

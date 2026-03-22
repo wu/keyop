@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"keyop/util"
 	"keyop/x/webui"
 	"net/http"
 	"time"
@@ -219,6 +220,13 @@ func (svc *Service) fetchCurrentTide() (any, error) {
 
 	logger.Debug("tides: collected sparkline records", "count", len(sparklineRecords))
 
+	// Compute solar days for the sparkline window (12h before now to 24h after)
+	// using the server-side astral library so JS doesn't need to recalculate.
+	var solarDays []util.SolarDay
+	if svc.lat != 0 || svc.lon != 0 {
+		solarDays = util.SolarDaysForRange(svc.lat, svc.lon, twelveHoursAgo, twentyFourHoursFromNow)
+	}
+
 	return map[string]any{
 		"event":            ev,
 		"sparklineRecords": sparklineRecords,
@@ -227,5 +235,6 @@ func (svc *Service) fetchCurrentTide() (any, error) {
 		"state":            state,
 		"lat":              svc.lat,
 		"lon":              svc.lon,
+		"solar_days":       solarDays,
 	}, nil
 }
