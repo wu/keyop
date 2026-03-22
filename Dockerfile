@@ -22,22 +22,29 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
+
+# Create a non-privileged user and group
+RUN groupadd --gid 10001 keyop && \
+    useradd --uid 10001 --gid keyop --no-create-home --shell /sbin/nologin keyop
 
 # Expose web UI port
 EXPOSE 8823
 
 # Copy selected example config files
-COPY --chown=0:0 example-conf/heartbeat.yaml      /root/.keyop/conf/heartbeat.yaml
-COPY --chown=0:0 example-conf/moon.yaml            /root/.keyop/conf/moon.yaml
-COPY --chown=0:0 example-conf/cpu-monitor.yaml     /root/.keyop/conf/cpu-monitor.yaml
-COPY --chown=0:0 example-conf/memory-monitor.yaml  /root/.keyop/conf/memory-monitor.yaml
-COPY --chown=0:0 example-conf/webui.yaml           /root/.keyop/conf/webui.yaml
+COPY --chown=keyop:keyop example-conf/heartbeat.yaml      /home/keyop/.keyop/conf/heartbeat.yaml
+COPY --chown=keyop:keyop example-conf/moon.yaml            /home/keyop/.keyop/conf/moon.yaml
+COPY --chown=keyop:keyop example-conf/cpu-monitor.yaml     /home/keyop/.keyop/conf/cpu-monitor.yaml
+COPY --chown=keyop:keyop example-conf/memory-monitor.yaml  /home/keyop/.keyop/conf/memory-monitor.yaml
+COPY --chown=keyop:keyop example-conf/webui.yaml           /home/keyop/.keyop/conf/webui.yaml
 
-RUN mkdir -p /root/.keyop/webui
+RUN mkdir -p /home/keyop/.keyop/data && \
+    chown -R keyop:keyop /home/keyop
 
 COPY --from=builder /keyop /keyop
+
+USER keyop
 
 ENTRYPOINT ["/keyop"]
 CMD ["--help"]

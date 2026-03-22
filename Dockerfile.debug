@@ -4,22 +4,27 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates procps curl \
+    bash ca-certificates procps curl git \
     && rm -rf /var/lib/apt/lists/*
+
+# Create a non-privileged user and group
+RUN groupadd --gid 10001 keyop && \
+    useradd --uid 10001 --gid keyop --no-create-home --shell /sbin/nologin keyop
 
 # Expose web UI port for convenience
 EXPOSE 8823
 
 # Copy example conf
-COPY example-conf /root/.keyop/conf
+COPY --chown=keyop:keyop example-conf /home/keyop/.keyop/conf
 
-# Ensure webui directory exists so the web UI can store its DB file
-RUN mkdir -p /root/.keyop/webui && \
-    chown -R root:root /root/.keyop/webui || true
+RUN mkdir -p /home/keyop/.keyop/data && \
+    chown -R keyop:keyop /home/keyop
 
 # Copy prebuilt binary to a known path and make it executable
 COPY keyop /usr/local/bin/keyop
 RUN chmod +x /usr/local/bin/keyop
+
+USER keyop
 
 ENTRYPOINT ["/usr/local/bin/keyop"]
 CMD ["--help"]

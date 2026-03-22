@@ -2,15 +2,17 @@ services:
 
   keyop:
     container_name: keyop
+    hostname: troubalert
     image: ghcr.io/main/keyop:latest
     restart: unless-stopped
+    user: "${UID}:${GID}"
     networks:
       hidden_network:
         ipv4_address: 172.18.0.3
     ports:
       - 8080:8080
     volumes:
-      - /home/ubuntu/.keyop:/root/.keyop
+      - /home/keyop/.keyop:/home/keyop/.keyop
     command: run -o
 
 
@@ -26,18 +28,19 @@ services:
     depends_on:
       - keyop
     volumes:
-      - /root/ingress/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /root/ingress/conf/:/etc/nginx/conf.d/:ro
-      - /root/ingress/certs:/etc/nginx/certs
-      - /root/certbot/conf/live/keyop.geekfarm.org/:/var/www/certbot/
-      - /root/certbot/conf:/etc/nginx/certbot
+      - /home/keyop/ingress/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /home/keyop/ingress/conf/:/etc/nginx/conf.d/:ro
+      - /home/keyop/ingress/certs:/etc/nginx/certs
+      - /home/keyop/certbot/conf/live/keyop.geekfarm.org/:/var/www/certbot/
+      - /home/keyop/certbot/conf:/etc/nginx/certbot
+      - /home/keyop/certbot/www:/var/www/certbot/
       - /etc/localtime:/etc/localtime:ro
 
   certbot:
     image: certbot/certbot
     volumes:
-      - /root/certbot/www:/var/www/certbot/
-      - /root/certbot/conf:/etc/letsencrypt
+      - /home/keyop/certbot/www:/var/www/certbot/
+      - /home/keyop/certbot/conf:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"  # Renew certificates every 12 hours
 
 
