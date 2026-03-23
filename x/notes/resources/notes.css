@@ -256,12 +256,40 @@
     background-color: #2a2a2a;
 }
 
+.notes-item.kbd-focused,
+.notes-item.active.kbd-focused {
+    box-shadow: inset 2px 0 0 var(--accent-blue);
+}
+
 .notes-item.active {
-    /* Use a translucent accent so the active note isn't overwhelming */
     background-color: var(--accent-blue-bg);
     color: var(--text);
     font-weight: 600;
-    border-color: rgba(138, 97, 214, 0.24);
+    border-bottom-color: var(--border);
+}
+
+/* Pinned indicator shown when the current note is filtered out of the list */
+.notes-current-indicator {
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--accent-blue);
+    background-color: var(--accent-blue-bg);
+    box-shadow: inset 2px 0 0 var(--accent-blue);
+}
+
+.notes-current-indicator-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.notes-current-indicator-meta {
+    font-size: 11px;
+    color: var(--text);
+    opacity: 0.55;
 }
 
 .notes-item-title {
@@ -290,7 +318,8 @@
     margin-left: auto;
 }
 
-.notes-item-meta .tag-badge {
+.notes-item-meta .tag-badge,
+.notes-view-tags .tag-badge {
     display: inline-block;
     background-color: var(--accent-blue-bg);
     color: var(--accent-blue);
@@ -300,6 +329,12 @@
     font-weight: 600;
     font-variant: small-caps;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.notes-item-meta .tag-badge:hover,
+.notes-view-tags .tag-badge:hover {
+    opacity: 0.8;
 }
 
 .notes-pagination {
@@ -383,6 +418,25 @@
     margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.notes-view-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.notes-view-tag {
+    cursor: pointer;
+}
+
+.notes-view-tag:hover {
+    opacity: 0.8;
 }
 
 .notes-view h1 {
@@ -627,16 +681,11 @@
     border-color: rgba(138, 97, 214, 0.24);
 }
 
-/* Keyboard focus indicator: thin accent line at the top of the active panel */
-.notes-container .filter-sidebar.kbd-focus,
-.notes-container .notes-top-bar-filter.kbd-focus {
-    box-shadow: inset 0 2px 0 0 var(--accent);
+.notes-container .tag-item.kbd-focused,
+.notes-container .tag-item.active.kbd-focused {
+    box-shadow: inset 2px 0 0 var(--accent-blue);
 }
 
-.notes-container .notes-sidebar.kbd-focus,
-.notes-container .notes-top-bar-search.kbd-focus {
-    box-shadow: inset 0 2px 0 0 var(--accent);
-}
 
 .notes-container .tag-label {
     font-size: 13px;

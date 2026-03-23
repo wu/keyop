@@ -4,6 +4,8 @@ export const handlesHorizontalNav = true;
 
 (() => {
     let currentNoteId = null;
+    let currentNoteTitle = '';
+    let currentNoteUpdatedAt = '';
     let isEditing = false;
     let allNotes = [];
     let currentSearch = '';
@@ -12,6 +14,8 @@ export const handlesHorizontalNav = true;
     let pageSize = 10;
     let totalCount = 0;
     let tagFilterText = '';
+    let focusedNoteId = null;  // keyboard cursor — not yet committed
+    let focusedTagTag = null;  // keyboard cursor — not yet committed
     const recentNotes = []; // [{id, title}], most recent first, max 20
     const maxRecent = 20;
 
@@ -110,18 +114,38 @@ export const handlesHorizontalNav = true;
         elements.list.innerHTML = '';
         allNotes.forEach(note => {
             const item = document.createElement('div');
-            item.className = 'notes-item' + (note.id === currentNoteId ? ' active' : '');
+            item.className = 'notes-item' +
+                (note.id === currentNoteId ? ' active' : '') +
+                (note.id === focusedNoteId ? ' kbd-focused' : '');
             const tagParts = note.tags ? note.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-            const tagsHtml = tagParts.length > 0
-                ? `<div class="notes-tags">${tagParts.map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
-                : '';
             item.innerHTML = `
                 <div class="notes-item-title">${escapeHtml(note.title)}</div>
-                <div class="notes-item-meta">${formatAge(note.updated_at)}${tagsHtml}</div>
+                <div class="notes-item-meta">
+                    <span class="notes-item-age">${formatAge(note.updated_at)}</span>
+                    ${tagParts.length > 0 ? `<div class="notes-tags">${tagParts.map(t => `<span class="tag-badge" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                </div>
             `;
             item.onclick = () => selectNote(note.id);
+            // Tag badges: click selects that tag without navigating to the note
+            item.querySelectorAll('.tag-badge[data-tag]').forEach(badge => {
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setTagFilter(badge.dataset.tag);
+                });
+            });
             elements.list.appendChild(item);
         });
+
+        // Show a pinned indicator when the current note is filtered out of the list
+        const indicator = document.getElementById('notes-current-indicator');
+        if (indicator) {
+            const inList = currentNoteId && allNotes.some(n => n.id === currentNoteId);
+            indicator.style.display = (currentNoteId && !inList) ? '' : 'none';
+            if (currentNoteId && !inList) {
+                indicator.querySelector('.notes-current-indicator-title').textContent = currentNoteTitle || '(untitled)';
+                indicator.querySelector('.notes-current-indicator-meta').textContent = currentNoteUpdatedAt ? formatAge(currentNoteUpdatedAt) : '';
+            }
+        }
     }
 
     function renderPagination() {
@@ -158,7 +182,9 @@ export const handlesHorizontalNav = true;
         // Always show "all" unless it's filtered out
         if (!filter || 'all'.includes(filter)) {
             const allItem = document.createElement('div');
-            allItem.className = 'tag-item' + (currentTag === 'all' ? ' active' : '');
+            allItem.className = 'tag-item' +
+                (currentTag === 'all' ? ' active' : '') +
+                (focusedTagTag === 'all' ? ' kbd-focused' : '');
             allItem.dataset.tag = 'all';
             allItem.innerHTML = `<span class="tag-label">all</span><span class="service-count">${counts['all'] ?? 0}</span>`;
             allItem.onclick = () => setTagFilter('all');
@@ -172,7 +198,9 @@ export const handlesHorizontalNav = true;
         for (const [tag, count] of sorted) {
             if (filter && !tag.toLowerCase().includes(filter)) continue;
             const item = document.createElement('div');
-            item.className = 'tag-item' + (currentTag === tag ? ' active' : '');
+            item.className = 'tag-item' +
+                (currentTag === tag ? ' active' : '') +
+                (focusedTagTag === tag ? ' kbd-focused' : '');
             item.dataset.tag = tag;
             item.innerHTML = `<span class="tag-label">${escapeHtml(tag)}</span><span class="service-count">${count}</span>`;
             item.onclick = () => setTagFilter(tag);
@@ -182,9 +210,36 @@ export const handlesHorizontalNav = true;
 
     function setTagFilter(tag) {
         currentTag = tag;
+        focusedTagTag = tag;
         currentPage = 1;
         loadNotes();
         loadTagCounts();
+    }
+
+    function setNoteFocused(id) {
+        focusedNoteId = id;
+        elements.list.querySelectorAll('.notes-item').forEach((el, i) => {
+            const note = allNotes[i];
+            if (!note) return;
+            el.classList.toggle('kbd-focused', id !== null && note.id === id);
+            el.classList.toggle('active', note.id === currentNoteId);
+        });
+        if (id !== null) {
+            const idx = allNotes.findIndex(n => n.id === id);
+            if (idx !== -1) elements.list.children[idx]?.scrollIntoView({block: 'nearest'});
+        }
+    }
+
+    function setTagFocused(tag) {
+        focusedTagTag = tag;
+        if (!elements.tagList) return;
+        elements.tagList.querySelectorAll('.tag-item').forEach(el => {
+            el.classList.toggle('kbd-focused', tag !== null && el.dataset.tag === tag);
+            el.classList.toggle('active', el.dataset.tag === currentTag);
+        });
+        if (tag !== null) {
+            elements.tagList.querySelector('.tag-item.kbd-focused')?.scrollIntoView({block: 'nearest'});
+        }
     }
 
     function addToRecent(id, title) {
@@ -241,6 +296,7 @@ export const handlesHorizontalNav = true;
         }
 
         currentNoteId = id;
+        focusedNoteId = id;
         isEditing = false;
         showNotePanel();
         updateEditMode();
@@ -248,17 +304,27 @@ export const handlesHorizontalNav = true;
 
         const result = await callAction('get-note', {id});
         if (result) {
-            addToRecent(id, result.title || '(untitled)');
+            currentNoteTitle = result.title || '(untitled)';
+            currentNoteUpdatedAt = result.updated_at || '';
+            addToRecent(id, currentNoteTitle);
             elements.view.innerHTML = '';
             elements.title.value = result.title || '';
             elements.content.value = result.content || '';
             elements.tags.value = result.tags || '';
 
-            // Show the full modified time above the note
+            // Show the full modified time and tags above the note
             const timestamp = document.createElement('div');
             timestamp.className = 'notes-view-timestamp';
-            timestamp.textContent = 'Modified: ' + formatFullDate(result.updated_at);
+            const tagParts = (result.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+            const tagsHtml = tagParts.length > 0
+                ? tagParts.map(t => `<span class="tag-badge notes-view-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+                : '';
+            timestamp.innerHTML = `<span>Modified: ${escapeHtml(formatFullDate(result.updated_at))}</span>${tagsHtml ? `<span class="notes-view-tags">${tagsHtml}</span>` : ''}`;
             elements.view.appendChild(timestamp);
+            // Wire up tag clicks
+            timestamp.querySelectorAll('.notes-view-tag').forEach(badge => {
+                badge.addEventListener('click', () => setTagFilter(badge.dataset.tag));
+            });
 
             // Render markdown preview (will append to elements.view)
             await renderPreview(result.content || '');
@@ -576,15 +642,18 @@ export const handlesHorizontalNav = true;
     let focusedPanel = 'notes'; // 'notes' | 'tags'
 
     function setFocusedPanel(panel) {
+        const prev = focusedPanel;
         focusedPanel = panel;
-        const filterSidebar = elements.tagList && elements.tagList.closest('.filter-sidebar');
-        const filterTopBar = document.querySelector('.notes-top-bar-filter');
-        const notesSidebar = elements.list && elements.list.closest('.notes-sidebar');
-        const searchTopBar = document.querySelector('.notes-top-bar-search');
-        if (filterSidebar) filterSidebar.classList.toggle('kbd-focus', panel === 'tags');
-        if (filterTopBar) filterTopBar.classList.toggle('kbd-focus', panel === 'tags');
-        if (notesSidebar) notesSidebar.classList.toggle('kbd-focus', panel === 'notes');
-        if (searchTopBar) searchTopBar.classList.toggle('kbd-focus', panel === 'notes');
+        if (panel === 'notes') {
+            // Clear tag focus highlights from the panel being left
+            if (prev === 'tags') setTagFocused(null);
+            // Move cursor to current note, or first note if none selected
+            setNoteFocused(currentNoteId ?? allNotes[0]?.id ?? null);
+        } else if (panel === 'tags') {
+            // Clear note focus highlights from the panel being left
+            if (prev === 'notes') setNoteFocused(null);
+            setTagFocused(currentTag);
+        }
     }
 
     // Keyboard navigation
@@ -608,34 +677,44 @@ export const handlesHorizontalNav = true;
             return;
         }
 
-        // Up/Down: navigate the focused panel
+        // Up/Down: move keyboard cursor without committing selection
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
 
             if (focusedPanel === 'tags' && elements.tagList) {
                 const items = Array.from(elements.tagList.querySelectorAll('.tag-item'));
                 if (items.length === 0) return;
-                const activeIdx = items.findIndex(el => el.classList.contains('active'));
-                let nextIdx;
-                if (e.key === 'ArrowUp') {
-                    nextIdx = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
-                } else {
-                    nextIdx = activeIdx >= items.length - 1 ? 0 : activeIdx + 1;
-                }
-                setTagFilter(items[nextIdx].dataset.tag);
+                const curTag = focusedTagTag ?? currentTag;
+                const activeIdx = items.findIndex(el => el.dataset.tag === curTag);
+                const nextIdx = e.key === 'ArrowUp'
+                    ? (activeIdx <= 0 ? items.length - 1 : activeIdx - 1)
+                    : (activeIdx >= items.length - 1 ? 0 : activeIdx + 1);
+                setTagFocused(items[nextIdx].dataset.tag);
                 return;
             }
 
             if (focusedPanel === 'notes' && !isEditing) {
                 if (allNotes.length === 0) return;
-                const currentIndex = allNotes.findIndex(n => n.id === currentNoteId);
-                let nextIndex;
-                if (e.key === 'ArrowUp') {
-                    nextIndex = currentIndex <= 0 ? allNotes.length - 1 : currentIndex - 1;
-                } else {
-                    nextIndex = currentIndex >= allNotes.length - 1 ? 0 : currentIndex + 1;
-                }
-                selectNote(allNotes[nextIndex].id);
+                const curId = focusedNoteId ?? currentNoteId;
+                const currentIndex = allNotes.findIndex(n => n.id === curId);
+                const nextIndex = e.key === 'ArrowUp'
+                    ? (currentIndex <= 0 ? allNotes.length - 1 : currentIndex - 1)
+                    : (currentIndex >= allNotes.length - 1 ? 0 : currentIndex + 1);
+                setNoteFocused(allNotes[nextIndex].id);
+            }
+        }
+
+        // Enter: commit the focused selection
+        if (e.key === 'Enter' && !isEditing) {
+            if (focusedPanel === 'tags' && focusedTagTag != null && focusedTagTag !== currentTag) {
+                e.preventDefault();
+                setTagFilter(focusedTagTag);
+                return;
+            }
+            if (focusedPanel === 'notes' && focusedNoteId != null && focusedNoteId !== currentNoteId) {
+                e.preventDefault();
+                selectNote(focusedNoteId);
+
             }
         }
     }, true);
