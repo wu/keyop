@@ -125,6 +125,8 @@ function setupTabKeyboardNavigation() {
         }
 
         if (e.key === 'ArrowRight') {
+            // Let tabs that manage their own horizontal panel navigation handle this key.
+            if (tabsModules[activeTabId] && tabsModules[activeTabId].handlesHorizontalNav) return;
             e.preventDefault();
             if (focusOnTabs) {
                 // Move focus to next tab (don't switch yet)
@@ -134,6 +136,8 @@ function setupTabKeyboardNavigation() {
                 }
             }
         } else if (e.key === 'ArrowLeft') {
+            // Let tabs that manage their own horizontal panel navigation handle this key.
+            if (tabsModules[activeTabId] && tabsModules[activeTabId].handlesHorizontalNav) return;
             e.preventDefault();
             if (focusOnTabs) {
                 // Move focus to previous tab (don't switch yet)

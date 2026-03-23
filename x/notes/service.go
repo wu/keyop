@@ -65,7 +65,9 @@ func (svc *Service) getNotes(params map[string]any) (any, error) {
 		searchContent = scf != 0
 	}
 
-	limit := 100
+	tag, _ := params["tag"].(string)
+
+	limit := 10
 	if l, ok := params["limit"].(float64); ok {
 		limit = int(l)
 	}
@@ -75,7 +77,32 @@ func (svc *Service) getNotes(params map[string]any) (any, error) {
 		offset = int(o)
 	}
 
-	return getNotesList(svc.dbPath, search, searchContent, limit, offset)
+	return getNotesList(svc.dbPath, search, searchContent, tag, limit, offset)
+}
+
+// getTagCounts returns per-tag counts for notes matching the current search filter.
+func (svc *Service) getTagCounts(params map[string]any) (any, error) {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+
+	search, _ := params["search"].(string)
+
+	searchContent := false
+	if sc, ok := params["search_content"].(bool); ok {
+		searchContent = sc
+	} else if scf, ok := params["search_content"].(float64); ok {
+		searchContent = scf != 0
+	}
+
+	return getTagCounts(svc.dbPath, search, searchContent)
+}
+
+// getNoteTitles returns all note IDs and titles for autolink matching.
+func (svc *Service) getNoteTitles(_ map[string]any) (any, error) {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+
+	return getNoteTitles(svc.dbPath)
 }
 
 // getNote retrieves a single note by ID.

@@ -17,37 +17,86 @@
 }
 
 .notes-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: 160px minmax(0, 300px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "top-filter  top-search  top-actions"
+        "body-filter body-notes  body-main";
     height: calc(100dvh - var(--notes-chrome-height));
     background-color: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-.notes-sidebar {
-    width: 300px;
+/* Top bar cells */
+.notes-top-bar-filter {
+    grid-area: top-filter;
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.notes-top-bar-search {
+    grid-area: top-search;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.notes-top-bar-actions {
+    grid-area: top-actions;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* Body cells — all scoped under .notes-container to avoid conflicts with other tabs */
+.notes-container .filter-sidebar {
+    grid-area: body-filter;
+    border-right: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+    /* Reset any inherited flex properties from other tab CSS */
+    width: auto;
+    flex-shrink: 1;
+    padding: 0;
+}
+
+.notes-container .notes-sidebar {
+    grid-area: body-notes;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     background-color: var(--tab-content-bg);
     overflow: hidden;
+    min-width: 0;
 }
 
-.notes-main {
-    flex: 1;
+.notes-container .notes-main {
+    grid-area: body-main;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-}
-
-.notes-toolbar {
-    display: flex;
-    gap: 8px;
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-    background-color: var(--header-bg);
-    flex-wrap: wrap;
-    align-items: center;
+    min-width: 0;
 }
 
 .notes-search-extended-label {
@@ -127,8 +176,67 @@
     background-color: #9d6cdc;
 }
 
-.notes-toolbar .notes-new-btn {
-    margin-right: 12px;
+/* Recent notes dropdown */
+.notes-recent-wrap {
+    position: relative;
+    margin-left: auto;
+}
+
+.notes-recent-btn.active {
+    background-color: var(--accent-blue-bg);
+    border-color: var(--accent);
+}
+
+.notes-recent-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
+    background-color: var(--header-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+}
+
+.notes-recent-dropdown.open {
+    display: block;
+}
+
+.notes-recent-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.12s;
+}
+
+.notes-recent-item:last-child {
+    border-bottom: none;
+}
+
+.notes-recent-item:hover {
+    background-color: var(--accent-blue-bg);
+}
+
+.notes-recent-item.active {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.notes-recent-empty {
+    padding: 14px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0.5;
+    text-align: center;
 }
 
 .notes-list {
@@ -174,9 +282,62 @@
     opacity: 0.6;
 }
 
-.notes-item-meta .task-tags {
+.notes-item-meta .notes-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     opacity: 1;
     margin-left: auto;
+}
+
+.notes-item-meta .tag-badge {
+    display: inline-block;
+    background-color: var(--accent-blue-bg);
+    color: var(--accent-blue);
+    padding: 0 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant: small-caps;
+    white-space: nowrap;
+}
+
+.notes-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+}
+
+.notes-page-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.notes-page-btn:hover:not(:disabled) {
+    background-color: var(--accent-blue-bg);
+}
+
+.notes-page-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.notes-page-info {
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.7;
+    min-width: 50px;
+    text-align: center;
 }
 
 .notes-import {
@@ -358,6 +519,17 @@
     overflow: hidden;
 }
 
+.notes-edit-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.notes-autolink-btn {
+    font-size: 13px;
+    padding: 5px 10px;
+}
+
 .notes-input {
     padding: 8px 12px;
     background-color: var(--tab-content-bg);
@@ -412,20 +584,117 @@
     display: none;
 }
 
+/* Tags filter sidebar */
+.notes-container .tag-filter-input {
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+}
+
+.notes-container .tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.notes-container .tag-item {
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-variant: small-caps;
+    transition: background-color 0.15s;
+    color: var(--text);
+    background-color: transparent;
+    border: 1px solid transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notes-container .tag-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.notes-container .tag-item.active {
+    background-color: var(--accent-blue-bg);
+    color: var(--text);
+    font-weight: 600;
+    border-color: rgba(138, 97, 214, 0.24);
+}
+
+/* Keyboard focus indicator: thin accent line at the top of the active panel */
+.notes-container .filter-sidebar.kbd-focus,
+.notes-container .notes-top-bar-filter.kbd-focus {
+    box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.notes-container .notes-sidebar.kbd-focus,
+.notes-container .notes-top-bar-search.kbd-focus {
+    box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.notes-container .tag-label {
+    font-size: 13px;
+    font-variant: small-caps;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.notes-container .service-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text);
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
 /* Mobile: single-column notes layout */
 @media (max-width: 640px) {
-    .notes-sidebar {
-        width: 100%;
-        border-right: none;
+    .notes-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        grid-template-areas:
+            "top-search"
+            "body-notes";
     }
 
-    /* On mobile, main panel is hidden until a note is selected */
+    .notes-top-bar-filter,
+    .filter-sidebar,
+    .notes-top-bar-actions,
     .notes-main {
         display: none;
     }
 
+    .notes-top-bar-search {
+        border-right: none;
+    }
+
+    .notes-sidebar {
+        border-right: none;
+    }
+
     /* When a note is selected, swap: hide list, show main */
-    .notes-container.note-selected .notes-sidebar {
+    .notes-container.note-selected {
+        grid-template-areas:
+            "top-actions"
+            "body-main";
+    }
+
+    .notes-container.note-selected .notes-top-bar-actions {
+        display: flex;
+    }
+
+    .notes-container.note-selected .notes-sidebar,
+    .notes-container.note-selected .notes-top-bar-search {
         display: none;
     }
 

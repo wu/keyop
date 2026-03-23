@@ -1,24 +1,38 @@
 <div class="notes-container" id="notes-container">
-    <div class="notes-sidebar">
-        <div class="notes-toolbar">
-            <input class="notes-search" id="notes-search" placeholder="Search notes..." type="text">
-            <label class="notes-search-extended-label"><input id="notes-search-content" type="checkbox"> full
-                text</label>
+    <div class="notes-top-bar-filter">
+        <input class="notes-search tag-filter-input" id="notes-tag-filter" placeholder="Filter tags..." type="text">
+    </div>
+    <div class="notes-top-bar-search">
+        <input class="notes-search" id="notes-search" placeholder="Search notes..." type="text">
+        <label class="notes-search-extended-label"><input id="notes-search-content" type="checkbox"> full text</label>
+    </div>
+    <div class="notes-top-bar-actions">
+        <button class="notes-btn notes-back-btn" id="notes-back-btn">← Back</button>
+        <button class="notes-btn notes-new-btn" id="notes-new-btn">+ New</button>
+        <button class="notes-btn notes-edit-btn" id="notes-edit-btn">Edit</button>
+        <button class="notes-btn notes-save-btn" id="notes-save-btn" style="display:none;">Save</button>
+        <button class="notes-btn notes-delete-btn" id="notes-delete-btn">Delete</button>
+        <button class="notes-btn notes-cancel-btn" id="notes-cancel-btn" style="display:none;">Cancel</button>
+        <button class="notes-btn notes-autolink-btn" id="notes-autolink-btn" style="display:none;"
+                title="Auto-link selected text to matching note titles">🔗 Auto-link
+        </button>
+        <div class="notes-recent-wrap" id="notes-recent-wrap">
+            <button class="notes-btn notes-recent-btn" id="notes-recent-btn" title="Recently visited notes">🕐 Recent
+            </button>
+            <div class="notes-recent-dropdown" id="notes-recent-dropdown"></div>
         </div>
+    </div>
+    <div class="filter-sidebar">
+        <div class="tag-list" id="notes-tag-list"></div>
+    </div>
+    <div class="notes-sidebar">
         <div class="notes-list" id="notes-list"></div>
+        <div class="notes-pagination" id="notes-pagination"></div>
         <div class="notes-import" id="notes-import">
             <div class="notes-import-zone" id="notes-import-zone">Drop markdown files here to import</div>
         </div>
     </div>
     <div class="notes-main">
-        <div class="notes-toolbar">
-            <button class="notes-btn notes-back-btn" id="notes-back-btn">← Back</button>
-            <button class="notes-btn notes-new-btn" id="notes-new-btn">+ New</button>
-            <button class="notes-btn notes-edit-btn" id="notes-edit-btn">Edit</button>
-            <button class="notes-btn notes-save-btn" id="notes-save-btn" style="display:none;">Save</button>
-            <button class="notes-btn notes-delete-btn" id="notes-delete-btn">Delete</button>
-            <button class="notes-btn notes-cancel-btn" id="notes-cancel-btn" style="display:none;">Cancel</button>
-        </div>
         <div class="notes-view" id="notes-view"></div>
         <div class="notes-edit" id="notes-edit" style="display: none;">
             <input class="notes-input" id="notes-title" placeholder="Note title" type="text">

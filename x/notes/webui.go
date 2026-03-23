@@ -75,6 +75,10 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 	switch action {
 	case "get-notes":
 		return svc.getNotes(params)
+	case "get-tag-counts":
+		return svc.getTagCounts(params)
+	case "get-note-titles":
+		return svc.getNoteTitles(params)
 	case "get-note":
 		return svc.getNote(params)
 	case "create-note":

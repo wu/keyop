@@ -11,8 +11,39 @@ import (
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
 )
 
-// getNotesList retrieves notes with optional search filter.
-func getNotesList(dbPath string, search string, searchContent bool, limit, offset int) (any, error) {
+// buildSearchWhere builds the shared WHERE clause and args for search/tag filters.
+// baseWhere is "WHERE 1=1"; the returned suffix and args are appended by the caller.
+func buildNotesWhere(search string, searchContent bool, tag string) (string, []any) {
+	where := ""
+	args := []any{}
+
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		if searchContent {
+			where += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
+			args = append(args, searchPattern, searchPattern, searchPattern)
+		} else {
+			where += " AND title LIKE ?"
+			args = append(args, searchPattern)
+		}
+	}
+
+	if tag != "" && tag != "all" {
+		if tag == "untagged" {
+			where += " AND (tags = '' OR tags IS NULL)"
+		} else {
+			// Normalise spaces around commas before matching so "foo, bar" matches tag "bar".
+			where += " AND REPLACE(',' || tags || ',', ' ', '') LIKE ?"
+			args = append(args, "%,"+tag+",%")
+		}
+	}
+
+	return where, args
+}
+
+// getNotesList retrieves notes with optional search/tag filter and pagination.
+// Returns {notes: [...], total: N} where total is the unfiltered count.
+func getNotesList(dbPath string, search string, searchContent bool, tag string, limit, offset int) (any, error) {
 	db, err := openNotesDB(dbPath)
 	if err != nil {
 		return nil, err
@@ -21,26 +52,19 @@ func getNotesList(dbPath string, search string, searchContent bool, limit, offse
 		_ = db.Close()
 	}()
 
-	query := "SELECT id, title, tags, created_at, updated_at FROM notes WHERE 1=1"
-	args := []any{}
+	whereClause, whereArgs := buildNotesWhere(search, searchContent, tag)
+	base := "SELECT id, title, tags, created_at, updated_at FROM notes WHERE 1=1" + whereClause
 
-	if search != "" {
-		searchPattern := "%" + search + "%"
-		if searchContent {
-			// Search in title, content, and tags
-			query += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
-			args = append(args, searchPattern, searchPattern, searchPattern)
-		} else {
-			// Only search in title by default
-			query += " AND title LIKE ?"
-			args = append(args, searchPattern)
-		}
+	// Count total matching rows for pagination.
+	var total int
+	countArgs := make([]any, len(whereArgs))
+	copy(countArgs, whereArgs)
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE 1=1"+whereClause, countArgs...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("failed to count notes: %w", err)
 	}
 
-	query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
-
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query(base+" ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+		append(whereArgs, limit, offset)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query notes: %w", err)
 	}
@@ -55,7 +79,6 @@ func getNotesList(dbPath string, search string, searchContent bool, limit, offse
 		if err := rows.Scan(&id, &title, &tags, &createdAt, &updatedAt); err != nil {
 			continue
 		}
-
 		notes = append(notes, map[string]any{
 			"id":         id,
 			"title":      title,
@@ -65,7 +88,53 @@ func getNotesList(dbPath string, search string, searchContent bool, limit, offse
 		})
 	}
 
-	return map[string]any{"notes": notes}, nil
+	return map[string]any{"notes": notes, "total": total}, nil
+}
+
+// getTagCounts returns per-tag note counts for all notes matching the search filter.
+// The "all" key holds the total matching count; "untagged" counts notes with no tags.
+func getTagCounts(dbPath string, search string, searchContent bool) (any, error) {
+	db, err := openNotesDB(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	whereClause, whereArgs := buildNotesWhere(search, searchContent, "")
+	rows, err := db.Query("SELECT tags FROM notes WHERE 1=1"+whereClause, whereArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tags: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	counts := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var tagsStr string
+		if err := rows.Scan(&tagsStr); err != nil {
+			continue
+		}
+		total++
+		parts := strings.Split(tagsStr, ",")
+		hasTag := false
+		for _, p := range parts {
+			t := strings.TrimSpace(p)
+			if t != "" {
+				counts[t]++
+				hasTag = true
+			}
+		}
+		if !hasTag {
+			counts["untagged"]++
+		}
+	}
+	counts["all"] = total
+
+	return map[string]any{"counts": counts}, nil
 }
 
 // getNotesEntry retrieves a single note by ID.
@@ -198,6 +267,41 @@ func deleteNotesEntry(dbPath string, id int64) (any, error) {
 	}
 
 	return map[string]any{"deleted": true}, nil
+}
+
+// getNoteTitles returns all note IDs and titles, ordered by title length descending.
+// Longest titles first ensures the autolink algorithm matches greedily.
+func getNoteTitles(dbPath string) (any, error) {
+	db, err := openNotesDB(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	rows, err := db.Query("SELECT id, title FROM notes ORDER BY length(title) DESC, title ASC")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query note titles: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	type noteTitle struct {
+		ID    int64  `json:"id"`
+		Title string `json:"title"`
+	}
+	var titles []noteTitle
+	for rows.Next() {
+		var nt noteTitle
+		if err := rows.Scan(&nt.ID, &nt.Title); err != nil {
+			continue
+		}
+		titles = append(titles, nt)
+	}
+
+	return map[string]any{"titles": titles}, nil
 }
 
 // openNotesDB opens the notes database.

@@ -1,8 +1,19 @@
+// Signal to app.js that this tab owns horizontal arrow-key navigation
+// (left/right switch between the tags panel and the notes list).
+export const handlesHorizontalNav = true;
+
 (() => {
     let currentNoteId = null;
     let isEditing = false;
     let allNotes = [];
     let currentSearch = '';
+    let currentTag = 'all';
+    let currentPage = 1;
+    let pageSize = 10;
+    let totalCount = 0;
+    let tagFilterText = '';
+    const recentNotes = []; // [{id, title}], most recent first, max 20
+    const maxRecent = 20;
 
     const elements = {
         search: document.getElementById('notes-search'),
@@ -10,6 +21,9 @@
         newBtn: document.getElementById('notes-new-btn'),
         backBtn: document.getElementById('notes-back-btn'),
         list: document.getElementById('notes-list'),
+        pagination: document.getElementById('notes-pagination'),
+        tagList: document.getElementById('notes-tag-list'),
+        tagFilter: document.getElementById('notes-tag-filter'),
         view: document.getElementById('notes-view'),
         edit: document.getElementById('notes-edit'),
         title: document.getElementById('notes-title'),
@@ -19,7 +33,9 @@
         saveBtn: document.getElementById('notes-save-btn'),
         deleteBtn: document.getElementById('notes-delete-btn'),
         cancelBtn: document.getElementById('notes-cancel-btn'),
-        importZone: document.getElementById('notes-import-zone'),
+        autolinkBtn: document.getElementById('notes-autolink-btn'),
+        recentDropdown: document.getElementById('notes-recent-dropdown'),
+        recentWrap: document.getElementById('notes-recent-wrap'),
         container: document.getElementById('notes-container'),
     };
 
@@ -55,20 +71,38 @@
     }
 
     async function loadNotes() {
+        const searchContent = elements.searchContent ? elements.searchContent.checked : false;
         const result = await callAction('get-notes', {
             search: currentSearch,
-            limit: 100,
-            search_content: elements.searchContent ? elements.searchContent.checked : false,
+            tag: currentTag === 'all' ? '' : currentTag,
+            limit: pageSize,
+            offset: (currentPage - 1) * pageSize,
+            search_content: searchContent,
         });
         if (result && result.notes) {
             allNotes = result.notes;
+            totalCount = result.total ?? 0;
             renderNotesList();
+            renderPagination();
+        }
+    }
+
+    async function loadTagCounts() {
+        const searchContent = elements.searchContent ? elements.searchContent.checked : false;
+        const result = await callAction('get-tag-counts', {
+            search: currentSearch,
+            search_content: searchContent,
+        });
+        if (result && result.counts) {
+            updateTagsList(result.counts);
         }
     }
 
     if (elements.searchContent) {
-        elements.searchContent.addEventListener('change', (e) => {
+        elements.searchContent.addEventListener('change', () => {
+            currentPage = 1;
             loadNotes();
+            loadTagCounts();
         });
     }
 
@@ -77,8 +111,9 @@
         allNotes.forEach(note => {
             const item = document.createElement('div');
             item.className = 'notes-item' + (note.id === currentNoteId ? ' active' : '');
-            const tagsHtml = note.tags
-                ? `<div class="task-tags">${note.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+            const tagParts = note.tags ? note.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+            const tagsHtml = tagParts.length > 0
+                ? `<div class="notes-tags">${tagParts.map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
                 : '';
             item.innerHTML = `
                 <div class="notes-item-title">${escapeHtml(note.title)}</div>
@@ -87,6 +122,117 @@
             item.onclick = () => selectNote(note.id);
             elements.list.appendChild(item);
         });
+    }
+
+    function renderPagination() {
+        if (!elements.pagination) return;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        if (totalPages <= 1) {
+            elements.pagination.innerHTML = '';
+            return;
+        }
+        elements.pagination.innerHTML = `
+            <button class="notes-page-btn" id="notes-prev-btn" ${currentPage <= 1 ? 'disabled' : ''}>←</button>
+            <span class="notes-page-info">${currentPage} / ${totalPages}</span>
+            <button class="notes-page-btn" id="notes-next-btn" ${currentPage >= totalPages ? 'disabled' : ''}>→</button>
+        `;
+        document.getElementById('notes-prev-btn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                loadNotes();
+            }
+        });
+        document.getElementById('notes-next-btn').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadNotes();
+            }
+        });
+    }
+
+    function updateTagsList(counts) {
+        if (!elements.tagList) return;
+        elements.tagList.innerHTML = '';
+        const filter = tagFilterText.toLowerCase();
+
+        // Always show "all" unless it's filtered out
+        if (!filter || 'all'.includes(filter)) {
+            const allItem = document.createElement('div');
+            allItem.className = 'tag-item' + (currentTag === 'all' ? ' active' : '');
+            allItem.dataset.tag = 'all';
+            allItem.innerHTML = `<span class="tag-label">all</span><span class="service-count">${counts['all'] ?? 0}</span>`;
+            allItem.onclick = () => setTagFilter('all');
+            elements.tagList.appendChild(allItem);
+        }
+
+        // Sort non-meta tags by count descending (exclude 'all'), apply filter
+        const sorted = Object.entries(counts)
+            .filter(([tag]) => tag !== 'all')
+            .sort((a, b) => b[1] - a[1]);
+        for (const [tag, count] of sorted) {
+            if (filter && !tag.toLowerCase().includes(filter)) continue;
+            const item = document.createElement('div');
+            item.className = 'tag-item' + (currentTag === tag ? ' active' : '');
+            item.dataset.tag = tag;
+            item.innerHTML = `<span class="tag-label">${escapeHtml(tag)}</span><span class="service-count">${count}</span>`;
+            item.onclick = () => setTagFilter(tag);
+            elements.tagList.appendChild(item);
+        }
+    }
+
+    function setTagFilter(tag) {
+        currentTag = tag;
+        currentPage = 1;
+        loadNotes();
+        loadTagCounts();
+    }
+
+    function addToRecent(id, title) {
+        const idx = recentNotes.findIndex(n => n.id === id);
+        if (idx !== -1) recentNotes.splice(idx, 1);
+        recentNotes.unshift({id, title});
+        if (recentNotes.length > maxRecent) recentNotes.length = maxRecent;
+    }
+
+    function renderRecentDropdown() {
+        if (!elements.recentDropdown) return;
+        elements.recentDropdown.innerHTML = '';
+        if (recentNotes.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'notes-recent-empty';
+            empty.textContent = 'No recently visited notes';
+            elements.recentDropdown.appendChild(empty);
+            return;
+        }
+        recentNotes.forEach(note => {
+            const item = document.createElement('div');
+            item.className = 'notes-recent-item' + (note.id === currentNoteId ? ' active' : '');
+            item.textContent = note.title;
+            item.onclick = () => {
+                closeRecentDropdown();
+                selectNote(note.id);
+            };
+            elements.recentDropdown.appendChild(item);
+        });
+    }
+
+    function openRecentDropdown() {
+        renderRecentDropdown();
+        elements.recentDropdown.classList.add('open');
+        elements.recentBtn && elements.recentBtn.classList.add('active');
+    }
+
+    function closeRecentDropdown() {
+        elements.recentDropdown && elements.recentDropdown.classList.remove('open');
+        elements.recentBtn && elements.recentBtn.classList.remove('active');
+    }
+
+    function toggleRecentDropdown() {
+        if (elements.recentDropdown.classList.contains('open')) {
+            closeRecentDropdown();
+        } else {
+            openRecentDropdown();
+        }
     }
 
     async function selectNote(id) {
@@ -102,6 +248,7 @@
 
         const result = await callAction('get-note', {id});
         if (result) {
+            addToRecent(id, result.title || '(untitled)');
             elements.view.innerHTML = '';
             elements.title.value = result.title || '';
             elements.content.value = result.content || '';
@@ -135,8 +282,8 @@
                     const pageName = link.getAttribute('title');
                     if (!pageName) return;
 
-                    // Search for note with this title
-                    const searchResult = await callAction('get-notes', {search: pageName, limit: 100});
+                    // Search for note with this title (high limit to find exact match)
+                    const searchResult = await callAction('get-notes', {search: pageName, limit: 50});
                     if (searchResult && searchResult.notes) {
                         // Find exact title match
                         const matchingNote = searchResult.notes.find(n => n.title === pageName);
@@ -216,6 +363,7 @@
         elements.editBtn.style.display = hidden ? 'block' : 'none';
         elements.saveBtn.style.display = hidden ? 'none' : 'block';
         elements.cancelBtn.style.display = hidden ? 'none' : 'block';
+        if (elements.autolinkBtn) elements.autolinkBtn.style.display = hidden ? 'none' : 'block';
     }
 
     function cancelEdit() {
@@ -236,7 +384,11 @@
         const result = await callAction('update-note', {
             id: currentNoteId,
             title,
-            content: elements.content.value,
+            content: elements.content.value
+                .split('\n')
+                .map(line => line.trimEnd())
+                .join('\n')
+                .trimEnd(),
             tags: elements.tags.value,
         });
 
@@ -244,6 +396,7 @@
             isEditing = false;
             updateEditMode();
             loadNotes();
+            loadTagCounts();
             selectNote(currentNoteId);
         }
     }
@@ -257,6 +410,7 @@
             isEditing = false;
             updateEditMode();
             loadNotes();
+            loadTagCounts();
             elements.view.innerHTML = '<div class="notes-view-empty">Select a note or create a new one</div>';
         }
     }
@@ -267,7 +421,10 @@
 
         const result = await callAction('create-note', {title, content: '', tags: ''});
         if (result && result.id) {
+            currentPage = 1;
+            currentTag = 'all';
             await loadNotes();
+            await loadTagCounts();
             selectNote(result.id);
         }
     }
@@ -292,20 +449,143 @@
         if (result) {
             alert(`Imported ${result.count} notes`);
             await loadNotes();
+            await loadTagCounts();
         }
     }
 
     // Event listeners
     elements.search.addEventListener('input', (e) => {
         currentSearch = e.target.value;
+        currentPage = 1;
         loadNotes();
+        loadTagCounts();
     });
+
+    if (elements.tagFilter) {
+        elements.tagFilter.addEventListener('input', (e) => {
+            tagFilterText = e.target.value;
+            // Re-render the existing counts with the new filter — no server round-trip needed
+            loadTagCounts();
+        });
+    }
 
     elements.newBtn.addEventListener('click', createNewNote);
     elements.editBtn.addEventListener('click', startEdit);
     elements.saveBtn.addEventListener('click', saveNote);
     elements.cancelBtn.addEventListener('click', cancelEdit);
     elements.deleteBtn.addEventListener('click', deleteCurrentNote);
+
+    // Auto-link: replace matched note titles in selected text with [[title]]
+    function autoLinkText(text, titles) {
+        // titles are pre-sorted longest-first; process character by character
+        // to greedily match the longest title at each position, skipping existing [[...]]
+        let result = '';
+        let i = 0;
+        while (i < text.length) {
+            // Skip existing [[...]] blocks unchanged
+            if (text[i] === '[' && text[i + 1] === '[') {
+                const end = text.indexOf(']]', i + 2);
+                if (end !== -1) {
+                    result += text.substring(i, end + 2);
+                    i = end + 2;
+                    continue;
+                }
+            }
+            // Try each title (longest first) at the current position
+            let matched = false;
+            for (const {title} of titles) {
+                if (text.substring(i, i + title.length).toLowerCase() === title.toLowerCase()) {
+                    result += `[[${title}]]`;
+                    i += title.length;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                result += text[i];
+                i++;
+            }
+        }
+        return result;
+    }
+
+    async function runAutoLink() {
+        const textarea = elements.content;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const hasSelection = start !== end;
+        const targetStart = hasSelection ? start : 0;
+        const targetEnd = hasSelection ? end : textarea.value.length;
+        const selected = textarea.value.substring(targetStart, targetEnd);
+
+        if (!selected.trim()) return;
+
+        const btn = elements.autolinkBtn;
+        const origText = btn ? btn.textContent : '';
+        if (btn) {
+            btn.textContent = '⏳';
+            btn.disabled = true;
+        }
+
+        const result = await callAction('get-note-titles', {});
+        if (!result || !result.titles) {
+            if (btn) {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+            return;
+        }
+
+        // All titles are eligible including the current note (self-links are valid)
+        const titles = result.titles;
+        const linked = autoLinkText(selected, titles);
+
+        if (linked !== selected) {
+            textarea.focus();
+            textarea.value = textarea.value.substring(0, targetStart) + linked + textarea.value.substring(targetEnd);
+            textarea.selectionStart = targetStart;
+            textarea.selectionEnd = targetStart + linked.length;
+        }
+
+        if (btn) {
+            btn.textContent = origText;
+            btn.disabled = false;
+        }
+    }
+
+    if (elements.autolinkBtn) {
+        elements.autolinkBtn.addEventListener('click', runAutoLink);
+    }
+
+    if (elements.recentBtn) {
+        elements.recentBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleRecentDropdown();
+        });
+    }
+
+    // Close the recent dropdown when clicking anywhere outside it
+    document.addEventListener('click', (e) => {
+        if (elements.recentWrap && !elements.recentWrap.contains(e.target)) {
+            closeRecentDropdown();
+        }
+    });
+
+    let focusedPanel = 'notes'; // 'notes' | 'tags'
+
+    function setFocusedPanel(panel) {
+        focusedPanel = panel;
+        const filterSidebar = elements.tagList && elements.tagList.closest('.filter-sidebar');
+        const filterTopBar = document.querySelector('.notes-top-bar-filter');
+        const notesSidebar = elements.list && elements.list.closest('.notes-sidebar');
+        const searchTopBar = document.querySelector('.notes-top-bar-search');
+        if (filterSidebar) filterSidebar.classList.toggle('kbd-focus', panel === 'tags');
+        if (filterTopBar) filterTopBar.classList.toggle('kbd-focus', panel === 'tags');
+        if (notesSidebar) notesSidebar.classList.toggle('kbd-focus', panel === 'notes');
+        if (searchTopBar) searchTopBar.classList.toggle('kbd-focus', panel === 'notes');
+    }
 
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
@@ -316,22 +596,47 @@
             return;
         }
 
-        // In view mode, use arrow keys to navigate notes
-        if (!isEditing && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (!isEditing && e.key === 'ArrowLeft' && focusedPanel === 'notes') {
+            e.preventDefault();
+            setFocusedPanel('tags');
+            return;
+        }
+
+        if (e.key === 'ArrowRight' && focusedPanel === 'tags') {
+            e.preventDefault();
+            setFocusedPanel('notes');
+            return;
+        }
+
+        // Up/Down: navigate the focused panel
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
 
-            if (allNotes.length === 0) return;
-
-            const currentIndex = allNotes.findIndex(n => n.id === currentNoteId);
-            let nextIndex = currentIndex;
-
-            if (e.key === 'ArrowUp') {
-                nextIndex = currentIndex <= 0 ? allNotes.length - 1 : currentIndex - 1;
-            } else if (e.key === 'ArrowDown') {
-                nextIndex = currentIndex >= allNotes.length - 1 ? 0 : currentIndex + 1;
+            if (focusedPanel === 'tags' && elements.tagList) {
+                const items = Array.from(elements.tagList.querySelectorAll('.tag-item'));
+                if (items.length === 0) return;
+                const activeIdx = items.findIndex(el => el.classList.contains('active'));
+                let nextIdx;
+                if (e.key === 'ArrowUp') {
+                    nextIdx = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+                } else {
+                    nextIdx = activeIdx >= items.length - 1 ? 0 : activeIdx + 1;
+                }
+                setTagFilter(items[nextIdx].dataset.tag);
+                return;
             }
 
-            selectNote(allNotes[nextIndex].id);
+            if (focusedPanel === 'notes' && !isEditing) {
+                if (allNotes.length === 0) return;
+                const currentIndex = allNotes.findIndex(n => n.id === currentNoteId);
+                let nextIndex;
+                if (e.key === 'ArrowUp') {
+                    nextIndex = currentIndex <= 0 ? allNotes.length - 1 : currentIndex - 1;
+                } else {
+                    nextIndex = currentIndex >= allNotes.length - 1 ? 0 : currentIndex + 1;
+                }
+                selectNote(allNotes[nextIndex].id);
+            }
         }
     }, true);
 
@@ -370,7 +675,34 @@
         return div.innerHTML;
     }
 
+    // Dynamically size the page to fit the visible notes list area
+    let resizeDebounce = null;
+
+    function recalcPageSize() {
+        if (!elements.list) return;
+        const containerHeight = elements.list.clientHeight;
+        if (containerHeight <= 0) return;
+        // Measure the height of a rendered item; fall back to a CSS-derived estimate
+        const sampleItem = elements.list.querySelector('.notes-item');
+        const itemHeight = sampleItem ? sampleItem.offsetHeight : 64;
+        const newSize = Math.max(1, Math.floor(containerHeight / itemHeight));
+        if (newSize !== pageSize) {
+            pageSize = newSize;
+            currentPage = 1;
+            loadNotes();
+        }
+    }
+
+    if (elements.list && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => {
+            clearTimeout(resizeDebounce);
+            resizeDebounce = setTimeout(recalcPageSize, 100);
+        }).observe(elements.list);
+    }
+
     // Initialize
+    setFocusedPanel('notes');
     loadNotes();
+    loadTagCounts();
     elements.view.innerHTML = '<div class="notes-view-empty">Select a note or create a new one</div>';
 })();
