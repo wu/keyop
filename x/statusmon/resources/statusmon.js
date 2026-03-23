@@ -1,5 +1,6 @@
 let statusmonContainer = null;
 let currentStatuses = {}; // Cache of current status items keyed by name
+let lastRefreshTime = null;
 
 import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
 
