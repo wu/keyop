@@ -37,7 +37,8 @@ func (svc *Service) WebUITab() webui.TabInfo {
     <div id="alerts-list">Loading alerts...</div>
   </div>
 </div>
-</div>`,
+</div>
+<link href="/api/assets/alerts/alerts.css" rel="stylesheet">`,
 		JSPath: "/api/assets/alerts/alerts.js",
 	}
 }

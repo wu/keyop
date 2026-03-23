@@ -272,7 +272,7 @@
     line-height: 1.6;
 }
 
-.list-group-gap {
+.journal-container .list-group-gap {
     height: 10px;
     background: transparent;
 }
@@ -342,13 +342,13 @@
 
 /* Mobile: single-column journal layout */
 @media (max-width: 640px) {
-    .journal-sidebar {
+    .journal-container .journal-sidebar {
         width: 100%;
         border-right: none;
     }
 
     /* On mobile, main panel is hidden until an entry is selected */
-    .journal-main {
+    .journal-container .journal-main {
         display: none;
     }
 
