@@ -1263,6 +1263,73 @@ input[type="date"]:focus {
     font-style: italic;
 }
 
+/* Status tab — mobile responsive */
+@media (max-width: 640px) {
+    .statusmon-content {
+        padding: 0.5rem;
+    }
+
+    /* Switch to card layout: hide the table header, stack each row as a card */
+    .status-table thead {
+        display: none;
+    }
+
+    .status-table,
+    .status-table tbody,
+    .status-table tr {
+        display: block;
+        width: 100%;
+    }
+
+    .status-table tr {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.82rem;
+    }
+
+    .status-table td {
+        display: block;
+        padding: 0.15rem 0;
+        border: none;
+        width: 100%;
+    }
+
+    /* Hide hostname and last-seen — not worth the space on mobile */
+    .status-hostname,
+    .status-lastseen {
+        display: none;
+    }
+
+    /* Service name — prominent, on its own line */
+    .status-service {
+        font-weight: 600;
+        font-size: 0.88rem;
+        margin-bottom: 0.1rem;
+    }
+
+    /* Details wrap naturally, no truncation */
+    .status-text {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        max-width: none;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+
+    .status-ack {
+        text-align: left;
+        margin-top: 0.25rem;
+    }
+
+    .ack-button {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}
+
 /* Elapsed time formatter with tooltip */
 .elapsed-time {
     cursor: help;
