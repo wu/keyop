@@ -1,3 +1,56 @@
+## [0.8.0](https://github.com/wu/keyop/compare/0.7.0...0.8.0) (2026-03-23)
+
+### Features
+
+* add acknowledgment state tracking to StatusMon service ([65c8e17](https://github.com/wu/keyop/commit/65c8e179f94d2bd6bc7da84e17cfe5e87dab3b01))
+* add basic weather panel with icons, forecasts, and day/night data ([587d86f](https://github.com/wu/keyop/commit/587d86f6f534d1d70ca4e5f11f5ccbf79e8357f4))
+* add daylight low tide info to Tides panel and backend logic ([d798921](https://github.com/wu/keyop/commit/d798921cb57b6e8cc834a5864c2cf6c5d2f03808))
+* add equinox/solstice countdown to Sun panel with styling updates ([ec91124](https://github.com/wu/keyop/commit/ec9112487a7a51f8966eb254da281cc57bb33e13))
+* add example proxy config with certbot ([a6a03ff](https://github.com/wu/keyop/commit/a6a03ff978093d2f5904e41a319c69db1f99c44d))
+* add flashcards service with WebUI integration, SM-2 algorithm, and SQLite support ([ae97df8](https://github.com/wu/keyop/commit/ae97df82c3963b81f1f36a2a6d9c35b2f44a99c3))
+* add GPS history map generation and WebUI integration ([baadc1f](https://github.com/wu/keyop/commit/baadc1f796d5279a0087f5540d839e0d81a1ccd0))
+* add host removal functionality to heartbeat panel ([8bef576](https://github.com/wu/keyop/commit/8bef576247c3c60890d6f4891b96f990f9ef712a))
+* add mobile-friendly layout for notes tab with back button functionality ([03eb15a](https://github.com/wu/keyop/commit/03eb15a508ca6047d42fe51d2118a906e2cf59ce))
+* add mobile-responsive layout for Status tab ([80d405f](https://github.com/wu/keyop/commit/80d405feee1635b13347e0df8090509a2b700406))
+* add passkey-based authentication to WebUI ([490b770](https://github.com/wu/keyop/commit/490b7708f2706a16be10668738e79671930a4c69))
+* add sensor settings panel and customizable display configurations for Temps WebUI ([ca1968a](https://github.com/wu/keyop/commit/ca1968a3d939a703bc87b30dee2fc011fdbff3f2))
+* add SSE keep-alive and configure nginx for event streaming ([377272e](https://github.com/wu/keyop/commit/377272ea6e656cef8352f677ae6e2ee628559814))
+* display note tags in list view with updated styling ([8e6d05f](https://github.com/wu/keyop/commit/8e6d05f0e3bdb449c9dba97b00a959521e4a20ab))
+* embed static assets for all services using `embed.FS` ([1a3ae6a](https://github.com/wu/keyop/commit/1a3ae6a0db4b87a4083ebaba49eab22e8bda52f2))
+* enable full viewport rendering for notes tab in WebUI ([ded8c86](https://github.com/wu/keyop/commit/ded8c869a809e50198fd217cfc1df2d798e5ee12))
+* enhance dark theme styling and improve UI consistency ([81bf110](https://github.com/wu/keyop/commit/81bf11071e7af295878b7105b1d694d2996877c2))
+* enhance flashcards with schedule previews and Anki-style learning phases ([13d03d0](https://github.com/wu/keyop/commit/13d03d0cfa24d550e8cf4de7e91f8e15beb26733))
+* enhance Temps panel with metric configurations ([c3adb4e](https://github.com/wu/keyop/commit/c3adb4e51bf2ed8719ff113167873f288203455d))
+* implement enhanced navigation and focus indicators for Notes tab ([cfd507e](https://github.com/wu/keyop/commit/cfd507e1b7ba8094e2910327f95d88c553f000e2))
+* implement responsive journal layout and mobile navigation ([ea8f943](https://github.com/wu/keyop/commit/ea8f9432e16e6ce97c0fd3815f13a12f5fb20d40))
+* redesign notes layout with grid-based responsive structure ([14156a3](https://github.com/wu/keyop/commit/14156a36d97a2b1b2c45b867786914a31aacff8b))
+* replace nwsWeather with revamped Weather service and WebUI integration ([f416d95](https://github.com/wu/keyop/commit/f416d958e3da2f46f87799f7cb513e8c3dee0361))
+* scope css to prevent inter-tab interactions ([aff929e](https://github.com/wu/keyop/commit/aff929e1749120666e841473db4007431c044507))
+* update WeatherStation service with WebUI integration and SQLite support ([eee7ae4](https://github.com/wu/keyop/commit/eee7ae475b276848aaf8f59772cd3f247e34e146))
+
+### Bug Fixes
+
+* handle empty or error responses in GPS fetch requests ([effc2a5](https://github.com/wu/keyop/commit/effc2a594313e91f47a1ce81c0240d3e3f7bdfdb))
+* improve current time indicator on tide sparkline ([e9ad114](https://github.com/wu/keyop/commit/e9ad114bad866726b17c950c8027eda21d9bef3a))
+* refine dashboard view and adjust panel/grid spacing ([907cd0b](https://github.com/wu/keyop/commit/907cd0b616caade7050d297ad7ea8f61d4add1db))
+* replace `setDate` with `setTime` to avoid timezone offset bugs in day rollover logic ([cb05e17](https://github.com/wu/keyop/commit/cb05e17e2822b3dcf31db72a086995eba2b43b7f))
+* resolve issue with flashcard fetch storm ([1b71e0e](https://github.com/wu/keyop/commit/1b71e0e8a174b28e7572275d923139373b8f96cc))
+* resolve issue with flashcard formatting ([a16c5c7](https://github.com/wu/keyop/commit/a16c5c7c297f14110bc9aacf092104917b1f443b)), closes [#flashcards-container](https://github.com/wu/keyop/issues/flashcards-container)
+* set HTTP client timeout and update map fetch error handling ([3d3a8d2](https://github.com/wu/keyop/commit/3d3a8d25096d7af5660878f21b92fe35bed75589))
+* standardize timestamp handling to UTC in idle report generation and related functions ([1a2105a](https://github.com/wu/keyop/commit/1a2105a8ffa6647f53c85629dd95ddb080f27dde))
+
+### Refactoring
+
+* add `lastRefreshTime` to track status update timing in StatusMon ([550470d](https://github.com/wu/keyop/commit/550470d6af31f69e2ba6f173ef23e6dd5ad4e6ea))
+* improve alert selector logic and enhance UI alignment for panels ([c45d5d1](https://github.com/wu/keyop/commit/c45d5d17d5aa8f1d4c1c6f503335775c38121f92))
+* migrate Dockerfiles to Ubuntu base, optimize build context, and clean scripts ([1558998](https://github.com/wu/keyop/commit/15589984164183c2de9daf1dcc923d0c6c711972))
+* migrate to non-privileged user and update paths for keyop service ([2cbb32f](https://github.com/wu/keyop/commit/2cbb32fc410f655acaf7e52bf056551ee8541da4))
+* reorganize image assets into WebUI resources ([a85e033](https://github.com/wu/keyop/commit/a85e0337f1e0aea1b08d117acc1f28cbf3edec31))
+* replace client-side dawn/dusk calculations with server-provided solar data ([594f5e2](https://github.com/wu/keyop/commit/594f5e2ac5a1c344ac0d5e600399112af2827caa))
+* simplify devicePath handling and improve temp query reliability ([5226d74](https://github.com/wu/keyop/commit/5226d7417c26b5c0a0e0e86afa0bec9cb5ba7754))
+* simplify status update logic and remove redundant refresh checks ([1f5ef5b](https://github.com/wu/keyop/commit/1f5ef5b305a7abfd299f1364ed7833543d10d402))
+* standardize JSON field access across services ([18fa32d](https://github.com/wu/keyop/commit/18fa32d08f5ef8cd4e738e4a79e3c69b53a3c214))
+
 ## [0.7.0](https://github.com/wu/keyop/compare/0.6.0...0.7.0) (2026-03-19)
 
 ### Features
