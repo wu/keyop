@@ -1,16 +1,91 @@
 /* Flashcards tab layout — mirrors the alerts/tasks sidebar layout */
 
-.flashcards-layout {
+#flashcards-container {
+    width: 100%;
+    height: 100%;
     display: flex;
+    overflow: hidden;
+}
+
+#flashcards-container .flashcards-layout {
+    display: flex;
+    width: 100%;
     height: 100%;
     overflow: hidden;
 }
 
-.flashcards-content {
+#flashcards-container .flashcards-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+/* Sidebar with tag filter — previously inherited from tasks.css */
+#flashcards-container .filter-sidebar {
+    width: 200px;
+    border-right: 1px solid var(--border);
+    padding: 12px;
+    overflow-y: auto;
+    background-color: var(--bg);
+    flex-shrink: 0;
+}
+
+#flashcards-container .tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#flashcards-container .service-item {
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-variant: small-caps;
+    transition: background-color 0.15s;
+    color: var(--text);
+    background-color: transparent;
+    border: 1px solid transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--tag-font-family);
+    font-weight: var(--tag-font-weight);
+    letter-spacing: var(--tag-letter-spacing);
+    -webkit-font-smoothing: antialiased;
+}
+
+#flashcards-container .service-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#flashcards-container .service-item.active {
+    background-color: var(--accent-blue-bg);
+    color: var(--text);
+    font-weight: 600;
+    border-color: rgba(138, 97, 214, 0.24);
+}
+
+#flashcards-container .service-count {
+    font-size: 0.75rem;
+    background-color: transparent;
+    color: var(--text);
+    padding: 0;
+    border-radius: 0;
+    font-weight: 600;
+}
+
+#flashcards-container .tag-label {
+    display: inline-block;
+    background-color: transparent;
+    color: var(--text);
+    padding: 0;
+    border-radius: 0;
+    font-size: 13px;
+    font-weight: 600;
+    margin-right: 8px;
+    font-variant: small-caps;
 }
 
 .flashcards-header {
