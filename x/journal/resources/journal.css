@@ -1,6 +1,20 @@
+/*
+ * The journal tab needs to fill the full browser window. Same approach as notes:
+ * subtract header + tab-nav + padding from the dynamic viewport height.
+ * --journal-chrome-height: header (~46px) + tab-nav (~36px) + padding (16px+16px) = ~114px.
+ */
+:root {
+    --journal-chrome-height: 114px;
+}
+
+/* Pull the journal tab-content out of the normal flow padding */
+#journal-container {
+    margin: -1rem;
+}
+
 .journal-container {
     display: flex;
-    height: 100%;
+    height: calc(100dvh - var(--journal-chrome-height));
     background-color: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -321,6 +335,35 @@
     text-decoration: none;
 }
 
-.journal-view a:hover {
-    text-decoration: underline;
+/* Back button hidden on desktop */
+.journal-back-btn {
+    display: none;
 }
+
+/* Mobile: single-column journal layout */
+@media (max-width: 640px) {
+    .journal-sidebar {
+        width: 100%;
+        border-right: none;
+    }
+
+    /* On mobile, main panel is hidden until an entry is selected */
+    .journal-main {
+        display: none;
+    }
+
+    /* When an entry is selected, swap: hide sidebar, show main */
+    .journal-container.entry-selected .journal-sidebar {
+        display: none;
+    }
+
+    .journal-container.entry-selected .journal-main {
+        display: flex;
+    }
+
+    /* Show back button on mobile */
+    .journal-back-btn {
+        display: inline-block;
+    }
+}
+

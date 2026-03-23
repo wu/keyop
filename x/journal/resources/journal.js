@@ -204,13 +204,24 @@ async function selectDate(date) {
             await saveJournalEntry();
         } else {
             journalState.isEditing = false;
-            toggleEditMode();
+            updateEditModeUI();
         }
     }
 
     journalState.currentDate = date;
     updateDateButtons();
+    showEntryPanel();
     await loadJournalEntry(date);
+}
+
+function showEntryPanel() {
+    const c = document.getElementById('journal-container');
+    if (c) c.classList.add('entry-selected');
+}
+
+function showListPanel() {
+    const c = document.getElementById('journal-container');
+    if (c) c.classList.remove('entry-selected');
 }
 
 // Load a journal entry
@@ -300,7 +311,10 @@ function escapeHtml(text) {
 // Toggle edit mode
 function toggleEditMode() {
     journalState.isEditing = !journalState.isEditing;
+    updateEditModeUI();
+}
 
+function updateEditModeUI() {
     const viewContainer = document.getElementById('journal-view');
     const editContainer = document.getElementById('journal-edit');
     const editBtn = document.getElementById('journal-edit-btn');
@@ -332,7 +346,7 @@ function toggleEditMode() {
 // Cancel editing without saving
 function cancelEdit() {
     journalState.isEditing = false;
-    toggleEditMode();
+    updateEditModeUI();
     displayJournalEntry(journalState.originalContent);
 }
 
@@ -441,11 +455,20 @@ export function canReturnToTabs() {
 export async function init(container) {
 
     // Set up event listeners for buttons
+    const backBtn = document.getElementById('journal-back-btn');
     const editBtn = document.getElementById('journal-edit-btn');
     const saveBtn = document.getElementById('journal-save-btn');
     const cancelBtn = document.getElementById('journal-cancel-btn');
 
-
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            if (journalState.isEditing) {
+                journalState.isEditing = false;
+                updateEditModeUI();
+            }
+            showListPanel();
+        });
+    }
     if (editBtn) {
         editBtn.addEventListener('click', () => {
             toggleEditMode();
