@@ -112,9 +112,10 @@ function renderForecastTable(forecast, solarDays) {
             const startUtcDate = convertUtcToLocal(startHour, dayStr);
             const endUtcDate = convertUtcToLocal(endHour, dayStr);
 
-            // Handle day rollover (e.g., 21-00UT becomes next day at 00:00)
+            // Handle day rollover (e.g., 21-00UT becomes next day at 00:00).
+            // Use millisecond arithmetic to avoid local-timezone offset bugs from setDate().
             if (endHour < startHour) {
-                endUtcDate.setDate(endUtcDate.getDate() + 1);
+                endUtcDate.setTime(endUtcDate.getTime() + 86400000);
             }
 
             // Skip rows in the past
@@ -254,7 +255,7 @@ function extractKpEntries(forecast, futureOnly = false) {
             const {start: startHour, end: endHour} = parseUtcHours(period);
             const startDate = convertUtcToLocal(startHour, dayStr);
             const endDate = convertUtcToLocal(endHour, dayStr);
-            if (endHour < startHour) endDate.setDate(endDate.getDate() + 1);
+            if (endHour < startHour) endDate.setTime(endDate.getTime() + 86400000);
 
             if (futureOnly && endDate <= now) continue;
 

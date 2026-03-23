@@ -93,7 +93,7 @@ function extractKpEntries(forecast, futureOnly = true) {
             const {start: startHour, end: endHour} = parseUtcHours(period);
             const startDate = parseUtcDate(dayStr, startHour);
             const endDate = parseUtcDate(dayStr, endHour);
-            if (endHour < startHour) endDate.setDate(endDate.getDate() + 1);
+            if (endHour < startHour) endDate.setTime(endDate.getTime() + 86400000);
 
             if (futureOnly && endDate <= now) continue;
 
@@ -196,7 +196,7 @@ function analyzeGEvents(forecast) {
             // Handle day rollover
             let endDate = parseUtcDate(dayStr, endHour);
             if (endHour < startHour) {
-                endDate.setDate(endDate.getDate() + 1);
+                endDate.setTime(endDate.getTime() + 86400000);
             }
 
             gEvents.push({

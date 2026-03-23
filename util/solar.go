@@ -28,11 +28,14 @@ func CivilDawnDusk(lat, lon float64, t time.Time) (dawn, dusk time.Time) {
 	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 	d, err := astral.Dawn(observer, day, astral.DepressionCivil)
 	if err == nil {
-		dawn = d.UTC()
+		// Truncate to whole seconds so JSON serialization produces a string that all
+		// browsers can parse with new Date() — Go's RFC3339Nano format would otherwise
+		// emit sub-second digits that some browsers reject.
+		dawn = d.UTC().Truncate(time.Second)
 	}
 	k, err := astral.Dusk(observer, day, astral.DepressionCivil)
 	if err == nil {
-		dusk = k.UTC()
+		dusk = k.UTC().Truncate(time.Second)
 	}
 	return dawn, dusk
 }
