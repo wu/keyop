@@ -157,6 +157,12 @@ func init() {
 	if err := reg.Register("temp", func() any { return &TempEvent{} }); err != nil {
 		panic(fmt.Sprintf("failed to register temp: %v", err))
 	}
+	if err := reg.Register("core.switch.v1", func() any { return &SwitchEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.switch.v1: %v", err))
+	}
+	if err := reg.Register("switch", func() any { return &SwitchEvent{} }); err != nil {
+		panic(fmt.Sprintf("failed to register switch: %v", err))
+	}
 
 	globalPayloadRegistry = reg
 }
@@ -272,6 +278,14 @@ type TempEvent struct {
 }
 
 func (t TempEvent) PayloadType() string { return "core.temp.v1" }
+
+// SwitchEvent represents a switch (on/off) state change for a named device.
+type SwitchEvent struct {
+	DeviceName string `json:"deviceName"` // Name of the switch device
+	State      string `json:"state"`      // "ON" or "OFF"
+}
+
+func (s SwitchEvent) PayloadType() string { return "core.switch.v1" }
 
 // WeatherStationEvent represents weather data from a weather station.
 type WeatherStationEvent struct {

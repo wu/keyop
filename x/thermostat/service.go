@@ -1,7 +1,7 @@
-// Package thermostat controls HVAC devices, applies schedules, and manages temperature setpoints for zones.
 package thermostat
 
 import (
+	"database/sql"
 	"fmt"
 	"keyop/core"
 	"keyop/util"
@@ -9,14 +9,16 @@ import (
 
 // Service orchestrates thermostat control loops, schedules, and integration with temperature sensors.
 type Service struct {
-	Deps        core.Dependencies
-	Cfg         core.ServiceConfig
-	MinTemp     float64
-	MaxTemp     float64
-	Mode        string // "heat", "cool", "auto", "off"
-	Hysteresis  float64
-	HeaterState string
-	CoolerState string
+	Deps       core.Dependencies
+	Cfg        core.ServiceConfig
+	MinTemp    float64
+	MaxTemp    float64
+	Mode       string // "heat", "cool", "auto", "off"
+	Hysteresis float64
+	HeaterName string
+	CoolerName string
+	lastEvent  *Event
+	db         **sql.DB
 }
 
 var validModes = map[string]bool{
@@ -33,24 +35,25 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		Cfg:  cfg,
 	}
 
-	minTemp, minTempExists := svc.Cfg.Config["minTemp"]
-	if minTempExists {
+	if minTemp, ok := svc.Cfg.Config["minTemp"]; ok {
 		svc.MinTemp = minTemp.(float64)
 	}
-
-	maxTemp, maxTempExists := svc.Cfg.Config["maxTemp"]
-	if maxTempExists {
+	if maxTemp, ok := svc.Cfg.Config["maxTemp"]; ok {
 		svc.MaxTemp = maxTemp.(float64)
 	}
-
-	mode, modeExists := svc.Cfg.Config["mode"]
-	if modeExists {
+	if mode, ok := svc.Cfg.Config["mode"]; ok {
 		svc.Mode = mode.(string)
 	}
-
-	hysteresis, hysteresisExists := svc.Cfg.Config["hysteresis"]
-	if hysteresisExists {
+	if hysteresis, ok := svc.Cfg.Config["hysteresis"]; ok {
 		svc.Hysteresis = hysteresis.(float64)
+	}
+	svc.HeaterName = "unnamed_heater"
+	if name, ok := svc.Cfg.Config["heaterName"].(string); ok && name != "" {
+		svc.HeaterName = name
+	}
+	svc.CoolerName = "unnamed_cooler"
+	if name, ok := svc.Cfg.Config["coolerName"].(string); ok && name != "" {
+		svc.CoolerName = name
 	}
 
 	return svc
@@ -65,161 +68,152 @@ func getValidModes() []string {
 }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
-func (svc Service) ValidateConfig() []error {
+func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
 
-	subErrs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
-	errs := subErrs
+	errs := util.ValidateConfig("subs", svc.Cfg.Subs, []string{"temp"}, logger)
 
-	// check min/max temps
-	_, minTempExists := svc.Cfg.Config["minTemp"].(float64)
-	if !minTempExists {
+	if _, ok := svc.Cfg.Config["minTemp"].(float64); !ok {
 		err := fmt.Errorf("thermostat: minTemp not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
-
-	_, maxTempExists := svc.Cfg.Config["maxTemp"].(float64)
-	if !maxTempExists {
+	if _, ok := svc.Cfg.Config["maxTemp"].(float64); !ok {
 		err := fmt.Errorf("thermostat: maxTemp not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
-
 	if svc.MinTemp > svc.MaxTemp {
 		err := fmt.Errorf("thermostat: minTemp must be less than or equal to maxTemp (minTemp: %f, maxTemp: %f)", svc.MinTemp, svc.MaxTemp)
 		logger.Error(err.Error())
 		errs = append(errs, err)
 	}
 
-	// check mode
 	mode, modeExists := svc.Cfg.Config["mode"].(string)
 	if !modeExists {
 		err := fmt.Errorf("thermostat: mode not set in config")
 		logger.Error(err.Error())
 		errs = append(errs, err)
-	} else {
-		if _, valid := validModes[mode]; !valid {
-			err := fmt.Errorf("thermostat: invalid mode '%s' in config, must be one of %v", mode, getValidModes())
-			logger.Error(err.Error())
-			errs = append(errs, err)
-		}
+	} else if _, valid := validModes[mode]; !valid {
+		err := fmt.Errorf("thermostat: invalid mode '%s' in config, must be one of %v", mode, getValidModes())
+		logger.Error(err.Error())
+		errs = append(errs, err)
 	}
 
 	return errs
 }
 
 // Initialize performs one-time startup required by the service (resource loading or connectivity checks).
-func (svc Service) Initialize() error {
+func (svc *Service) Initialize() error {
 	messenger := svc.Deps.MustGetMessenger()
 	return messenger.Subscribe(svc.Deps.MustGetContext(), svc.Cfg.Name, svc.Cfg.Subs["temp"].Name, svc.Cfg.Type, svc.Cfg.Name, svc.Cfg.Subs["temp"].MaxAge, svc.tempHandler)
 }
 
-// Event describes a thermostat payload containing current temperature and control state used by the thermostat service.
-type Event struct {
-	HeaterTargetState string  `json:"heaterTargetState"`
-	CoolerTargetState string  `json:"coolerTargetState"`
-	Temp              float64 `json:"temp"`
-	MinTemp           float64 `json:"minTemp"`
-	MaxTemp           float64 `json:"maxTemp"`
-	Mode              string  `json:"mode"`
-	Hysteresis        float64 `json:"hysteresis,omitempty"`
-}
-
-func (svc Service) tempHandler(msg core.Message) error {
+func (svc *Service) tempHandler(msg core.Message) error {
 	logger := svc.Deps.MustGetLogger()
 	messenger := svc.Deps.MustGetMessenger()
 
-	// process incoming message
 	logger.Info("thermostat received temp message", "message", msg)
 
-	event := svc.updateState(msg, logger)
-	logger.Info("thermostat state updated", "event", event)
-	svc.HeaterState = event.HeaterTargetState
-	svc.CoolerState = event.CoolerTargetState
+	var temp float64
+	if tp, ok := core.AsType[*core.TempEvent](msg.Data); ok && tp != nil {
+		temp = float64(tp.TempF)
+	} else if tv, ok := core.AsType[core.TempEvent](msg.Data); ok {
+		temp = float64(tv.TempF)
+	} else {
+		temp = msg.Metric
+	}
 
-	logger.Debug("Sending heater state", "channel", svc.Cfg.Name)
+	event := svc.updateState(temp, logger)
+	logger.Info("thermostat state updated", "event", event)
+
 	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "heater_state",
+		Event:       "thermostat_event",
 		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
 		State:       event.HeaterTargetState,
-		Data:        event,
+		Data:        &event,
+		DataType:    event.PayloadType(),
+		Correlation: msg.Uuid,
 	}); err != nil {
-		logger.Warn("failed to send heater_state message", "err", err)
+		logger.Warn("failed to send thermostat_event message", "err", err)
 	}
 
-	logger.Debug("Sending cooler state", "channel", svc.Cfg.Name)
+	heaterSwitch := core.SwitchEvent{DeviceName: svc.HeaterName, State: event.HeaterTargetState}
 	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "cooler_state",
-		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.CoolerTargetState),
-		State:       event.CoolerTargetState,
-		Data:        event,
-	}); err != nil {
-		logger.Warn("failed to send cooler_state message", "err", err)
-	}
-
-	logger.Debug("Sending thermostat status", "channel", svc.Cfg.Name)
-	if err := messenger.Send(core.Message{
-		ChannelName: svc.Cfg.Name,
-		ServiceName: svc.Cfg.Name,
-		ServiceType: svc.Cfg.Type,
-		Event:       "thermostat_status",
-		Text:        fmt.Sprintf("%s status event", svc.Cfg.Name),
+		Event:       "switch_event",
+		Text:        fmt.Sprintf("%s state is %s", svc.HeaterName, event.HeaterTargetState),
 		State:       event.HeaterTargetState,
-		Data:        event,
+		Data:        &heaterSwitch,
+		DataType:    heaterSwitch.PayloadType(),
+		Correlation: msg.Uuid,
 	}); err != nil {
-		logger.Warn("failed to send thermostat_status message", "err", err)
+		logger.Warn("failed to send heater switch_event message", "err", err)
+	}
+
+	coolerSwitch := core.SwitchEvent{DeviceName: svc.CoolerName, State: event.CoolerTargetState}
+	if err := messenger.Send(core.Message{
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "switch_event",
+		Text:        fmt.Sprintf("%s state is %s", svc.CoolerName, event.CoolerTargetState),
+		State:       event.CoolerTargetState,
+		Data:        &coolerSwitch,
+		DataType:    coolerSwitch.PayloadType(),
+		Correlation: msg.Uuid,
+	}); err != nil {
+		logger.Warn("failed to send cooler switch_event message", "err", err)
 	}
 
 	return nil
 }
 
-func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
-
+func (svc *Service) updateState(temp float64, logger core.Logger) Event {
 	heaterTargetState := "OFF"
 	coolerTargetState := "OFF"
 
-	logger.Info("thermostat: current temp", "temp", msg.Metric, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp, "mode", svc.Mode, "hysteresis", svc.Hysteresis, "heaterState", svc.HeaterState, "coolerState", svc.CoolerState)
+	heaterOn := svc.lastEvent != nil && svc.lastEvent.HeaterTargetState == "ON"
+	coolerOn := svc.lastEvent != nil && svc.lastEvent.CoolerTargetState == "ON"
 
-	// enforce mode
+	logger.Info("thermostat: current temp", "temp", temp, "minTemp", svc.MinTemp, "maxTemp", svc.MaxTemp, "mode", svc.Mode, "hysteresis", svc.Hysteresis, "heaterOn", heaterOn, "coolerOn", coolerOn)
+
 	switch svc.Mode {
 	case "heat":
-		if msg.Metric < svc.MinTemp {
-			logger.Info("thermostat: temp below min threshold, heating", "temp", msg.Metric, "minTemp", svc.MinTemp)
+		if temp < svc.MinTemp {
+			logger.Info("thermostat: temp below min threshold, heating", "temp", temp, "minTemp", svc.MinTemp)
 			heaterTargetState = "ON"
-		} else if svc.HeaterState == "ON" && msg.Metric <= svc.MinTemp+svc.Hysteresis {
-			logger.Info("thermostat: temp under min threshold + hysteresis", "temp", msg.Metric, "minTemp", svc.MinTemp, "hysteresis", svc.Hysteresis)
+		} else if heaterOn && temp <= svc.MinTemp+svc.Hysteresis {
+			logger.Info("thermostat: temp under min threshold + hysteresis", "temp", temp, "minTemp", svc.MinTemp, "hysteresis", svc.Hysteresis)
 			heaterTargetState = "ON"
 		}
 
 	case "cool":
-		if msg.Metric > svc.MaxTemp {
-			logger.Info("thermostat: temp above max threshold, cooling", "temp", msg.Metric, "maxTemp", svc.MaxTemp)
+		if temp > svc.MaxTemp {
+			logger.Info("thermostat: temp above max threshold, cooling", "temp", temp, "maxTemp", svc.MaxTemp)
 			coolerTargetState = "ON"
-		} else if svc.CoolerState == "ON" && msg.Metric >= svc.MaxTemp-svc.Hysteresis {
-			logger.Info("thermostat: temp over max threshold + hysteresis", "temp", msg.Metric, "maxTemp", svc.MaxTemp, "hysteresis", svc.Hysteresis)
+		} else if coolerOn && temp >= svc.MaxTemp-svc.Hysteresis {
+			logger.Info("thermostat: temp over max threshold + hysteresis", "temp", temp, "maxTemp", svc.MaxTemp, "hysteresis", svc.Hysteresis)
 			coolerTargetState = "ON"
 		}
 
 	case "auto":
-		// determine if heat or cool is needed based on current temp, min/max temps, and hysteresis
-		if svc.HeaterState == "ON" && msg.Metric <= svc.MinTemp+svc.Hysteresis {
-			logger.Info("thermostat: temp under min threshold + hysteresis", "temp", msg.Metric, "minTemp", svc.MinTemp, "hysteresis", svc.Hysteresis)
+		if heaterOn && temp <= svc.MinTemp+svc.Hysteresis {
+			logger.Info("thermostat: temp under min threshold + hysteresis", "temp", temp, "minTemp", svc.MinTemp, "hysteresis", svc.Hysteresis)
 			heaterTargetState = "ON"
-		} else if svc.CoolerState == "ON" && msg.Metric >= svc.MaxTemp-svc.Hysteresis {
-			logger.Info("thermostat: temp over max threshold + hysteresis", "temp", msg.Metric, "maxTemp", svc.MaxTemp, "hysteresis", svc.Hysteresis)
+		} else if coolerOn && temp >= svc.MaxTemp-svc.Hysteresis {
+			logger.Info("thermostat: temp over max threshold + hysteresis", "temp", temp, "maxTemp", svc.MaxTemp, "hysteresis", svc.Hysteresis)
 			coolerTargetState = "ON"
-		} else if msg.Metric < svc.MinTemp {
-			logger.Info("thermostat: temp below min threshold, heating", "temp", msg.Metric, "minTemp", svc.MinTemp)
+		} else if temp < svc.MinTemp {
+			logger.Info("thermostat: temp below min threshold, heating", "temp", temp, "minTemp", svc.MinTemp)
 			heaterTargetState = "ON"
-		} else if msg.Metric > svc.MaxTemp {
-			logger.Info("thermostat: temp above max threshold, cooling", "temp", msg.Metric, "maxTemp", svc.MaxTemp)
+		} else if temp > svc.MaxTemp {
+			logger.Info("thermostat: temp above max threshold, cooling", "temp", temp, "maxTemp", svc.MaxTemp)
 			coolerTargetState = "ON"
 		}
 
@@ -227,19 +221,20 @@ func (svc Service) updateState(msg core.Message, logger core.Logger) Event {
 		logger.Error("thermostat: invalid mode, not heating or cooling", "mode", svc.Mode)
 	}
 
-	thermostatEvent := Event{
-		Temp:              msg.Metric,
+	event := Event{
+		Temp:              temp,
 		MinTemp:           svc.MinTemp,
 		MaxTemp:           svc.MaxTemp,
 		Mode:              svc.Mode,
 		HeaterTargetState: heaterTargetState,
 		CoolerTargetState: coolerTargetState,
 	}
-	logger.Warn("thermostat event", "event", thermostatEvent)
-	return thermostatEvent
+	svc.lastEvent = &event
+	logger.Warn("thermostat event", "event", event)
+	return event
 }
 
 // Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
-func (svc Service) Check() error {
+func (svc *Service) Check() error {
 	return nil
 }

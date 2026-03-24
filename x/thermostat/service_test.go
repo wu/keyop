@@ -44,23 +44,19 @@ func testDeps(t *testing.T) core.Dependencies {
 	return deps
 }
 
-func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
+func Test_tempHandler_publishes_thermostat_event(t *testing.T) {
 	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
 	var mu sync.Mutex
-	var heaterMsgs []core.Message
-	var coolerMsgs []core.Message
+	var thermostatMsgs []core.Message
 
-	// subscribe to the service name channel and filter by Event
+	// subscribe to the service name channel and capture thermostat_event messages
 	_ = messenger.Subscribe(context.Background(), "test", "thermo", "thermostat", "test", 0, func(m core.Message) error {
 		mu.Lock()
 		defer mu.Unlock()
-		switch m.Event {
-		case "heater_state":
-			heaterMsgs = append(heaterMsgs, m)
-		case "cooler_state":
-			coolerMsgs = append(coolerMsgs, m)
+		if m.Event == "thermostat_event" {
+			thermostatMsgs = append(thermostatMsgs, m)
 		}
 		return nil
 	})
@@ -82,10 +78,10 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	svc := NewService(deps, cfg)
 	err := svc.Initialize()
 	assert.NoError(t, err)
+	_ = svc.(*Service).RegisterPayloads(core.GetPayloadRegistry())
 
-	// send a temp message to the temp channel
-	// pick a value above max to turn cooler ON
-	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80})
+	// send a temp message to the temp channel — above max to turn cooler ON
+	err = messenger.Send(core.Message{ChannelName: "temp-topic", Metric: 80, Data: core.TempEvent{TempF: 80}})
 	assert.NoError(t, err)
 
 	// Wait for processing
@@ -94,44 +90,27 @@ func Test_tempHandler_publishes_to_heater_and_cooler(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	require.NotEmpty(t, heaterMsgs)
-	m := heaterMsgs[0]
-	assert.Equal(t, "thermo", m.ServiceName)
-	assert.Equal(t, "thermostat", m.ServiceType)
+	require.NotEmpty(t, thermostatMsgs)
+	m := thermostatMsgs[0]
+	assert.Equal(t, "thermostat_event", m.Event)
 	assert.Equal(t, "OFF", m.State) // heater should be OFF at 80
 
-	data, ok := m.Data.(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected type not matched in data, got %T", m.Data)
-	}
-	assert.Equal(t, 80.0, data["temp"])
-	assert.Equal(t, "OFF", data["heaterTargetState"])
-
-	require.NotEmpty(t, coolerMsgs)
-	mCool := coolerMsgs[0]
-	assert.Equal(t, "thermo", mCool.ServiceName)
-	assert.Equal(t, "thermostat", mCool.ServiceType)
-	assert.Equal(t, "ON", mCool.State) // cooler should be ON at 80
-
-	dataCool, ok := mCool.Data.(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected type not matched in data, got %T", mCool.Data)
-	}
-	assert.Equal(t, 80.0, dataCool["temp"])
-	assert.Equal(t, "ON", dataCool["coolerTargetState"])
+	event, ok := m.Data.(*Event)
+	require.True(t, ok, "expected *Event, got %T", m.Data)
+	assert.Equal(t, "ON", event.CoolerTargetState)
 }
 
 func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 	deps := testDeps(t)
 	messenger := deps.MustGetMessenger()
 
-	// capture heater_state events from service name channel
-	var gotHeater []core.Message
+	// capture thermostat_event events from service name channel
+	var gotThermostat []core.Message
 	var mu sync.Mutex
 	subErr := messenger.Subscribe(context.Background(), "test", "thermo", "thermostat", "test", 0, func(m core.Message) error {
-		if m.Event == "heater_state" {
+		if m.Event == "thermostat_event" {
 			mu.Lock()
-			gotHeater = append(gotHeater, m)
+			gotThermostat = append(gotThermostat, m)
 			mu.Unlock()
 		}
 		return nil
@@ -164,8 +143,9 @@ func Test_tempHandler_with_missing_pub_channels(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.NotEmpty(t, gotHeater)
-	assert.Equal(t, "ON", gotHeater[0].State)
+	require.NotEmpty(t, gotThermostat)
+	assert.Equal(t, "thermostat_event", gotThermostat[0].Event)
+	assert.Equal(t, "ON", gotThermostat[0].State)
 }
 
 func TestValidateConfig(t *testing.T) {
@@ -354,8 +334,7 @@ func TestService_updateState(t *testing.T) {
 				MaxTemp: tc.maxTemp,
 				Mode:    tc.mode,
 			}
-			msg := core.Message{Metric: tc.inputTemp}
-			event := svc.updateState(msg, logger)
+			event := svc.updateState(tc.inputTemp, logger)
 			if event.HeaterTargetState != tc.heater {
 				t.Errorf("expected heater=%s, got %s", tc.heater, event.HeaterTargetState)
 			}
@@ -386,28 +365,28 @@ func Test_updateState_thresholds_heat(t *testing.T) {
 			logger := deps.MustGetLogger()
 
 			// between -> both OFF
-			ev := svc.updateState(core.Message{Metric: 60}, logger)
+			ev := svc.updateState(60, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// drop to 51 -> both OFF
-			ev = svc.updateState(core.Message{Metric: 51}, logger)
+			ev = svc.updateState(51, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// drop to just below min -> heater ON, cooler OFF
-			ev = svc.updateState(core.Message{Metric: 49}, logger)
+			ev = svc.updateState(49, logger)
 			assert.Equal(t, "ON", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
-			svc.HeaterState = ev.HeaterTargetState // simulate heater turning ON
+			svc.lastEvent = &ev // simulate heater turning ON
 
 			// drop to just above min, hysteresis should keep heater ON
-			ev = svc.updateState(core.Message{Metric: 51}, logger)
+			ev = svc.updateState(51, logger)
 			assert.Equal(t, "ON", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// temp goes above min + hysteresis -> heater OFF
-			ev = svc.updateState(core.Message{Metric: 58}, logger)
+			ev = svc.updateState(58, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 		})
@@ -423,28 +402,28 @@ func Test_updateState_thresholds_cool(t *testing.T) {
 			logger := deps.MustGetLogger()
 
 			// between -> both OFF
-			ev := svc.updateState(core.Message{Metric: 70}, logger)
+			ev := svc.updateState(70, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// rise near max -> both OFF
-			ev = svc.updateState(core.Message{Metric: 74}, logger)
+			ev = svc.updateState(74, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 			// rise just above max -> cooler ON, heater OFF
-			ev = svc.updateState(core.Message{Metric: 76}, logger)
+			ev = svc.updateState(76, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "ON", ev.CoolerTargetState)
-			svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+			svc.lastEvent = &ev // simulate cooler turning ON
 
 			// drop just below max, hysteresis should keep cooler ON
-			ev = svc.updateState(core.Message{Metric: 74}, logger)
+			ev = svc.updateState(74, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "ON", ev.CoolerTargetState)
 
 			// temp goes below max + hysteresis -> heater OFF
-			ev = svc.updateState(core.Message{Metric: 70}, logger)
+			ev = svc.updateState(70, logger)
 			assert.Equal(t, "OFF", ev.HeaterTargetState)
 			assert.Equal(t, "OFF", ev.CoolerTargetState)
 		})
@@ -457,28 +436,28 @@ func Test_updateState_cool_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Metric: 60}, logger)
+	ev := svc.updateState(60, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise above target -> cooler ON
-	ev = svc.updateState(core.Message{Metric: 65}, logger)
+	ev = svc.updateState(65, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
-	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+	svc.lastEvent = &ev // simulate cooler turning ON
 
 	// drop just above target -> cooler ON, heater OFF
-	ev = svc.updateState(core.Message{Metric: 61}, logger)
+	ev = svc.updateState(61, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop just below target, hysteresis should keep cooler ON
-	ev = svc.updateState(core.Message{Metric: 59}, logger)
+	ev = svc.updateState(59, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop below max + hysteresis -> heater OFF
-	ev = svc.updateState(core.Message{Metric: 50}, logger)
+	ev = svc.updateState(50, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
@@ -490,28 +469,28 @@ func Test_updateState_heat_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Metric: 60}, logger)
+	ev := svc.updateState(60, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// drop below target -> heater ON
-	ev = svc.updateState(core.Message{Metric: 55}, logger)
+	ev = svc.updateState(55, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
-	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
+	svc.lastEvent = &ev // simulate cooler turning ON
 
 	// rise just below target -> heater stays on
-	ev = svc.updateState(core.Message{Metric: 59}, logger)
+	ev = svc.updateState(59, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise just above target, hysteresis should keep heater ON
-	ev = svc.updateState(core.Message{Metric: 61}, logger)
+	ev = svc.updateState(61, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// temp rises above max + hysteresis -> heater OFF
-	ev = svc.updateState(core.Message{Metric: 70}, logger)
+	ev = svc.updateState(70, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 }
@@ -522,45 +501,44 @@ func Test_updateState_auto_min_equals_max(t *testing.T) {
 	logger := deps.MustGetLogger()
 
 	// exact -> both OFF
-	ev := svc.updateState(core.Message{Metric: 60}, logger)
+	ev := svc.updateState(60, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise above target -> cooler ON
-	ev = svc.updateState(core.Message{Metric: 65}, logger)
+	ev = svc.updateState(65, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
-	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+	svc.lastEvent = &ev // simulate cooler turning ON
 
 	// drop just above target -> cooler ON, heater OFF
-	ev = svc.updateState(core.Message{Metric: 61}, logger)
+	ev = svc.updateState(61, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop just below target, hysteresis should keep cooler ON
-	ev = svc.updateState(core.Message{Metric: 59}, logger)
+	ev = svc.updateState(59, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 
 	// drop below target -> heater ON
-	ev = svc.updateState(core.Message{Metric: 55}, logger)
+	ev = svc.updateState(55, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
-	svc.HeaterState = ev.HeaterTargetState // simulate cooler turning ON
-	svc.CoolerState = ev.CoolerTargetState // simulate cooler turning ON
+	svc.lastEvent = &ev // simulate cooler turning ON
 
 	// rise just below target -> heater stays on
-	ev = svc.updateState(core.Message{Metric: 59}, logger)
+	ev = svc.updateState(59, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// rise just above target, hysteresis should keep heater ON
-	ev = svc.updateState(core.Message{Metric: 61}, logger)
+	ev = svc.updateState(61, logger)
 	assert.Equal(t, "ON", ev.HeaterTargetState)
 	assert.Equal(t, "OFF", ev.CoolerTargetState)
 
 	// temp rises above max + hysteresis -> cooler on
-	ev = svc.updateState(core.Message{Metric: 70}, logger)
+	ev = svc.updateState(70, logger)
 	assert.Equal(t, "OFF", ev.HeaterTargetState)
 	assert.Equal(t, "ON", ev.CoolerTargetState)
 }
