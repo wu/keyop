@@ -299,6 +299,23 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err := messenger.Send(eventMsg); err != nil {
 					logger.Error("failed to send enter event message", "error", err)
 				}
+				alert := core.AlertEvent{
+					Summary: fmt.Sprintf("%s arrived at %s", deviceName, nr),
+					Text:    fmt.Sprintf("Device %s entered region %s", deviceName, nr),
+					Level:   "info",
+				}
+				alertMsg := core.Message{
+					Correlation: correlationID,
+					ChannelName: svc.Cfg.Name,
+					ServiceType: svc.Cfg.Type,
+					ServiceName: serviceName,
+					Event:       "alert",
+					Text:        alert.Summary,
+					Data:        alert,
+				}
+				if err := messenger.Send(alertMsg); err != nil {
+					logger.Error("failed to send region enter alert", "error", err)
+				}
 			}
 		}
 
@@ -329,6 +346,23 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 				if err := messenger.Send(eventMsg); err != nil {
 					logger.Error("failed to send exit event message", "error", err)
+				}
+				alert := core.AlertEvent{
+					Summary: fmt.Sprintf("%s left %s", deviceName, cr),
+					Text:    fmt.Sprintf("Device %s exited region %s", deviceName, cr),
+					Level:   "info",
+				}
+				alertMsg := core.Message{
+					Correlation: correlationID,
+					ChannelName: svc.Cfg.Name,
+					ServiceType: svc.Cfg.Type,
+					ServiceName: serviceName,
+					Event:       "alert",
+					Text:        alert.Summary,
+					Data:        alert,
+				}
+				if err := messenger.Send(alertMsg); err != nil {
+					logger.Error("failed to send region exit alert", "error", err)
 				}
 			}
 		}
