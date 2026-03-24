@@ -1245,10 +1245,13 @@ func (svc *Service) createTask(params map[string]any) (any, error) {
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
+	tags, _ := params["tags"].(string)
+	tags = strings.TrimSpace(tags)
+
 	// Insert the task
 	result, err := svc.db.Exec(
-		"INSERT INTO tasks (uuid, title, scheduled_date, created_at, updated_at, done, scheduled_time) VALUES (?, ?, ?, ?, ?, 0, ?)",
-		uuid.New().String(), title, scheduledDate.UTC().Format(time.RFC3339Nano), now, now, hasScheduledTimeFlag,
+		"INSERT INTO tasks (uuid, title, scheduled_date, created_at, updated_at, done, scheduled_time, tags) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+		uuid.New().String(), title, scheduledDate.UTC().Format(time.RFC3339Nano), now, now, hasScheduledTimeFlag, tags,
 	)
 	if err != nil {
 		return nil, err
