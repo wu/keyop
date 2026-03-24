@@ -20,7 +20,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "heartbeat",
-		Title: "Heartbeat",
+		Title: "💜",
 		Content: `<div id="heartbeat-container">
 <div style="padding: 16px;">
   <div id="heartbeat-list" style="font-size: 0.85rem;">Loading heartbeat data...</div>

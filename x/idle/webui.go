@@ -22,7 +22,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "idle",
-		Title: "Idle",
+		Title: "🖥️",
 		Content: `<div id="idle-container">
 <div id="idle-status">Loading status...</div>
 <div id="idle-totals"></div>
@@ -50,7 +50,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "idle",
-			Title:       "Idle",
+			Title:       "🖥️",
 			Content:     `<div class="panel" id="panel-idle"><div class="panel-body">Loading...</div></div>`,
 			JSPath:      "/api/assets/idle/idle-panel.js",
 			Event:       "idle",

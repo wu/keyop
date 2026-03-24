@@ -1,6 +1,6 @@
 :root {
     color-scheme: dark;
-    --bg: #303132; /* page background */
+    --bg: #303334; /* page background */
     --text: #b2b0ac; /* muted warm off-white, matching Dark Reader text */
     --header-bg: #2a2c2d; /* slightly darker header/nav */
     --tab-content-bg: #303334; /* content background */
@@ -13,35 +13,45 @@
     --text-secondary: #716f6c; /* secondary/supporting text */
     --text-muted: #4a4846; /* muted/disabled text */
 
-    /* Accent palette */
-    --accent: #7a35c0; /* muted purple */
-    --accent-bright: #d0a8f8; /* light accent */
-    --accent-pink: #cc40b8; /* muted magenta */
-    --accent-blue: #8a52da; /* purple-blue */
-    --accent-blue-bg: #3a2d72; /* selection/highlight — dark visible purple */
-    --accent-orange: var(--time-elapsed); /* orange accent — alias of time-elapsed */
-    --tag-color: var(--accent-blue); /* tag badges use purple accent */
+    /* ── Consistent purple palette (hue ~263°) ── */
+    --purple-1: #e0ccfc; /* pale lavender — scheduled times, faint accents */
+    --purple-2: #b490f4; /* light — bright highlights, gradient endpoints */
+    --purple-3: #8a52da; /* medium — tag text, icon accents */
+    --purple-4: #6a32b8; /* primary — buttons, active tab text */
+    --purple-5: #4c2294; /* dark — button pressed/active backgrounds */
+    --purple-6: #382068; /* deeper — selection & focus highlight backgrounds */
+    --purple-7: #241548; /* very dark — tag chip backgrounds */
+    --purple-border: #4a3280; /* border — tag borders, dialog outlines */
+
+    /* Semantic accent aliases — all sourced from the palette above */
+    --accent: var(--purple-4);
+    --accent-bright: var(--purple-2);
+    --accent-pink: #cc40b8; /* magenta accent — intentionally distinct */
+    --accent-blue: var(--purple-3);
+    --accent-blue-bg: var(--purple-6);
+    --accent-orange: var(--time-elapsed);
+    --tag-color: var(--purple-3);
 
     --accent-text: #1a1a1a;
-    --pre-text: #2de076; /* muted green accent for task left stripe */
-    --task-left-accent: #2de076; /* explicit variable for left stripe */
-    --task-row-bg: #303132; /* task row background */
-    --task-row-border: #5b554d; /* slightly lighter row separator */
-    --time-scheduled: #d8b8f8; /* light purple for scheduled times */
-    --time-elapsed: #e07830; /* orange for elapsed time */
-    --inprogress-base: #6a00e0; /* deep saturated purple */
-    --inprogress-glow: rgba(106, 0, 224, 0.9);
-    --inprogress-glow-outer: rgba(106, 0, 224, 0.30);
-    --inprogress-glow-outer-2: rgba(106, 0, 224, 0.14);
+    --pre-text: #2de076; /* neon green accent used for task left stripe */
+    --task-left-accent: #2de076;
+    --task-row-bg: #303334;
+    --task-row-border: #484644;
+    --time-scheduled: var(--purple-1);
+    --time-elapsed: #e07830;
+    --inprogress-base: #7030e0; /* vivid purple for glow animation */
+    --inprogress-glow: rgba(112, 48, 224, 0.9);
+    --inprogress-glow-outer: rgba(112, 48, 224, 0.30);
+    --inprogress-glow-outer-2: rgba(112, 48, 224, 0.14);
     --tag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --tag-font-weight: 700;
     --tag-letter-spacing: 0.4px;
-    --tag-bg: #252430; /* tag chip background */
-    --tag-border: #3e3068; /* tag chip border */
+    --tag-bg: var(--purple-7);
+    --tag-border: var(--purple-border);
     --shadow: rgba(0, 0, 0, 0.50);
-    --btn-hover: #2e2d3a; /* button hover background */
-    --primary-color: #3574e0; /* blue primary action color */
-    --primary-color-dark: #1a48c8; /* darker blue for hover/active states */
+    --btn-hover: #2e2d3a;
+    --primary-color: #3574e0;
+    --primary-color-dark: #1a48c8;
 }
 
 /* Dark theme flag (in case we add toggling later) */

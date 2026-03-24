@@ -21,7 +21,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "statusmon",
-		Title: "Status",
+		Title: "🚦",
 		Content: `<div id="statusmon-container">
 <div class="statusmon-layout">
   <div class="statusmon-content">

@@ -107,7 +107,7 @@
     color: var(--text);
     font-weight: 600;
     /* Slight accent border to indicate active selection */
-    border-color: rgba(138, 97, 214, 0.24);
+    border-color: rgba(138, 82, 218, 0.24);
 }
 
 #tasks-container .tag-item.menu-selected {

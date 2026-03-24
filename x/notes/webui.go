@@ -57,7 +57,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 
 	return webui.TabInfo{
 		ID:      "notes",
-		Title:   "Notes",
+		Title:   "🗒️",
 		Icon:    "📋",
 		Content: content,
 		JSPath:  "/api/assets/notes/notes.js",

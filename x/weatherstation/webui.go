@@ -21,7 +21,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "weatherstation",
-			Title:       "Weather",
+			Title:       "🌤️",
 			Content:     `<div class="panel" id="panel-weatherstation"><div class="panel-body">Loading...</div></div>`,
 			JSPath:      "/api/assets/weatherstation/weatherstation-panel.js",
 			Event:       "weatherstation",

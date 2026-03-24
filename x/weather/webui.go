@@ -31,7 +31,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "weather",
-			Title:       "Weather",
+			Title:       "🌤️",
 			Content:     content,
 			JSPath:      "/api/assets/weather/weather-panel.js",
 			Event:       "weather_forecast",
@@ -49,7 +49,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 	}
 	return webui.TabInfo{
 		ID:      "weather",
-		Title:   "Weather",
+		Title:   "🌤️",
 		Content: content,
 		JSPath:  "/api/assets/weather/weather.js",
 	}

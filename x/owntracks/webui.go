@@ -24,7 +24,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "gps",
-		Title: "GPS",
+		Title: "🗺️",
 		Content: `<div id="gps-container">
 			<div id="gps-status" style="padding: 16px; opacity: 0.6;">Loading GPS data...</div>
 		</div>`,

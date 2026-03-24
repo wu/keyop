@@ -80,7 +80,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 
 	return webui.TabInfo{
 		ID:      "flashcards",
-		Title:   "Flashcards",
+		Title:   "🧠",
 		Content: html,
 		JSPath:  "/api/assets/flashcards/flashcards.js",
 	}

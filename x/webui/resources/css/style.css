@@ -15,7 +15,9 @@ header {
     padding: 0.6rem 1rem;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 0.25rem;
+    min-width: 0;
 }
 
 h1 {
@@ -60,14 +62,28 @@ h1 {
     background: #fd7e14;
 }
 
+#pinned-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    padding: 0.25rem 0;
+    border-right: 1px solid var(--border);
+    margin-right: 0.25rem;
+    padding-right: 0.5rem;
+}
+
 #tabs-nav {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: flex-start;
 }
 
 #tabs-nav::-webkit-scrollbar {
@@ -124,7 +140,7 @@ h1 {
     right: 12%;
     bottom: -8px;
     height: 3px;
-    background: linear-gradient(90deg, var(--accent), #b086ff);
+    background: linear-gradient(90deg, var(--accent), var(--purple-2));
     border-radius: 2px;
 }
 
@@ -229,7 +245,7 @@ input[type="date"] {
 }
 
 input[type="date"]:focus {
-    outline: 2px solid rgba(187, 134, 252, 0.2);
+    outline: 2px solid rgba(180, 144, 244, 0.25);
 }
 
 /* Controls layout */
@@ -358,7 +374,7 @@ input[type="date"]:focus {
 }
 
 .sun-night-icon svg {
-    color: #7c3aed; /* Purple for night */
+    color: var(--purple-3); /* Purple for night */
 }
 
 .sun-event {
@@ -595,7 +611,7 @@ input[type="date"]:focus {
     background-color: var(--accent-blue-bg);
     color: var(--text);
     font-weight: 600;
-    border-color: rgba(138, 97, 214, 0.12);
+    border-color: rgba(138, 82, 218, 0.12);
 }
 
 .alerts-layout .service-count {
@@ -704,7 +720,7 @@ input[type="date"]:focus {
 }
 
 .mark-all-seen-btn:hover {
-    background-color: rgba(139, 92, 246, 0.15);
+    background-color: rgba(138, 82, 218, 0.15);
 }
 
 .alert-checkbox {

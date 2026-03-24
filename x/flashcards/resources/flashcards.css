@@ -279,9 +279,9 @@
 /* New card button */
 .fc-new-btn {
     padding: 5px 14px;
-    background: #4c1d95;
+    background: var(--purple-5);
     color: #e9d5ff;
-    border: 1px solid #7c3aed;
+    border: 1px solid var(--purple-3);
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.85em;
@@ -289,10 +289,7 @@
 }
 
 .fc-new-btn:hover {
-    background: #5b21b6;
-}
-
-/* Modal */
+    background: var(--purple-4);
 .fc-modal {
     position: fixed;
     inset: 0;
@@ -349,7 +346,7 @@
 .fc-modal-box textarea:focus,
 .fc-modal-box input[type="text"]:focus {
     outline: none;
-    border-color: #7c3aed;
+    border-color: var(--purple-3);
 }
 
 .fc-modal-actions {
@@ -375,13 +372,13 @@
 }
 
 .fc-btn-primary {
-    background: #4c1d95;
+    background: var(--purple-5);
     color: #e9d5ff;
-    border-color: #7c3aed;
+    border-color: var(--purple-3);
 }
 
 .fc-btn-primary:hover {
-    background: #5b21b6;
+    background: var(--purple-4);
 }
 
 /* Markdown content inside card question/answer — mirrors .notes-view rules exactly */
@@ -491,5 +488,5 @@
 
 .fc-edit-btn:hover {
     color: #a78bfa;
-    border-color: #7c3aed;
+    border-color: var(--purple-3);
 }

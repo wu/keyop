@@ -40,6 +40,7 @@ export const handlesHorizontalNav = true;
         autolinkBtn: document.getElementById('notes-autolink-btn'),
         recentDropdown: document.getElementById('notes-recent-dropdown'),
         recentWrap: document.getElementById('notes-recent-wrap'),
+        recentBtn: document.getElementById('notes-recent-btn'),
         container: document.getElementById('notes-container'),
     };
 

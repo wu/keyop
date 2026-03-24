@@ -23,7 +23,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "tides",
-		Title: "Tides",
+		Title: "🌊",
 		Content: `<div id="tides-container">
 			<h3>Current Tide</h3>
 			<div id="tide-status">Loading tide...</div>
@@ -49,7 +49,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "tides",
-			Title:       "Tides",
+			Title:       "🌊",
 			Content:     `<div class="panel" id="panel-tides"><div class="panel-body">Loading...</div></div>`,
 			JSPath:      "/api/assets/tides/tides-panel.js",
 			Event:       "tides",

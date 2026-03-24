@@ -21,7 +21,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "messages",
-		Title: "Messages",
+		Title: "📊",
 		Content: `<div id="messages-container">
 <h3>Message Statistics</h3>
 <div id="messages-summary" style="display:flex;gap:2rem;margin-bottom:1rem;">
@@ -39,7 +39,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "messages",
-			Title:       "Messages",
+			Title:       "📊",
 			Content:     `<div class="panel" id="panel-messages"><div class="panel-body">Loading...</div></div>`,
 			JSPath:      "/api/assets/messengerStats/messages-panel.js",
 			Event:       "messenger_stats",

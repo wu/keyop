@@ -1,6 +1,7 @@
 import {initSSE} from './vendor/sse.js';
 
 const tabsNav = document.getElementById('tabs-nav');
+const pinnedTabs = document.getElementById('pinned-tabs');
 const tabsContent = document.getElementById('tabs-content');
 
 let activeTabId = null;
@@ -53,7 +54,11 @@ async function loadTabs() {
         } else {
             link.textContent = tab.title;
         }
-        tabsNav.appendChild(link);
+        if (tab.id === 'dashboard') {
+            pinnedTabs.appendChild(link);
+        } else {
+            tabsNav.appendChild(link);
+        }
 
         // Create tab content container
         const content = document.createElement('div');

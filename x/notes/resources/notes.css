@@ -173,7 +173,7 @@
 }
 
 .notes-new-btn:hover {
-    background-color: #9d6cdc;
+    background-color: var(--purple-3);
 }
 
 /* Recent notes dropdown */
@@ -678,7 +678,7 @@
     background-color: var(--accent-blue-bg);
     color: var(--text);
     font-weight: 600;
-    border-color: rgba(138, 97, 214, 0.24);
+    border-color: rgba(138, 82, 218, 0.24);
 }
 
 .notes-container .tag-item.kbd-focused,

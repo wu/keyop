@@ -50,7 +50,7 @@ func (svc *Service) WebUITab() webui.TabInfo {
 
 	return webui.TabInfo{
 		ID:      "tasks",
-		Title:   "Tasks",
+		Title:   "✅",
 		Content: string(htmlContent),
 		JSPath:  "/api/assets/tasks/tasks.js",
 	}

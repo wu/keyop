@@ -25,7 +25,7 @@ func (svc *Service) WebUIAssets() http.FileSystem {
 func (svc *Service) WebUITab() webui.TabInfo {
 	return webui.TabInfo{
 		ID:    "aurora",
-		Title: "Aurora",
+		Title: "🌌",
 		Content: `<div id="aurora-container">
 <h3>Current Aurora</h3>
 <div id="aurora-status">Loading aurora forecast...</div>
@@ -44,7 +44,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 	return []webui.PanelInfo{
 		{
 			ID:          "aurora",
-			Title:       "Aurora",
+			Title:       "🌌",
 			Content:     `<div class="panel" id="panel-aurora"><div class="panel-body">Loading...</div></div>`,
 			JSPath:      "/api/assets/aurora/aurora-panel.js",
 			Event:       "aurora_check",
