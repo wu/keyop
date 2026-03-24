@@ -52,6 +52,13 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 	switch action {
 	case "fetch-status":
 		return svc.fetchStatus()
+	case "remove-status":
+		if params != nil {
+			if statusKey, ok := params["statusKey"].(string); ok {
+				return svc.removeStatus(statusKey)
+			}
+		}
+		return map[string]any{"error": "missing statusKey parameter"}, nil
 	case "acknowledge-status":
 		if params != nil {
 			if statusName, ok := params["statusName"].(string); ok {
@@ -95,12 +102,12 @@ func (svc *Service) fetchStatus() (any, error) {
 		rows, err := db.Query(`
 			SELECT name, status_hostname, status, level, details, timestamp
 			FROM status
-			WHERE (name, timestamp) IN (
-				SELECT name, MAX(timestamp)
+			WHERE (name, status_hostname, timestamp) IN (
+				SELECT name, status_hostname, MAX(timestamp)
 				FROM status
-				GROUP BY name
+				GROUP BY name, status_hostname
 			)
-			ORDER BY name
+			ORDER BY status_hostname, name
 		`)
 		if err != nil {
 			// If query fails, return empty list (sqlite table may not exist yet)
@@ -119,6 +126,11 @@ func (svc *Service) fetchStatus() (any, error) {
 				continue
 			}
 
+			// Skip entries the user has removed
+			if state, exists := svc.states[statusKey(hostname, name)]; exists && state.Removed {
+				continue
+			}
+
 			// Derive level from status if empty
 			if level == "" {
 				switch status {
@@ -133,7 +145,8 @@ func (svc *Service) fetchStatus() (any, error) {
 
 			// Look up acknowledged status from in-memory state
 			acknowledged := false
-			if state, exists := svc.states[name]; exists {
+			stateKey := statusKey(hostname, name)
+			if state, exists := svc.states[stateKey]; exists {
 				acknowledged = state.Acknowledged
 			}
 
@@ -195,6 +208,18 @@ func (svc *Service) fetchStatus() (any, error) {
 	}
 
 	return map[string]any{"statuses": statuses}, nil
+}
+
+// removeStatus marks a service instance as removed so it is hidden from the status list.
+func (svc *Service) removeStatus(key string) (any, error) {
+	svc.statesMutex.Lock()
+	defer svc.statesMutex.Unlock()
+
+	state := svc.states[key]
+	state.Removed = true
+	svc.states[key] = state
+	svc.saveState()
+	return map[string]any{"removed": true}, nil
 }
 
 // acknowledgeStatus marks a status problem as acknowledged.

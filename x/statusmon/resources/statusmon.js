@@ -1,5 +1,6 @@
 let statusmonContainer = null;
-let currentStatuses = {}; // Cache of current status items keyed by name
+let currentStatuses = {}; // Cache of current status items keyed by "hostname:name" (or just "name" if no hostname)
+const removedStatuses = new Set(); // Keys removed by the user; re-shown on new incoming message
 let lastRefreshTime = null;
 
 import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
@@ -11,6 +12,10 @@ const LEVEL_COLORS = {
     'error': '#dc2626',      // dark red
     'info': '#3b82f6'        // blue
 };
+
+function statusItemKey(status) {
+    return status.hostname ? `${status.hostname}:${status.name}` : status.name;
+}
 
 export async function init(container) {
     statusmonContainer = container;
@@ -31,8 +36,11 @@ export function onMessage(msg) {
     // Acknowledged state is preserved from cache; it is only changed by explicit user action.
     if (msg.data && msg.data.name) {
         const statusData = msg.data;
-        const oldStatus = currentStatuses[statusData.name];
-        currentStatuses[statusData.name] = {
+        const key = statusItemKey(statusData);
+        const oldStatus = currentStatuses[key];
+        // Re-show if a new message arrives for a previously removed entry
+        removedStatuses.delete(key);
+        currentStatuses[key] = {
             name: statusData.name,
             status: statusData.status,
             details: statusData.details,
@@ -75,7 +83,7 @@ async function refreshStatus() {
         // Cache the initial status data
         currentStatuses = {};
         statuses.forEach(status => {
-            currentStatuses[status.name] = status;
+            currentStatuses[statusItemKey(status)] = status;
         });
 
         lastRefreshTime = Date.now();
@@ -99,7 +107,7 @@ function renderStatusList() {
         list = statusmonContainer.querySelector('#statusmon-list');
     }
 
-    const statuses = Object.values(currentStatuses);
+    const statuses = Object.values(currentStatuses).filter(s => !removedStatuses.has(statusItemKey(s)));
 
     if (statuses.length === 0) {
         list.innerHTML = '<div class="no-status">No status items</div>';
@@ -117,6 +125,7 @@ function renderStatusList() {
     // Parse name to extract hostname and service
     // Format: "hostname:service" or just "service"
     const rows = statuses.map(status => {
+        const key = statusItemKey(status);
         const hostname = status.hostname || '';
         const level = (status.level || 'ok').toLowerCase();
         const color = LEVEL_COLORS[level] || LEVEL_COLORS['info'];
@@ -128,9 +137,9 @@ function renderStatusList() {
         let ackButton = '';
         if (isProblem) {
             if (status.acknowledged) {
-                ackButton = `<button class="ack-button unacked-btn" data-name="${status.name}" title="Un-acknowledge">✓ Acked</button>`;
+                ackButton = `<button class="ack-button unacked-btn" data-name="${key}" title="Un-acknowledge">✓ Acked</button>`;
             } else {
-                ackButton = `<button class="ack-button ack-btn" data-name="${status.name}" title="Acknowledge">Ack</button>`;
+                ackButton = `<button class="ack-button ack-btn" data-name="${key}" title="Acknowledge">Ack</button>`;
             }
         }
 
@@ -138,7 +147,7 @@ function renderStatusList() {
         const rowClass = status.acknowledged ? 'status-row acknowledged' : 'status-row';
 
         return `
-            <tr class="${rowClass}" data-name="${status.name}">
+            <tr class="${rowClass}" data-name="${key}">
                 <td class="status-hostname">${hostname}</td>
                 <td class="status-service">${status.name}</td>
                 <td class="status-status">
@@ -147,6 +156,7 @@ function renderStatusList() {
                 <td class="status-text">${status.details || ''}</td>
                 <td class="status-lastseen">${lastSeenHtml}</td>
                 <td class="status-ack">${ackButton}</td>
+                <td class="status-remove"><button class="remove-button" data-key="${key}" style="background: none; border: none; color: var(--text); opacity: 0.4; cursor: pointer; font-size: 0.9rem; padding: 0 2px; line-height: 1;" title="Remove from list">✕</button></td>
             </tr>
         `;
     }).join('');
@@ -161,6 +171,7 @@ function renderStatusList() {
                     <th>Details</th>
                     <th>Last Seen</th>
                     <th>Action</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -176,6 +187,7 @@ function renderStatusList() {
 
     // Attach click handlers to ack buttons
     attachAckHandlers();
+    attachRemoveHandlers();
 }
 
 function updateStatusTabBadge(criticalCount, warningCount) {
@@ -201,6 +213,32 @@ function updateStatusTabBadge(criticalCount, warningCount) {
         warningBadge.textContent = warningCount;
         warningBadge.setAttribute('data-badge-style', 'warning');
         tabLink.appendChild(warningBadge);
+    }
+}
+
+function attachRemoveHandlers() {
+    document.querySelectorAll('.remove-button').forEach(btn => {
+        btn.addEventListener('click', handleRemoveClick);
+    });
+}
+
+async function handleRemoveClick(event) {
+    event.stopPropagation();
+    const key = event.target.dataset.key;
+    if (!key) return;
+
+    removedStatuses.add(key);
+    delete currentStatuses[key];
+    renderStatusList();
+
+    try {
+        await fetch('/api/tabs/statusmon/action/remove-status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({statusKey: key}),
+        });
+    } catch (err) {
+        console.error('[statusmon] Failed to remove status:', err);
     }
 }
 

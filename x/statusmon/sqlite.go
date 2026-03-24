@@ -76,16 +76,17 @@ func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 	}
 
 	// Extract StatusEvent if available
-	var name, status, level, details string
+	var name, statusHostname, status, level, details string
 	if se, ok := core.AsType[*core.StatusEvent](msg.Data); ok && se != nil {
 		name = se.Name
+		statusHostname = se.Hostname
 		status = se.Status
 		level = se.Level
 		details = se.Details
 	}
 
 	return `INSERT INTO status (timestamp, service_name, service_type, hostname, event, name, status_hostname, status, level, details, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		[]any{msg.Timestamp, msg.ServiceName, msg.ServiceType, msg.Hostname, msg.Event, name, msg.Hostname, status, level, details, dataJSON}
+		[]any{msg.Timestamp, msg.ServiceName, msg.ServiceType, msg.Hostname, msg.Event, name, statusHostname, status, level, details, dataJSON}
 }
 
 // SetSQLiteDB allows the runtime to provide a pointer to the DB instance.

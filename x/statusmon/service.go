@@ -20,6 +20,7 @@ type serviceState struct {
 	LastAlertTime time.Time `json:"lastAlertTime,omitempty"`
 	AlertCount    int       `json:"alertCount,omitempty"`
 	Acknowledged  bool      `json:"acknowledged,omitempty"`
+	Removed       bool      `json:"removed,omitempty"`
 }
 
 // Service collects per-service status events and computes an aggregate health score for dashboards and alerts.
@@ -132,6 +133,9 @@ func (svc *Service) Initialize() error {
 				if ack, ok := m["acknowledged"].(bool); ok {
 					st.Acknowledged = ack
 				}
+				if removed, ok := m["removed"].(bool); ok {
+					st.Removed = removed
+				}
 				svc.states[k] = st
 			}
 		}
@@ -150,20 +154,30 @@ func (svc *Service) Initialize() error {
 	return nil
 }
 
+func statusKey(hostname, name string) string {
+	if hostname != "" {
+		return hostname + ":" + name
+	}
+	return name
+}
+
 func (svc *Service) handleStatusEvent(statusEvent *core.StatusEvent) error {
 	if statusEvent.Name == "" {
 		return nil
 	}
 
+	key := statusKey(statusEvent.Hostname, statusEvent.Name)
+
 	svc.statesMutex.Lock()
 	defer svc.statesMutex.Unlock()
 
-	state := svc.states[statusEvent.Name]
+	state := svc.states[key]
 	state.Status = statusEvent.Status
 	state.Details = statusEvent.Details
 	state.Level = statusEvent.Level
 	state.LastSeen = time.Now()
-	svc.states[statusEvent.Name] = state
+	state.Removed = false // re-show if a new event arrives after removal
+	svc.states[key] = state
 
 	// Persist the updated state
 	svc.saveState()
@@ -189,10 +203,11 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	// and forward it so sqlite can capture it
 	name := fmt.Sprintf("%s:%s", msg.ServiceType, msg.ServiceName)
 	statusEvent := &core.StatusEvent{
-		Name:    name,
-		Status:  msg.Status,
-		Details: msg.Text,
-		Level:   msg.Status, // Derive level from status
+		Name:     name,
+		Hostname: msg.Hostname,
+		Status:   msg.Status,
+		Details:  msg.Text,
+		Level:    msg.Status, // Derive level from status
 	}
 
 	// Send the status event back so sqlite can capture it
@@ -222,7 +237,7 @@ func (svc *Service) messageHandler(msg core.Message) error {
 	svc.statesMutex.Lock()
 	defer svc.statesMutex.Unlock()
 
-	key := name
+	key := statusKey(msg.Hostname, name)
 	state, exists := svc.states[key]
 
 	isProblem := func(s string) bool {

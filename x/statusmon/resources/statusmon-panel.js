@@ -1,5 +1,9 @@
 let panelBody = null;
-const panelStatuses = {}; // local cache: name -> status object
+const panelStatuses = {}; // local cache: "hostname:name" -> status object
+
+function panelStatusKey(s) {
+    return s.hostname ? `${s.hostname}:${s.name}` : s.name;
+}
 
 export function init(el) {
     panelBody = el.querySelector('.panel-body') || el;
@@ -11,7 +15,7 @@ export function init(el) {
         .then(data => {
             if (data && data.statuses) {
                 data.statuses.forEach(s => {
-                    panelStatuses[s.name] = s;
+                    panelStatuses[panelStatusKey(s)] = s;
                 });
                 updatePanel(Object.values(panelStatuses));
             }
@@ -25,8 +29,9 @@ export function onMessage(msg) {
     // Update local cache directly from SSE — no server fetch needed
     if (msg['data-type'] === 'core.status.v1' && msg.data && msg.data.name) {
         const s = msg.data;
-        panelStatuses[s.name] = {
-            ...panelStatuses[s.name],
+        const key = panelStatusKey(s);
+        panelStatuses[key] = {
+            ...panelStatuses[key],
             name: s.name,
             status: s.status,
             level: s.level,

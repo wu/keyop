@@ -3,6 +3,7 @@ package diskspace
 import (
 	"fmt"
 	"keyop/core"
+	"keyop/util"
 	"strings"
 	"syscall"
 
@@ -86,6 +87,7 @@ func (svc *Service) Check() error {
 	}
 
 	correlationID := uuid.NewString()
+	hostname, _ := util.GetShortHostname(svc.Deps.MustGetOsProvider())
 
 	// Determine overall status level
 	overallLevel := "ok"
@@ -130,10 +132,11 @@ func (svc *Service) Check() error {
 		statusDetails = strings.Join(problemDetails, "; ")
 	}
 	statusEvent := core.StatusEvent{
-		Name:    svc.Cfg.Name,
-		Status:  overallLevel,
-		Details: statusDetails,
-		Level:   overallLevel,
+		Name:     svc.Cfg.Name,
+		Hostname: hostname,
+		Status:   overallLevel,
+		Details:  statusDetails,
+		Level:    overallLevel,
 	}
 	if err := messenger.Send(core.Message{
 		Correlation: correlationID,
