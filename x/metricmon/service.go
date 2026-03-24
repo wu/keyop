@@ -245,11 +245,10 @@ func (svc *Service) messageHandler(msg core.Message) error {
 		Text:        msg.Text,
 		Summary:     msg.Summary,
 		Data: &core.StatusEvent{
-			Name:     msg.MetricName,
-			Hostname: msg.Hostname,
-			Status:   currentStatus,
-			Level:    currentStatus,
-			Details:  fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric),
+			Name:    msg.MetricName,
+			Status:  currentStatus,
+			Level:   currentStatus,
+			Details: fmt.Sprintf("%s: %0.2f", msg.MetricName, msg.Metric),
 		},
 	}
 

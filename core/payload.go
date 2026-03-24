@@ -263,11 +263,10 @@ func (e ErrorEvent) PayloadType() string { return "core.error.v1" }
 // Name identifies the component, Status is the current state, Details provides
 // additional information, and Level indicates the severity (e.g., "ok", "warning", "critical").
 type StatusEvent struct {
-	Name     string `json:"name"`               // Unique identifier for this status
-	Hostname string `json:"hostname,omitempty"` // Hostname where status originated
-	Status   string `json:"status"`             // Current status value
-	Details  string `json:"details"`            // Additional status information
-	Level    string `json:"level,omitempty"`    // Severity level (e.g., "ok", "warning", "critical")
+	Name    string `json:"name"`            // Unique identifier for this status
+	Status  string `json:"status"`          // Current status value
+	Details string `json:"details"`         // Additional status information
+	Level   string `json:"level,omitempty"` // Severity level (e.g., "ok", "warning", "critical")
 }
 
 func (s StatusEvent) PayloadType() string { return "core.status.v1" }
