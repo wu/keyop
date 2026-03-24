@@ -1,0 +1,40 @@
+# Disk space monitoring service.
+#
+# Emits:
+#   diskspace_event  — FilesystemUsage for all monitored filesystems (bytes, percent used/free, level)
+#   status_event     — overall health: "ok", "warning", or "critical"
+
+x: diskspace
+name: diskspace
+freq: 5m
+
+config:
+
+  # Percentage used at which a filesystem is considered in warning state (default: 80)
+  warningThreshold: 80
+
+  # Percentage used at which a filesystem is considered in critical state (default: 90)
+  criticalThreshold: 90
+
+  # Optional: only monitor these mount points. If omitted, all real filesystems are monitored.
+  # include:
+  #   - /
+  #   - /data
+
+  # Optional: exclude these mount points (or any path with this prefix).
+  exclude:
+    - /boot/efi
+    - /run
+
+  pub_preprocess:
+    - when: 'event eq "diskspace_event"'
+      updates:
+        channelName: diskspace
+
+    - when: 'event eq "status_event" and state ne "ok"'
+      updates:
+        channelName: status
+
+    - when: 'event eq "status_event" and state eq "ok"'
+      updates:
+        channelName: status

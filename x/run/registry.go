@@ -6,6 +6,7 @@ import (
 	"keyop/x/aurora"
 	"keyop/x/condition"
 	"keyop/x/cpuMonitor"
+	"keyop/x/diskspace"
 	"keyop/x/errorevents"
 	"keyop/x/flashcards"
 	"keyop/x/git"
@@ -59,6 +60,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"condition": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return condition.NewService(deps, cfg)
+	},
+	"diskspace": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return diskspace.NewService(deps, cfg)
 	},
 	"graphite": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return graphite.NewService(deps, cfg)
