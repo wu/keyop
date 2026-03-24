@@ -1,0 +1,22 @@
+x: switch
+
+config:
+
+  # GPIO pin number (BCM numbering)
+  pin: 23
+
+  pub_preprocess:
+    - when: 'event eq "switch_event"'
+      updates:
+        channelName: switch
+
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+
+subs:
+
+  switch:
+    name: switch-command
+    description: Subscribe to switch commands from the thermostat
+

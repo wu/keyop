@@ -135,40 +135,37 @@ func (svc *Service) tempHandler(msg core.Message) error {
 		Text:        fmt.Sprintf("%s target state is %s", svc.Cfg.Name, event.HeaterTargetState),
 		State:       event.HeaterTargetState,
 		Data:        &event,
-		DataType:    event.PayloadType(),
 		Correlation: msg.Uuid,
 	}); err != nil {
 		logger.Warn("failed to send thermostat_event message", "err", err)
 	}
 
-	heaterSwitch := core.SwitchEvent{DeviceName: svc.HeaterName, State: event.HeaterTargetState}
+	heaterCmd := core.SwitchCommand{DeviceName: svc.HeaterName, State: event.HeaterTargetState}
 	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "switch_event",
-		Text:        fmt.Sprintf("%s state is %s", svc.HeaterName, event.HeaterTargetState),
+		Event:       "switch_command",
+		Text:        fmt.Sprintf("%s target state is %s", svc.HeaterName, event.HeaterTargetState),
 		State:       event.HeaterTargetState,
-		Data:        &heaterSwitch,
-		DataType:    heaterSwitch.PayloadType(),
+		Data:        &heaterCmd,
 		Correlation: msg.Uuid,
 	}); err != nil {
-		logger.Warn("failed to send heater switch_event message", "err", err)
+		logger.Warn("failed to send heater switch_command message", "err", err)
 	}
 
-	coolerSwitch := core.SwitchEvent{DeviceName: svc.CoolerName, State: event.CoolerTargetState}
+	coolerCmd := core.SwitchCommand{DeviceName: svc.CoolerName, State: event.CoolerTargetState}
 	if err := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
-		Event:       "switch_event",
-		Text:        fmt.Sprintf("%s state is %s", svc.CoolerName, event.CoolerTargetState),
+		Event:       "switch_command",
+		Text:        fmt.Sprintf("%s target state is %s", svc.CoolerName, event.CoolerTargetState),
 		State:       event.CoolerTargetState,
-		Data:        &coolerSwitch,
-		DataType:    coolerSwitch.PayloadType(),
+		Data:        &coolerCmd,
 		Correlation: msg.Uuid,
 	}); err != nil {
-		logger.Warn("failed to send cooler switch_event message", "err", err)
+		logger.Warn("failed to send cooler switch_command message", "err", err)
 	}
 
 	return nil

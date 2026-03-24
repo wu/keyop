@@ -163,6 +163,12 @@ func init() {
 	if err := reg.Register("switch", func() any { return &SwitchEvent{} }); err != nil {
 		panic(fmt.Sprintf("failed to register switch: %v", err))
 	}
+	if err := reg.Register("core.switch.command.v1", func() any { return &SwitchCommand{} }); err != nil {
+		panic(fmt.Sprintf("failed to register core.switch.command.v1: %v", err))
+	}
+	if err := reg.Register("switch.command", func() any { return &SwitchCommand{} }); err != nil {
+		panic(fmt.Sprintf("failed to register switch.command: %v", err))
+	}
 
 	globalPayloadRegistry = reg
 }
@@ -279,7 +285,15 @@ type TempEvent struct {
 
 func (t TempEvent) PayloadType() string { return "core.temp.v1" }
 
-// SwitchEvent represents a switch (on/off) state change for a named device.
+// SwitchCommand represents a command to set a named switch device to a target state.
+type SwitchCommand struct {
+	DeviceName string `json:"deviceName"` // Name of the switch device
+	State      string `json:"state"`      // "ON" or "OFF"
+}
+
+func (s SwitchCommand) PayloadType() string { return "core.switch.command.v1" }
+
+// SwitchEvent represents the current state of a named switch device.
 type SwitchEvent struct {
 	DeviceName string `json:"deviceName"` // Name of the switch device
 	State      string `json:"state"`      // "ON" or "OFF"

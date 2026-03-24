@@ -36,6 +36,7 @@ import (
 	"keyop/x/sslMonitor"
 	"keyop/x/statusmon"
 	"keyop/x/sun"
+	"keyop/x/switchgpio"
 	"keyop/x/tasks"
 	"keyop/x/temp"
 	"keyop/x/thermostat"
@@ -158,6 +159,10 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	"flashcards": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return flashcards.NewService(deps, cfg)
 	},
+	"switchgpio": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return switchgpio.NewService(deps, cfg)
+	},
+
 	"tasks": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return tasks.NewService(deps, cfg)
 	},

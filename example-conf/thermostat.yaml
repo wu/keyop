@@ -1,0 +1,32 @@
+x: thermostat
+
+config:
+
+  minTemp: 40.0
+  maxTemp: 70.0
+  mode: auto
+  hysteresis: 2.0
+
+  heaterName: "coop-heater"
+  coolerName: "coop-fan"
+
+  pub_preprocess:
+    - when: 'event eq "thermostat_event"'
+      updates:
+        channelName: thermostat
+
+    - when: 'event eq "switch_command"'
+      updates:
+        channelName: switch-command
+
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+
+subs:
+  temp:
+    name: temp
+    description: read temps from temp sensor
+    maxAge: 5m
+
+
