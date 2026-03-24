@@ -113,9 +113,13 @@ h1 {
     letter-spacing: 0.2px;
     background: transparent;
     position: relative;
-    transition: color 120ms ease, background-color 120ms ease;
+    transition: color 120ms ease, background-color 120ms ease, padding-right 120ms ease;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.tab-link:has(.tab-badge) {
+    padding-right: 1.8rem;
 }
 
 .tab-link:hover {
@@ -1110,15 +1114,15 @@ input[type="date"]:focus {
     color: white;
     font-size: 0.65rem;
     font-weight: bold;
-    min-width: 18px;
-    height: 18px;
-    width: 18px;
-    padding: 0;
-    border-radius: 50%;
-    margin-left: 6px;
-    position: relative;
-    top: -2px;
-    flex-shrink: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    position: absolute;
+    top: 50%;
+    right: 0.35rem;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .tab-badge[data-badge-style="critical"] {
