@@ -412,8 +412,8 @@ func (svc *Service) generateIdleReport(_ core.MessengerApi, now time.Time, start
 	// Do not emit an "idle_report" event; reports are for the Web UI only.
 	// Keep returning the markdown so callers (web UI action) can render it.
 
-	if force && start.IsZero() && end.IsZero() {
-		// Only update lastReportDay if it was a standard "last 24h" report
+	if !force || (start.IsZero() && end.IsZero()) {
+		// Update lastReportDay for both nightly (force=false) and standard 24h forced reports
 		svc.lastReportDay = reportDay
 		_ = svc.Deps.MustGetStateStore().Save(svc.Cfg.Name, ServiceState{IsIdle: svc.isIdle, LastTransition: svc.lastTransition, LastAlertHours: svc.lastAlertHours, LastReportDay: svc.lastReportDay})
 	}
