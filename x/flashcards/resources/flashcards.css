@@ -167,7 +167,7 @@
 /* Due indicator */
 .fc-due {
     font-size: 0.72em;
-    color: var(--text-muted, #666);
+    color: var(--text-secondary, #716f6c);
     white-space: nowrap;
 }
 
@@ -179,7 +179,7 @@
 .fc-delete-btn {
     background: none;
     border: none;
-    color: var(--text-muted, #555);
+    color: var(--text-secondary, #716f6c);
     cursor: pointer;
     padding: 0 2px;
     font-size: 0.8em;
@@ -207,7 +207,7 @@
     font-size: 0.75em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #666);
+    color: var(--text-secondary, #716f6c);
     margin-top: 24px;
     margin-bottom: 32px;
 }
@@ -290,6 +290,8 @@
 
 .fc-new-btn:hover {
     background: var(--purple-4);
+}
+
 .fc-modal {
     position: fixed;
     inset: 0;
@@ -379,6 +381,26 @@
 
 .fc-btn-primary:hover {
     background: var(--purple-4);
+}
+
+/* Markdown tables */
+.fc-md table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 16px 0;
+}
+
+.fc-md table th {
+    background-color: var(--tab-content-bg);
+    padding: 8px;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-weight: 600;
+}
+
+.fc-md table td {
+    padding: 8px;
+    border: 1px solid var(--border);
 }
 
 /* Markdown content inside card question/answer — mirrors .notes-view rules exactly */
@@ -479,7 +501,7 @@
     background: none;
     border: 1px solid var(--border);
     border-radius: 3px;
-    color: var(--text-muted, #888);
+    color: var(--text-secondary, #716f6c);
     cursor: pointer;
     padding: 1px 7px;
     font-size: 0.75em;

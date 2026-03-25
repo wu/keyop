@@ -164,6 +164,7 @@ async function renderCards(cards) {
         if (isExpanded) {
             const aEl = item.querySelector('.fc-answer-text');
             if (aEl) aEl.innerHTML = await renderMarkdown(card.answer);
+            loadSchedulePreviews(card.id);
         }
     }
 }
@@ -252,9 +253,6 @@ async function toggleCard(cardId) {
     expandedCardId = expandedCardId === cardId ? null : cardId;
     await renderCards(allCards);
     setupNav();
-    if (expandedCardId === cardId) {
-        loadSchedulePreviews(cardId);
-    }
 }
 
 function relativeTime(isoStr) {

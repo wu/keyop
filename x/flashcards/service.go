@@ -453,11 +453,16 @@ func scheduleAnki(ef float64, interval, reps int64, cardState string, currentSte
 			newInterval = max64(interval+1, int64(math.Round(float64(interval)*1.2)))
 			dueDate = midnightInDays(int(newInterval))
 		case "correct":
-			newInterval = max64(interval+1, int64(math.Round(float64(interval)*ef)))
+			// Correct must always be strictly longer than hard.
+			hardInterval := max64(interval+1, int64(math.Round(float64(interval)*1.2)))
+			newInterval = max64(hardInterval+1, int64(math.Round(float64(interval)*ef)))
 			dueDate = midnightInDays(int(newInterval))
 		case "easy":
 			newEF = clampEF(ef + 0.15)
-			newInterval = max64(interval+1, int64(math.Round(float64(interval)*ef*1.3)))
+			// Easy must always be strictly longer than correct.
+			hardInterval := max64(interval+1, int64(math.Round(float64(interval)*1.2)))
+			correctInterval := max64(hardInterval+1, int64(math.Round(float64(interval)*ef)))
+			newInterval = max64(correctInterval+1, int64(math.Round(float64(interval)*ef*1.3)))
 			dueDate = midnightInDays(int(newInterval))
 		}
 		newReps = reps + 1
