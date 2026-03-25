@@ -96,9 +96,9 @@ func todayDir() string {
 	return time.Now().Format("2006-01-02")
 }
 
-var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+var sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9_.]`)
 
-// sanitizeFilename sanitizes the filename base to [a-zA-Z0-9_], preserving the extension.
+// sanitizeFilename sanitizes the filename base to [a-zA-Z0-9_.], preserving the extension.
 // Example: "my file (1).pdf" → "my_file__1_.pdf"
 func sanitizeFilename(name string) string {
 	if name == "" {

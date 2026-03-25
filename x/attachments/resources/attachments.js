@@ -52,7 +52,7 @@ function renderShell() {
             <label>Filename on server</label>
             <input type="text" id="att-filename-input" autocomplete="off" spellcheck="false">
             <div class="att-modal-hint">
-              Allowed characters: a–z, A–Z, 0–9, _ (other characters are replaced with _)
+              Allowed characters: a–z, A–Z, 0–9, _ . (other characters are replaced with _)
             </div>
             <div id="att-upload-progress" class="att-progress" style="display:none"></div>
             <div class="att-modal-actions">
@@ -110,17 +110,17 @@ function setView(view) {
 
 // ── Filename sanitization ─────────────────────────────────────────────────────
 
-// Mirrors server-side sanitizeFilename: replaces non-[a-zA-Z0-9_] in the base,
+// Mirrors server-side sanitizeFilename: replaces non-[a-zA-Z0-9_.] in the base,
 // keeps the extension with only alphanumeric chars.
 function sanitizeDisplay(name) {
     if (!name) return '';
     const lastDot = name.lastIndexOf('.');
     if (lastDot > 0) {
-        const base = name.slice(0, lastDot).replace(/[^a-zA-Z0-9_]/g, '_');
+        const base = name.slice(0, lastDot).replace(/[^a-zA-Z0-9_.]/g, '_');
         const ext = name.slice(lastDot + 1).replace(/[^a-zA-Z0-9]/g, '_');
         return ext ? base + '.' + ext : base;
     }
-    return name.replace(/[^a-zA-Z0-9_]/g, '_');
+    return name.replace(/[^a-zA-Z0-9_.]/g, '_');
 }
 
 // ── Upload modal ──────────────────────────────────────────────────────────────
@@ -143,6 +143,8 @@ function closeModal() {
     pendingFile = null;
     document.getElementById('att-modal').style.display = 'none';
     document.getElementById('att-upload-progress').style.display = 'none';
+    const confirmBtn = document.getElementById('att-confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = false;
 }
 
 async function confirmUpload() {
