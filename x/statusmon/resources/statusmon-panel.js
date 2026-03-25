@@ -90,7 +90,7 @@ function updatePanel(statuses) {
     if (okServices === totalServices) {
         // All OK - show label and count like sun-label/sun-value structure
         html += '<div style="font-size: 0.75rem; color: var(--text); opacity: 0.7;">Overall Status</div>';
-        html += `<div style="font-size: 1rem; font-weight: 600; color: var(--accent-green, #10b981); margin-top: 4px;">${okServices} OK</div>`;
+        html += `<div style="font-size: 1rem; font-weight: 600; color: var(--accent-green); margin-top: 4px;">${okServices} OK</div>`;
     } else {
         // Show problems - compact format
         let problemsHtml = '';

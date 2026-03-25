@@ -30,6 +30,8 @@
     --accent-blue: var(--purple-3);
     --accent-blue-bg: var(--purple-6);
     --accent-orange: var(--time-elapsed);
+    --accent-green: #10b981; /* emerald green — ok/success states */
+    --accent-red: #ef4444; /* red — error/critical states */
     --tag-color: var(--purple-3);
 
     --accent-text: #1a1a1a;
