@@ -335,6 +335,25 @@
     text-decoration: none;
 }
 
+.journal-view table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 16px 0;
+}
+
+.journal-view table th {
+    background-color: var(--tab-content-bg);
+    padding: 8px;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-weight: 600;
+}
+
+.journal-view table td {
+    padding: 8px;
+    border: 1px solid var(--border);
+}
+
 /* Back button hidden on desktop */
 .journal-back-btn {
     display: none;

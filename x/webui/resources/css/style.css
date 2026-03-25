@@ -230,13 +230,13 @@ main {
 
 .report-markdown th, .report-markdown td {
     border: 1px solid var(--border);
-    padding: 0.5rem;
+    padding: 8px;
     text-align: left;
 }
 
 .report-markdown th {
-    background-color: var(--header-bg);
-    color: var(--accent);
+    background-color: var(--tab-content-bg);
+    font-weight: 600;
 }
 
 /* Date input styling to match dark theme */

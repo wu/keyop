@@ -7,11 +7,34 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/alecthomas/chroma/v2"
+	chromastyles "github.com/alecthomas/chroma/v2/styles"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	goldmark_html "github.com/yuin/goldmark/renderer/html"
 )
+
+// customMonokaiStyle is monokai with warmer, less saturated replacements:
+//   - #f92672 (hot pink/red) → #e8884f (muted orange) for tags, operators, namespaces
+//   - #e6db74 (yellow)       → #a8c97f (soft green)   for string literals
+var customMonokaiStyle = func() *chroma.Style {
+	base := chromastyles.Get("monokai")
+	b := base.Builder()
+	orange := "#e8884f"
+	green := "#a8c97f"
+	b.Add(chroma.KeywordNamespace, orange)
+	b.Add(chroma.NameTag, orange)
+	b.Add(chroma.Operator, orange)
+	b.Add(chroma.GenericDeleted, orange)
+	b.Add(chroma.LiteralDate, green)
+	b.Add(chroma.LiteralString, green)
+	style, err := b.Build()
+	if err != nil {
+		panic("failed to build custom monokai style: " + err.Error())
+	}
+	return style
+}()
 
 // RenderMarkdown converts markdown to HTML using goldmark, preserving visual list grouping.
 // It preprocesses the markdown to ensure blank lines between list items create separate lists,
@@ -31,9 +54,9 @@ func RenderMarkdown(content string) (string, error) {
 		goldmark.WithExtensions(
 			extension.Table,
 			highlighting.NewHighlighting(
-				highlighting.WithStyle("monokai"),
+				highlighting.WithCustomStyle(customMonokaiStyle),
 				highlighting.WithFormatOptions(
-				// Use the Monokai theme which works well with dark backgrounds
+				// Use customised Monokai theme which works well with dark backgrounds
 				),
 			),
 		),
