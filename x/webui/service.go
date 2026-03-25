@@ -47,6 +47,12 @@ type AssetProvider interface {
 	WebUIAssets() http.FileSystem
 }
 
+// RouteProvider allows a service to register custom HTTP routes on the webui mux.
+// Called during webui Initialize(), before the server starts.
+type RouteProvider interface {
+	RegisterRoutes(mux *http.ServeMux)
+}
+
 // Service provides a web interface for the system.
 type Service struct {
 	Deps core.Dependencies
@@ -60,6 +66,9 @@ type Service struct {
 
 	assetProviders   map[string]AssetProvider
 	assetProvidersMu sync.RWMutex
+
+	routeProviders   []RouteProvider
+	routeProvidersMu sync.Mutex
 
 	server *http.Server
 	port   int
@@ -106,6 +115,12 @@ func (svc *Service) RegisterProvider(serviceType string, provider TabProvider) {
 		svc.assetProvidersMu.Lock()
 		svc.assetProviders[serviceType] = ap
 		svc.assetProvidersMu.Unlock()
+	}
+
+	if rp, ok := provider.(RouteProvider); ok {
+		svc.routeProvidersMu.Lock()
+		svc.routeProviders = append(svc.routeProviders, rp)
+		svc.routeProvidersMu.Unlock()
 	}
 }
 
@@ -175,6 +190,14 @@ func (svc *Service) Initialize() error {
 	// Add no-cache headers for JS and CSS files
 	mux.HandleFunc("GET /js/{path...}", svc.handleJSAsset)
 	mux.HandleFunc("GET /css/{path...}", svc.handleCSSAsset)
+
+	// Let services register their own custom routes (e.g. file upload endpoints).
+	svc.routeProvidersMu.Lock()
+	for _, rp := range svc.routeProviders {
+		rp.RegisterRoutes(mux)
+	}
+	svc.routeProvidersMu.Unlock()
+
 	fileServer := http.FileServer(http.FS(resourcesFS()))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// If requesting HTML, JS, or CSS, set no-cache headers so browsers will revalidate.

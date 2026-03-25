@@ -16,6 +16,14 @@
         <button class="notes-btn notes-autolink-btn" id="notes-autolink-btn" style="display:none;"
                 title="Auto-link selected text to matching note titles">🔗 Auto-link
         </button>
+        <div class="notes-attach-wrap" id="notes-attach-wrap" style="display:none; position:relative;">
+            <button class="notes-btn notes-attach-btn" id="notes-attach-btn" title="Insert attachment">📎 Attach</button>
+            <div class="notes-attach-picker" id="notes-attach-picker" style="display:none;">
+                <input autocomplete="off" class="notes-attach-search" id="notes-attach-search"
+                       placeholder="Search attachments…" spellcheck="false" type="text">
+                <div class="notes-attach-list" id="notes-attach-list"></div>
+            </div>
+        </div>
         <div class="notes-recent-wrap" id="notes-recent-wrap">
             <button class="notes-btn notes-recent-btn" id="notes-recent-btn" title="Recently visited notes">🕐 Recent
             </button>

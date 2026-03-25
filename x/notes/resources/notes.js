@@ -41,6 +41,11 @@ export const handlesHorizontalNav = true;
         recentDropdown: document.getElementById('notes-recent-dropdown'),
         recentWrap: document.getElementById('notes-recent-wrap'),
         recentBtn: document.getElementById('notes-recent-btn'),
+        attachWrap: document.getElementById('notes-attach-wrap'),
+        attachBtn: document.getElementById('notes-attach-btn'),
+        attachPicker: document.getElementById('notes-attach-picker'),
+        attachSearch: document.getElementById('notes-attach-search'),
+        attachList: document.getElementById('notes-attach-list'),
         container: document.getElementById('notes-container'),
     };
 
@@ -431,6 +436,8 @@ export const handlesHorizontalNav = true;
         elements.saveBtn.style.display = hidden ? 'none' : 'block';
         elements.cancelBtn.style.display = hidden ? 'none' : 'block';
         if (elements.autolinkBtn) elements.autolinkBtn.style.display = hidden ? 'none' : 'block';
+        if (elements.attachWrap) elements.attachWrap.style.display = hidden ? 'none' : 'inline-block';
+        if (hidden) closeAttachPicker();
     }
 
     function cancelEdit() {
@@ -638,7 +645,134 @@ export const handlesHorizontalNav = true;
         if (elements.recentWrap && !elements.recentWrap.contains(e.target)) {
             closeRecentDropdown();
         }
+        if (elements.attachWrap && !elements.attachWrap.contains(e.target)) {
+            closeAttachPicker();
+        }
     });
+
+    // ── Attachment picker ─────────────────────────────────────────────────────
+
+    let allAttachments = [];
+
+    if (elements.attachBtn) {
+        elements.attachBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleAttachPicker();
+        });
+    }
+
+    if (elements.attachSearch) {
+        elements.attachSearch.addEventListener('input', () => {
+            const q = elements.attachSearch.value.toLowerCase();
+            const filtered = q
+                ? allAttachments.filter(f =>
+                    f.storedFilename.toLowerCase().includes(q) ||
+                    f.originalFilename.toLowerCase().includes(q))
+                : allAttachments;
+            renderAttachPickerList(filtered);
+        });
+        elements.attachSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                closeAttachPicker();
+            }
+        });
+    }
+
+    function toggleAttachPicker() {
+        if (elements.attachPicker && elements.attachPicker.style.display !== 'none') {
+            closeAttachPicker();
+        } else {
+            openAttachPicker();
+        }
+    }
+
+    async function openAttachPicker() {
+        if (!elements.attachPicker) return;
+        elements.attachPicker.style.display = 'block';
+        if (elements.attachSearch) {
+            elements.attachSearch.value = '';
+            setTimeout(() => elements.attachSearch.focus(), 50);
+        }
+        if (elements.attachList) elements.attachList.textContent = 'Loading…';
+        try {
+            const resp = await fetch('/api/tabs/attachments/action/list-files', {method: 'POST'});
+            if (resp.ok) {
+                const data = await resp.json();
+                allAttachments = data.files || [];
+            } else {
+                allAttachments = [];
+            }
+        } catch {
+            allAttachments = [];
+        }
+        renderAttachPickerList(allAttachments);
+    }
+
+    function closeAttachPicker() {
+        if (elements.attachPicker) elements.attachPicker.style.display = 'none';
+    }
+
+    function renderAttachPickerList(files) {
+        if (!elements.attachList) return;
+        if (files.length === 0) {
+            elements.attachList.innerHTML = '<div class="notes-attach-empty">No attachments found</div>';
+            return;
+        }
+        elements.attachList.innerHTML = files.map(f => {
+            const isImage = f.mimeType && f.mimeType.startsWith('image/');
+            const thumbHTML = isImage
+                ? `<img class="notes-attach-thumb" src="/api/attachments/preview/${f.id}" alt="" loading="lazy">`
+                : `<span class="notes-attach-icon">${attachMimeIcon(f.mimeType)}</span>`;
+            return `<div class="notes-attach-item" data-id="${f.id}"
+                        data-name="${escapeHtml(f.storedFilename)}"
+                        data-mime="${escapeHtml(f.mimeType || '')}">
+                <div class="notes-attach-thumb-wrap">${thumbHTML}</div>
+                <div class="notes-attach-item-info">
+                    <div class="notes-attach-item-name">${escapeHtml(f.storedFilename)}</div>
+                    <div class="notes-attach-item-meta">${escapeHtml(f.mimeType || '—')}</div>
+                </div>
+            </div>`;
+        }).join('');
+        elements.attachList.querySelectorAll('.notes-attach-item').forEach(el => {
+            el.addEventListener('click', () => {
+                insertAttachmentMarkdown(
+                    el.dataset.id,
+                    el.dataset.name,
+                    el.dataset.mime
+                );
+                closeAttachPicker();
+            });
+        });
+    }
+
+    function insertAttachmentMarkdown(id, name, mimeType) {
+        const textarea = elements.content;
+        if (!textarea) return;
+        const isImage = mimeType && mimeType.startsWith('image/');
+        const md = isImage
+            ? `![${name}](/api/attachments/preview/${id})`
+            : `[${name}](/api/attachments/file/${id})`;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, start) + md + textarea.value.substring(end);
+        const cursor = start + md.length;
+        textarea.selectionStart = cursor;
+        textarea.selectionEnd = cursor;
+        textarea.focus();
+    }
+
+    function attachMimeIcon(mimeType) {
+        if (!mimeType) return '📎';
+        if (mimeType === 'application/pdf') return '📄';
+        if (mimeType.startsWith('video/')) return '🎬';
+        if (mimeType.startsWith('audio/')) return '🎵';
+        if (mimeType.startsWith('text/')) return '📝';
+        if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('gzip')) return '📦';
+        if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return '📊';
+        if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+        return '📎';
+    }
 
     let focusedPanel = 'notes'; // 'notes' | 'tags'
 

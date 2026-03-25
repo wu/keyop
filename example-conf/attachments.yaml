@@ -1,0 +1,5 @@
+x: attachments
+
+config:
+  upload_dir: ~/.keyop/attachments
+  db_path: ~/.keyop/sqlite/attachments.sql

@@ -1,0 +1,400 @@
+/* Attachments tab layout */
+
+#attachments-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.attachments-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.attachments-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header toolbar */
+.attachments-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.attachments-header h2 {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+    flex: 1;
+}
+
+.att-upload-btn {
+    padding: 5px 14px;
+    background: var(--purple-5);
+    color: #e9d5ff;
+    border: 1px solid var(--purple-3);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s;
+}
+
+.att-upload-btn:hover {
+    background: var(--purple-4);
+}
+
+/* File list */
+#attachments-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.att-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-secondary, #716f6c);
+    font-size: 0.95em;
+}
+
+/* Drop zone overlay (active during drag) */
+.att-dropzone-active #attachments-list::before {
+    content: "Drop file to upload";
+    position: fixed;
+    inset: 0;
+    background: rgba(138, 97, 214, 0.18);
+    border: 2px dashed var(--purple-3);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    color: var(--purple-2);
+    z-index: 50;
+    pointer-events: none;
+}
+
+/* File table */
+.att-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+}
+
+.att-table th {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary, #716f6c);
+    font-weight: 600;
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.att-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+}
+
+.att-table tr:last-child td {
+    border-bottom: none;
+}
+
+.att-table tr:hover td {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.att-filename-link {
+    color: var(--accent, #a78bfa);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.att-filename-link:hover {
+    text-decoration: underline;
+}
+
+.att-original-name {
+    color: var(--text-secondary, #716f6c);
+    font-size: 0.82em;
+}
+
+.att-mime {
+    color: var(--text-secondary, #716f6c);
+    font-size: 0.82em;
+}
+
+.att-size {
+    white-space: nowrap;
+    color: var(--text-secondary, #716f6c);
+}
+
+.att-date {
+    white-space: nowrap;
+    color: var(--text-secondary, #716f6c);
+    font-size: 0.82em;
+}
+
+.att-delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #716f6c);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.88em;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+}
+
+.att-table tr:hover .att-delete-btn {
+    opacity: 1;
+}
+
+.att-delete-btn:hover {
+    color: #ef4444;
+}
+
+/* View toggle buttons */
+.att-view-toggle {
+    display: flex;
+    gap: 2px;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.att-view-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #716f6c);
+    cursor: pointer;
+    padding: 3px 8px;
+    font-size: 1em;
+    border-radius: 3px;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1;
+}
+
+.att-view-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.att-view-btn-active {
+    background: var(--purple-5) !important;
+    color: #e9d5ff !important;
+}
+
+/* Icon grid view */
+.att-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 4px 2px;
+}
+
+.att-icon-card {
+    position: relative;
+    background: var(--header-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+
+.att-icon-card:hover {
+    border-color: var(--purple-3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.att-icon-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 110px;
+    background: var(--tab-content-bg);
+    text-decoration: none;
+    overflow: hidden;
+}
+
+.att-icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transition: opacity 0.2s;
+}
+
+.att-icon-placeholder {
+    font-size: 2.8em;
+    line-height: 1;
+    user-select: none;
+}
+
+.att-icon-footer {
+    padding: 6px 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.att-icon-name {
+    display: block;
+    font-size: 0.78em;
+    color: var(--accent, #a78bfa);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.att-icon-name:hover {
+    text-decoration: underline;
+}
+
+.att-icon-meta {
+    font-size: 0.72em;
+    color: var(--text-secondary, #716f6c);
+    margin-top: 2px;
+}
+
+.att-icon-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: var(--text-secondary, #716f6c);
+    cursor: pointer;
+    padding: 1px 5px;
+    font-size: 0.75em;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1.6;
+}
+
+.att-icon-card:hover .att-icon-delete {
+    opacity: 1;
+}
+
+.att-icon-delete:hover {
+    color: #ef4444;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+/* Upload modal */
+.att-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.att-modal-box {
+    background: var(--header-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 480px;
+    max-width: 95vw;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.att-modal-box h3 {
+    margin: 0 0 4px;
+    font-size: 1em;
+    color: var(--text);
+}
+
+.att-modal-box label {
+    font-size: 0.8em;
+    color: var(--text-secondary, #716f6c);
+}
+
+.att-modal-box input[type="text"] {
+    width: 100%;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 0.88em;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.att-modal-box input[type="text"]:focus {
+    outline: none;
+    border-color: var(--purple-3);
+}
+
+.att-modal-hint {
+    font-size: 0.78em;
+    color: var(--text-secondary, #716f6c);
+    font-style: italic;
+}
+
+.att-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    justify-content: flex-end;
+}
+
+.att-btn {
+    padding: 6px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    border: 1px solid var(--border);
+    background: var(--header-bg);
+    color: var(--text);
+    transition: background 0.15s;
+}
+
+.att-btn:hover {
+    background: var(--btn-hover, #3a3a4a);
+}
+
+.att-btn-primary {
+    background: var(--purple-5);
+    color: #e9d5ff;
+    border-color: var(--purple-3);
+}
+
+.att-btn-primary:hover {
+    background: var(--purple-4);
+}
+
+.att-progress {
+    font-size: 0.82em;
+    color: var(--text-secondary, #716f6c);
+    font-style: italic;
+}
