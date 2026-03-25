@@ -70,13 +70,14 @@ export const handlesHorizontalNav = true;
                 body: JSON.stringify(params),
             });
             if (!response.ok) {
-                console.error(`API call failed: ${response.status} ${response.statusText}`);
-                return null;
+                const text = (await response.text()).trim();
+                console.error(`API call failed: ${response.status} ${response.statusText}`, text);
+                return {_error: text || `${response.status} ${response.statusText}`};
             }
             return await response.json();
         } catch (error) {
             console.error('API call failed:', error);
-            return null;
+            return {_error: error.message};
         }
     }
 
@@ -466,6 +467,11 @@ export const handlesHorizontalNav = true;
             tags: elements.tags.value,
         });
 
+        if (result && result._error) {
+            alert(result._error);
+            return;
+        }
+
         if (result) {
             isEditing = false;
             updateEditMode();
@@ -494,6 +500,10 @@ export const handlesHorizontalNav = true;
         if (!title) return;
 
         const result = await callAction('create-note', {title, content: '', tags: ''});
+        if (result && result._error) {
+            alert(result._error);
+            return;
+        }
         if (result && result.id) {
             currentPage = 1;
             currentTag = 'all';

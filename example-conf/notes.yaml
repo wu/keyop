@@ -1,0 +1,25 @@
+x: notes
+
+config:
+
+  pub_preprocess:
+
+    - when: 'event eq "content_change"'
+      updates:
+        channelName: note-changes
+
+    - when: 'event eq "content_rename"'
+      updates:
+        channelName: note-changes
+
+    - when: 'event eq "content_remove"'
+      updates:
+        channelName: note-changes
+
+
+subs:
+  notes:
+    name: notes
+    description: read notes events from local channel
+
+

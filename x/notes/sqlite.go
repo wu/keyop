@@ -171,6 +171,19 @@ func getNotesEntry(dbPath string, id int64) (any, error) {
 	}, nil
 }
 
+// titleExists returns true if any note with the given title exists, excluding the note with excludeID
+// (use excludeID = 0 to check without exclusion, e.g. for new notes).
+func titleExists(db *sql.DB, title string, excludeID int64) (bool, error) {
+	var count int
+	var err error
+	if excludeID > 0 {
+		err = db.QueryRow("SELECT COUNT(*) FROM notes WHERE title = ? AND id != ?", title, excludeID).Scan(&count)
+	} else {
+		err = db.QueryRow("SELECT COUNT(*) FROM notes WHERE title = ?", title).Scan(&count)
+	}
+	return count > 0, err
+}
+
 // createNotesEntry creates a new note.
 func createNotesEntry(dbPath string, title, content, tags string) (any, error) {
 	db, err := openNotesDB(dbPath)
@@ -180,6 +193,12 @@ func createNotesEntry(dbPath string, title, content, tags string) (any, error) {
 	defer func() {
 		_ = db.Close()
 	}()
+
+	if exists, err := titleExists(db, title, 0); err != nil {
+		return nil, fmt.Errorf("failed to check title uniqueness: %w", err)
+	} else if exists {
+		return nil, fmt.Errorf("a note named %q already exists", title)
+	}
 
 	now := time.Now().Format(time.RFC3339Nano)
 	result, err := db.Exec(
@@ -214,6 +233,12 @@ func updateNotesEntry(dbPath string, id int64, title, content, tags string) (any
 	defer func() {
 		_ = db.Close()
 	}()
+
+	if exists, err := titleExists(db, title, id); err != nil {
+		return nil, fmt.Errorf("failed to check title uniqueness: %w", err)
+	} else if exists {
+		return nil, fmt.Errorf("a note named %q already exists", title)
+	}
 
 	now := time.Now().Format(time.RFC3339Nano)
 	result, err := db.Exec(

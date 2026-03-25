@@ -142,6 +142,7 @@ func (svc *Service) createNote(params map[string]any) (any, error) {
 }
 
 // updateNote updates an existing note and emits a ContentChange event with the old and new content.
+// If the title changed, a ContentRename event is emitted first so the git service can mv the file.
 func (svc *Service) updateNote(params map[string]any) (any, error) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -166,22 +167,46 @@ func (svc *Service) updateNote(params map[string]any) (any, error) {
 		tags = ""
 	}
 
-	// Fetch old content for the ContentChange event. Don't fail update if retrieval fails.
-	var oldContent string
+	// Fetch old content and title for change events.
+	var oldContent, oldTitle string
 	if oldEntry, err := getNotesEntry(svc.dbPath, int64(id)); err == nil {
 		if m, ok := oldEntry.(map[string]any); ok {
 			if oc, ok2 := m["content"].(string); ok2 {
 				oldContent = oc
 			}
+			if ot, ok2 := m["title"].(string); ok2 {
+				oldTitle = ot
+			}
 		}
 	} else {
-		// Log but continue
 		svc.Deps.MustGetLogger().Warn("notes: failed to fetch previous content", "id", id, "error", err)
 	}
 
 	res, err := updateNotesEntry(svc.dbPath, int64(id), title, content, tags)
 	if err != nil {
 		return nil, err
+	}
+
+	messenger := svc.Deps.MustGetMessenger()
+	logger := svc.Deps.MustGetLogger()
+
+	// If the title changed, emit a content_rename event first so the git service
+	// can rename the file before writing new content under the new name.
+	if oldTitle != "" && oldTitle != title {
+		cr := git.ContentRenameEvent{
+			OldName: oldTitle,
+			NewName: title,
+		}
+		if sendErr := messenger.Send(core.Message{
+			ChannelName: svc.Cfg.Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Event:       "content_rename",
+			Summary:     title,
+			Data:        cr,
+		}); sendErr != nil {
+			logger.Error("notes: failed to send ContentRename event", "error", sendErr, "id", id)
+		}
 	}
 
 	// Emit ContentChange event (typed). Messenger will set DataType automatically.
@@ -192,7 +217,7 @@ func (svc *Service) updateNote(params map[string]any) (any, error) {
 		UpdatedAt: time.Now().Format(time.RFC3339Nano),
 	}
 
-	if sendErr := svc.Deps.MustGetMessenger().Send(core.Message{
+	if sendErr := messenger.Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,
@@ -200,13 +225,13 @@ func (svc *Service) updateNote(params map[string]any) (any, error) {
 		Summary:     title,
 		Data:        cc,
 	}); sendErr != nil {
-		svc.Deps.MustGetLogger().Error("notes: failed to send ContentChange event", "error", sendErr, "id", id)
+		logger.Error("notes: failed to send ContentChange event", "error", sendErr, "id", id)
 	}
 
 	return res, nil
 }
 
-// deleteNote deletes a note.
+// deleteNote deletes a note and emits a ContentRemove event.
 func (svc *Service) deleteNote(params map[string]any) (any, error) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -216,7 +241,36 @@ func (svc *Service) deleteNote(params map[string]any) (any, error) {
 		return nil, fmt.Errorf("missing or invalid id parameter")
 	}
 
-	return deleteNotesEntry(svc.dbPath, int64(id))
+	// Fetch title before deletion so we can emit the remove event.
+	var title string
+	if oldEntry, err := getNotesEntry(svc.dbPath, int64(id)); err == nil {
+		if m, ok := oldEntry.(map[string]any); ok {
+			if t, ok2 := m["title"].(string); ok2 {
+				title = t
+			}
+		}
+	}
+
+	res, err := deleteNotesEntry(svc.dbPath, int64(id))
+	if err != nil {
+		return nil, err
+	}
+
+	if title != "" {
+		cr := git.ContentRemoveEvent{Name: title}
+		if sendErr := svc.Deps.MustGetMessenger().Send(core.Message{
+			ChannelName: svc.Cfg.Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Event:       "content_remove",
+			Summary:     title,
+			Data:        cr,
+		}); sendErr != nil {
+			svc.Deps.MustGetLogger().Error("notes: failed to send ContentRemove event", "error", sendErr, "id", id)
+		}
+	}
+
+	return res, nil
 }
 
 // renderMarkdown converts markdown to HTML.

@@ -111,6 +111,14 @@ func (svc *Service) handleMessage(msg core.Message) error {
 	messenger := svc.Deps.MustGetMessenger()
 	osProvider := svc.Deps.MustGetOsProvider()
 
+	// Dispatch by payload type.
+	switch msg.DataType {
+	case "notes.content_rename.v1":
+		return svc.handleRename(msg)
+	case "notes.content_remove.v1":
+		return svc.handleRemove(msg)
+	}
+
 	// Determine subject/name for the file. We assume Message.Summary is the subject.
 	subject := strings.TrimSpace(msg.Summary)
 	if subject == "" {
@@ -146,9 +154,9 @@ func (svc *Service) handleMessage(msg core.Message) error {
 	const contentChangeDataType = "notes.content_change.v1"
 
 	reg := core.GetPayloadRegistry()
-	isContentChange := strings.EqualFold(msg.Event, "ContentChange") || strings.EqualFold(msg.Event, "contentchange") || strings.EqualFold(msg.Event, "content_change") || msg.DataType == contentChangeDataType
+	isContentChange := msg.DataType == contentChangeDataType
 
-	if isContentChange && msg.DataType != "" {
+	if isContentChange {
 		// Attempt to decode typed payload using the global registry.
 		if reg != nil {
 			typed, derr := reg.Decode(msg.DataType, msg.Data)
@@ -308,6 +316,150 @@ func (svc *Service) handleMessage(msg core.Message) error {
 			logger.Debug("git: nothing to commit", "file", filename, "output", outStr)
 		} else {
 			logger.Error("git: git commit failed", "file", filename, "error", commitErr, "output", outStr)
+			sendErrorEvent(messenger, svc.Cfg, "git-commit", commitErr, outCommit)
+		}
+	}
+
+	return nil
+}
+
+// handleRename processes a content_rename event: git mv old file → new file, then commit.
+func (svc *Service) handleRename(msg core.Message) error {
+	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
+	osProvider := svc.Deps.MustGetOsProvider()
+
+	// Decode the rename payload.
+	var oldName, newName string
+	reg := core.GetPayloadRegistry()
+	if reg != nil && msg.DataType != "" {
+		if typed, err := reg.Decode(msg.DataType, msg.Data); err == nil {
+			switch v := typed.(type) {
+			case *ContentRenameEvent:
+				oldName, newName = v.OldName, v.NewName
+			case ContentRenameEvent:
+				oldName, newName = v.OldName, v.NewName
+			}
+		}
+	}
+	// Fallback: try raw map (untyped decode path).
+	if oldName == "" {
+		if m, ok := msg.Data.(map[string]any); ok {
+			oldName, _ = m["old_name"].(string)
+			newName, _ = m["new_name"].(string)
+		}
+	}
+
+	if oldName == "" || newName == "" || oldName == newName {
+		return nil
+	}
+
+	oldFilename := sanitizeFilename(oldName) + ".txt"
+	newFilename := sanitizeFilename(newName) + ".txt"
+
+	if err := osProvider.MkdirAll(svc.dir, 0o755); err != nil {
+		logger.Error("git: failed to create directory for rename", "dir", svc.dir, "error", err)
+		sendErrorEvent(messenger, svc.Cfg, "mkdir", err, nil)
+		return nil
+	}
+
+	// Only rename if the old file exists.
+	oldPath := filepath.Join(svc.dir, oldFilename)
+	if _, err := osProvider.Stat(oldPath); err != nil {
+		if os.IsNotExist(err) {
+			logger.Debug("git: rename skipped — old file does not exist", "file", oldFilename)
+			return nil
+		}
+		logger.Error("git: stat failed for rename", "file", oldFilename, "error", err)
+		return nil
+	}
+
+	// git mv <old> <new>
+	cmdMv := osProvider.Command("git", "-C", svc.dir, "mv", oldFilename, newFilename)
+	outMv, mvErr := cmdMv.CombinedOutput()
+	if mvErr != nil {
+		logger.Error("git: git mv failed", "old", oldFilename, "new", newFilename, "error", mvErr, "output", string(outMv))
+		sendErrorEvent(messenger, svc.Cfg, "git-mv", mvErr, outMv)
+		return nil
+	}
+
+	// git commit -m "Rename <old> to <new>"
+	commitMsg := fmt.Sprintf("Rename %s to %s", oldName, newName)
+	cmdCommit := osProvider.Command("git", "-C", svc.dir, "commit", "-m", commitMsg)
+	outCommit, commitErr := cmdCommit.CombinedOutput()
+	if commitErr != nil {
+		outStr := string(outCommit)
+		if !strings.Contains(outStr, "nothing to commit") && !strings.Contains(outStr, "nothing added to commit") {
+			logger.Error("git: git commit failed after mv", "error", commitErr, "output", outStr)
+			sendErrorEvent(messenger, svc.Cfg, "git-commit", commitErr, outCommit)
+		}
+	}
+
+	return nil
+}
+
+// handleRemove processes a content_remove event: git rm the file, then commit.
+func (svc *Service) handleRemove(msg core.Message) error {
+	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
+	osProvider := svc.Deps.MustGetOsProvider()
+
+	// Decode the remove payload.
+	var name string
+	reg := core.GetPayloadRegistry()
+	if reg != nil && msg.DataType != "" {
+		if typed, err := reg.Decode(msg.DataType, msg.Data); err == nil {
+			switch v := typed.(type) {
+			case *ContentRemoveEvent:
+				name = v.Name
+			case ContentRemoveEvent:
+				name = v.Name
+			}
+		}
+	}
+	// Fallback: try raw map or Summary.
+	if name == "" {
+		if m, ok := msg.Data.(map[string]any); ok {
+			name, _ = m["name"].(string)
+		}
+	}
+	if name == "" {
+		name = strings.TrimSpace(msg.Summary)
+	}
+	if name == "" {
+		return nil
+	}
+
+	filename := sanitizeFilename(name) + ".txt"
+	filePath := filepath.Join(svc.dir, filename)
+
+	// Only proceed if the file actually exists.
+	if _, err := osProvider.Stat(filePath); err != nil {
+		if os.IsNotExist(err) {
+			logger.Debug("git: remove skipped — file does not exist", "file", filename)
+			return nil
+		}
+		logger.Error("git: stat failed for remove", "file", filename, "error", err)
+		return nil
+	}
+
+	// git rm <file>
+	cmdRm := osProvider.Command("git", "-C", svc.dir, "rm", filename)
+	outRm, rmErr := cmdRm.CombinedOutput()
+	if rmErr != nil {
+		logger.Error("git: git rm failed", "file", filename, "error", rmErr, "output", string(outRm))
+		sendErrorEvent(messenger, svc.Cfg, "git-rm", rmErr, outRm)
+		return nil
+	}
+
+	// git commit -m "Delete <name>"
+	commitMsg := fmt.Sprintf("Delete %s", name)
+	cmdCommit := osProvider.Command("git", "-C", svc.dir, "commit", "-m", commitMsg)
+	outCommit, commitErr := cmdCommit.CombinedOutput()
+	if commitErr != nil {
+		outStr := string(outCommit)
+		if !strings.Contains(outStr, "nothing to commit") && !strings.Contains(outStr, "nothing added to commit") {
+			logger.Error("git: git commit failed after rm", "error", commitErr, "output", outStr)
 			sendErrorEvent(messenger, svc.Cfg, "git-commit", commitErr, outCommit)
 		}
 	}
