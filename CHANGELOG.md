@@ -1,3 +1,30 @@
+## [0.9.0](https://github.com/wu/keyop/compare/0.8.0...0.9.0) (2026-03-25)
+
+### Features
+
+* add attachment picker and new tab for managing file uploads ([dbaaf65](https://github.com/wu/keyop/commit/dbaaf6564b20a3718f3fd9001cff0a8097e394ce))
+* add diskspace monitoring service ([83edf08](https://github.com/wu/keyop/commit/83edf08966401ce064daae28baa7a28f13283448))
+* add GPIO-backed switch service and update thermostat to use switch commands ([90e8520](https://github.com/wu/keyop/commit/90e85208af6a5651fd16b5cfac1ba551801b706e))
+* add hostname support and removal mechanism to status monitoring ([d2581c9](https://github.com/wu/keyop/commit/d2581c929085789d0ba9dbc460739950036288c5))
+* add support for content rename and delete events in notes ([6b3fca3](https://github.com/wu/keyop/commit/6b3fca379bc350c3a662f45d98a32581683e133c))
+* apply selected tag to new tasks in tag view ([6b9de77](https://github.com/wu/keyop/commit/6b9de77643e2247ebd94d230a7dcb5505f3deae8))
+* define standard colors for success and error states in theme and fix inconsistency in status panel styling ([5550386](https://github.com/wu/keyop/commit/55503866297f9770d7e0138810b26aaf33149fc7))
+* enhance markdown rendering with custom Monokai theme and improve table styling ([92c07a7](https://github.com/wu/keyop/commit/92c07a732578a91aaf538b677ce35c5c19fccb6e))
+* improve tab badge styling and interaction readability ([4397a77](https://github.com/wu/keyop/commit/4397a7750a74ccf55de0a739a2d7ff4b872416d7))
+* improve UI styling and scheduling logic for flashcards ([857f063](https://github.com/wu/keyop/commit/857f0634b217c0b4aa598a06e5f005c48ec335b5))
+* resolve issue with only being able to upload images ([fabb17b](https://github.com/wu/keyop/commit/fabb17b530dd60fdc0becdfa29d6d02237151d22))
+* send alert messages for region enter and exit events ([19f9b50](https://github.com/wu/keyop/commit/19f9b506997a4ff880491e5c44856f2a521a1bb1))
+* update thermostat event to use registered payloads ([ad31fcb](https://github.com/wu/keyop/commit/ad31fcb2bd82333a0ab13358d7f65e4ae919084d))
+* use emojis as tab titles for a more visually engaging UI ([d159156](https://github.com/wu/keyop/commit/d15915602a28799685644a832c6ae3ac0619d6cc))
+
+### Bug Fixes
+
+* prevent unnecessary calculation of idle report ([d86acd8](https://github.com/wu/keyop/commit/d86acd8fea94a22b1472c97c8f48741c11af81c5))
+
+### Refactoring
+
+* simplify StatusEvent structure and usage ([65e3cca](https://github.com/wu/keyop/commit/65e3ccaecd94cbf0969e18d36a93fb305d3f42c3))
+
 ## [0.8.0](https://github.com/wu/keyop/compare/0.7.0...0.8.0) (2026-03-23)
 
 ### Features
