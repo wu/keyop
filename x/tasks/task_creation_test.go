@@ -40,12 +40,27 @@ func TestTaskCreationUsesLogicalDay(t *testing.T) {
 		CREATE TABLE tasks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			uuid TEXT UNIQUE,
+			parent_uuid TEXT DEFAULT '',
+			subtask_parent_uuid TEXT DEFAULT '',
 			title TEXT,
+			note TEXT DEFAULT '',
 			scheduled_date TEXT,
-			created_at TEXT,
-			updated_at TEXT,
+			scheduled_time INTEGER DEFAULT 0,
+			tags TEXT DEFAULT '',
+			color TEXT DEFAULT '',
+			importance INTEGER DEFAULT 0,
+			urgency INTEGER DEFAULT 0,
+			user_id INTEGER DEFAULT 0,
 			done INTEGER DEFAULT 0,
-			scheduled_time INTEGER DEFAULT 0
+			completed_at TEXT DEFAULT '',
+			recurrence TEXT DEFAULT '',
+			recurrence_days TEXT DEFAULT '',
+			recurrence_x INTEGER DEFAULT 0,
+			in_progress INTEGER DEFAULT 0,
+			in_progress_started_at TEXT DEFAULT '',
+			in_progress_total_seconds INTEGER DEFAULT 0,
+			created_at TEXT,
+			updated_at TEXT
 		)
 	`)
 	if err != nil {

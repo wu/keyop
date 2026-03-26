@@ -60,6 +60,43 @@ func parseTimeStringLocal(s string, base time.Time, loc *time.Location) (time.Ti
 
 // parseDurationString parses duration strings like "1h", "30m", "1h5m", "2h30m15s" and returns seconds.
 // Returns 0 if the string is empty or "0", and -1 on parse error.
+// stopInProgressParams checks if taskID is currently in-progress. If so, it
+// returns additional updateTask params that clear the in_progress flag and
+// accumulate the elapsed time into in_progress_total_seconds. If the task is
+// not in-progress, an empty map is returned.
+func (svc *Service) stopInProgressParams(taskID int64) (map[string]any, error) {
+	var isRunning sql.NullBool
+	var startedAtStr sql.NullString
+	var totalSec sql.NullInt64
+	err := svc.db.QueryRow(
+		"SELECT in_progress, in_progress_started_at, in_progress_total_seconds FROM tasks WHERE id = ?",
+		taskID,
+	).Scan(&isRunning, &startedAtStr, &totalSec)
+	if err != nil {
+		return nil, err
+	}
+	if !isRunning.Valid || !isRunning.Bool {
+		return map[string]any{}, nil
+	}
+	newTotal := int64(0)
+	if totalSec.Valid {
+		newTotal = totalSec.Int64
+	}
+	if startedAtStr.Valid && startedAtStr.String != "" {
+		if t, err2 := time.Parse(time.RFC3339Nano, startedAtStr.String); err2 == nil {
+			delta := int64(time.Since(t).Seconds())
+			if delta > 0 {
+				newTotal += delta
+			}
+		}
+	}
+	return map[string]any{
+		"in_progress":               false,
+		"in_progress_started_at":    "",
+		"in_progress_total_seconds": newTotal,
+	}, nil
+}
+
 func parseDurationString(s string) int64 {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "0" {
@@ -235,7 +272,15 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 
 		// Support clear command: 'r 0' clears scheduled date
 		if expr == "0" || strings.ToLower(expr) == "clear" {
-			if _, err := svc.updateTask(taskID, map[string]any{"scheduledAt": "", "hasScheduledTime": false}); err != nil {
+			stopParams, err := svc.stopInProgressParams(taskID)
+			if err != nil {
+				return nil, err
+			}
+			updateParams := map[string]any{"scheduledAt": "", "hasScheduledTime": false}
+			for k, v := range stopParams {
+				updateParams[k] = v
+			}
+			if _, err := svc.updateTask(taskID, updateParams); err != nil {
 				return nil, err
 			}
 			if t, _ := findUpdatedTask(); t != nil {
@@ -428,7 +473,15 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 		}
 
 		scheduledAtParam := newTime.UTC().Format(time.RFC3339)
-		if _, err := svc.updateTask(taskID, map[string]any{"scheduledAt": scheduledAtParam, "hasScheduledTime": resultHasTime}); err != nil {
+		stopParams, err := svc.stopInProgressParams(taskID)
+		if err != nil {
+			return nil, err
+		}
+		updateParams := map[string]any{"scheduledAt": scheduledAtParam, "hasScheduledTime": resultHasTime}
+		for k, v := range stopParams {
+			updateParams[k] = v
+		}
+		if _, err := svc.updateTask(taskID, updateParams); err != nil {
 			return nil, err
 		}
 
@@ -543,7 +596,15 @@ func (svc *Service) runTaskCommand(taskID int64, command string, view string) (a
 			resultHasTime = false
 		}
 
-		if _, err := svc.updateTask(taskID, map[string]any{"scheduledAt": scheduledAtParam, "hasScheduledTime": resultHasTime}); err != nil {
+		stopParams, err := svc.stopInProgressParams(taskID)
+		if err != nil {
+			return nil, err
+		}
+		skipUpdateParams := map[string]any{"scheduledAt": scheduledAtParam, "hasScheduledTime": resultHasTime}
+		for k, v := range stopParams {
+			skipUpdateParams[k] = v
+		}
+		if _, err := svc.updateTask(taskID, skipUpdateParams); err != nil {
 			return nil, err
 		}
 

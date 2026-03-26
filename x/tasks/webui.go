@@ -2228,6 +2228,22 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		updateArgs = append(updateArgs, int64(ipSecondsF))
 	}
 
+	// Handle in_progress flag
+	if _, hasIPKey := params["in_progress"]; hasIPKey {
+		switch v := params["in_progress"].(type) {
+		case bool:
+			val := 0
+			if v {
+				val = 1
+			}
+			updateFields = append(updateFields, "in_progress = ?")
+			updateArgs = append(updateArgs, val)
+		case int:
+			updateFields = append(updateFields, "in_progress = ?")
+			updateArgs = append(updateArgs, v)
+		}
+	}
+
 	// Handle in_progress_started_at
 	if _, hasStartedAtKey := params["in_progress_started_at"]; hasStartedAtKey {
 		switch v := params["in_progress_started_at"].(type) {

@@ -1972,6 +1972,13 @@ async function processCommand(taskId, commandText) {
 
         // If server returned a full TaskRow (with scheduledAt/hasScheduledTime), merge and refresh
         if (Object.prototype.hasOwnProperty.call(res, 'scheduledAt')) {
+            // If the task was running locally and the server no longer marks it as
+            // in-progress (rescheduling stops the timer), clear the local timer state.
+            const wasRunning = state.inProgress && state.inProgress[String(taskId)] && state.inProgress[String(taskId)].running;
+            if (wasRunning && !res.inProgress) {
+                clearLocalInProgress(taskId, typeof res.inProgressTotalSeconds === 'number' ? res.inProgressTotalSeconds : undefined);
+            }
+
             const idx = (state.tasks || []).findIndex(t => parseInt(t.id) === parseInt(taskId));
             if (idx !== -1) {
                 state.tasks[idx] = Object.assign({}, state.tasks[idx], res);
