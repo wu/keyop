@@ -442,8 +442,9 @@ func TestPersistentQueue_MissingFileInState(t *testing.T) {
 	err = os.Remove(files[0])
 	require.NoError(t, err)
 
-	// 6. Enqueue item3. We'll manually create a file with a NEWER date to ensure it's a different file.
-	newDate := time.Now().Add(24 * time.Hour).Format("20060102")
+	// 6. Create a file with a NEWER UTC date so it sorts after the deleted file.
+	// Use UTC+48h (not local+24h) to avoid collisions when local date != UTC date.
+	newDate := time.Now().UTC().Add(48 * time.Hour).Format("20060102")
 	newFile := filepath.Join(tmpDir, "test_queue_queue_"+newDate+".log")
 	err = os.WriteFile(newFile, []byte("item3\n"), 0600)
 	require.NoError(t, err)
