@@ -11,34 +11,48 @@ import (
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
 )
 
-// buildSearchWhere builds the shared WHERE clause and args for search/tag filters.
-// baseWhere is "WHERE 1=1"; the returned suffix and args are appended by the caller.
-func buildNotesWhere(search string, searchContent bool, tag string) (string, []any) {
-	where := ""
-	args := []any{}
+// buildNotesWhere returns a list of SQL condition fragments (each a hardcoded
+// string with ? placeholders) and the corresponding bind arguments. The caller
+// assembles them with strings.Join and appends after "WHERE 1=1 AND ...".
+//
+// Safety guarantee: user input (search, tag) is ONLY placed in the returned
+// args slice — never embedded in any of the returned condition strings.
+func buildNotesWhere(search string, searchContent bool, tag string) ([]string, []any) {
+	var conds []string
+	var args []any
 
 	if search != "" {
-		searchPattern := "%" + search + "%"
+		p := "%" + search + "%"
 		if searchContent {
-			where += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
-			args = append(args, searchPattern, searchPattern, searchPattern)
+			conds = append(conds, "(title LIKE ? OR content LIKE ? OR tags LIKE ?)")
+			args = append(args, p, p, p)
 		} else {
-			where += " AND title LIKE ?"
-			args = append(args, searchPattern)
+			conds = append(conds, "title LIKE ?")
+			args = append(args, p)
 		}
 	}
 
 	if tag != "" && tag != "all" {
 		if tag == "untagged" {
-			where += " AND (tags = '' OR tags IS NULL)"
+			conds = append(conds, "(tags = '' OR tags IS NULL)")
 		} else {
-			// Normalise spaces around commas before matching so "foo, bar" matches tag "bar".
-			where += " AND REPLACE(',' || tags || ',', ' ', '') LIKE ?"
+			// Normalise spaces around commas so "foo, bar" matches tag "bar".
+			conds = append(conds, "REPLACE(',' || tags || ',', ' ', '') LIKE ?")
 			args = append(args, "%,"+tag+",%")
 		}
 	}
 
-	return where, args
+	return conds, args
+}
+
+// notesWhere assembles a safe WHERE suffix from buildNotesWhere conditions.
+// Only hardcoded condition fragments from buildNotesWhere are joined here;
+// no user input enters the returned string.
+func notesWhere(conds []string) string { //nolint:gosec
+	if len(conds) == 0 {
+		return ""
+	}
+	return " AND " + strings.Join(conds, " AND ")
 }
 
 // getNotesList retrieves notes with optional search/tag filter and pagination.
@@ -52,14 +66,16 @@ func getNotesList(dbPath string, search string, searchContent bool, tag string, 
 		_ = db.Close()
 	}()
 
-	whereClause, whereArgs := buildNotesWhere(search, searchContent, tag)
-	base := "SELECT id, title, tags, created_at, updated_at FROM notes WHERE 1=1" + whereClause
+	whereConds, whereArgs := buildNotesWhere(search, searchContent, tag)
+	where := notesWhere(whereConds)
+	base := "SELECT id, title, tags, created_at, updated_at FROM notes WHERE 1=1" + where
 
 	// Count total matching rows for pagination.
 	var total int
 	countArgs := make([]any, len(whereArgs))
 	copy(countArgs, whereArgs)
-	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE 1=1"+whereClause, countArgs...).Scan(&total); err != nil {
+	countQ := "SELECT COUNT(*) FROM notes WHERE 1=1" + where
+	if err := db.QueryRow(countQ, countArgs...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("failed to count notes: %w", err)
 	}
 
@@ -102,8 +118,12 @@ func getTagCounts(dbPath string, search string, searchContent bool) (any, error)
 		_ = db.Close()
 	}()
 
-	whereClause, whereArgs := buildNotesWhere(search, searchContent, "")
-	rows, err := db.Query("SELECT tags FROM notes WHERE 1=1"+whereClause, whereArgs...)
+	whereConds, whereArgs := buildNotesWhere(search, searchContent, "")
+	where := notesWhere(whereConds)
+	// q is built only from hardcoded fragments in notesWhere; user input is
+	// bound exclusively via whereArgs — no SQL injection risk.
+	q := "SELECT tags FROM notes WHERE 1=1" + where //nolint:gosec
+	rows, err := db.Query(q, whereArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tags: %w", err)
 	}
