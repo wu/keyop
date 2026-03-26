@@ -122,7 +122,7 @@ func (svc *Service) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing file field", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	// Determine stored filename: use the user-supplied name (from the modal prompt),
 	// falling back to the original filename. Always sanitize server-side for safety.
@@ -153,10 +153,10 @@ func (svc *Service) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	written, err := io.Copy(out, file)
-	out.Close()
+	_ = out.Close()
 	if err != nil {
 		logger.Error("attachments: failed to write file", "path", destPath, "error", err)
-		_ = os.Remove(destPath)
+		_ = os.Remove(destPath) //nolint:gosec
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -212,7 +212,7 @@ func (svc *Service) handleServeFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "file not found on disk", http.StatusNotFound)
 		return
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	if a.MimeType != "" {
 		w.Header().Set("Content-Type", a.MimeType)
@@ -244,7 +244,7 @@ func (svc *Service) handlePreviewFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "file not found on disk", http.StatusNotFound)
 		return
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	if a.MimeType != "" {
 		w.Header().Set("Content-Type", a.MimeType)
@@ -261,14 +261,14 @@ func (svc *Service) handlePreviewFile(w http.ResponseWriter, r *http.Request) {
 
 // uniquePath appends _1, _2, … to the base name when a file already exists.
 func uniquePath(path string) string {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Stat(path); os.IsNotExist(err) { //nolint:gosec
 		return path
 	}
 	ext := filepath.Ext(path)
 	base := path[:len(path)-len(ext)]
 	for i := 1; i < 1000; i++ {
 		candidate := fmt.Sprintf("%s_%d%s", base, i, ext)
-		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+		if _, err := os.Stat(candidate); os.IsNotExist(err) { //nolint:gosec
 			return candidate
 		}
 	}

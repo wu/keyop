@@ -39,12 +39,12 @@ func migrateAttachmentsSchema(db *sql.DB) error {
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func listAttachments(db *sql.DB) ([]attachment, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var results []attachment
 	for rows.Next() {
@@ -116,12 +116,6 @@ func getAttachmentByUUID(db *sql.DB, id string) (attachment, error) {
 		 FROM attachments WHERE uuid = ?`, id,
 	).Scan(&a.ID, &a.UUID, &a.OriginalFilename, &a.StoredFilename, &a.DateDir, &a.MimeType, &a.Size, &a.UploadedAt)
 	return a, err
-}
-
-// deleteAttachment removes a record from the database by integer ID.
-func deleteAttachment(db *sql.DB, id int64) error {
-	_, err := db.Exec(`DELETE FROM attachments WHERE id = ?`, id)
-	return err
 }
 
 // deleteAttachmentByUUID removes a record from the database by UUID.

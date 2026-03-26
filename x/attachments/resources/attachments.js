@@ -275,7 +275,7 @@ function renderFileList(files) {
     `;
 
     list.querySelectorAll('.att-delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleDelete(parseInt(btn.dataset.id, 10)));
+        btn.addEventListener('click', () => handleDelete(btn.dataset.id));
     });
 }
 
@@ -314,7 +314,7 @@ function renderIconView(files) {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            handleDelete(parseInt(btn.dataset.id, 10));
+            handleDelete(btn.dataset.id);
         });
     });
 }

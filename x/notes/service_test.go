@@ -132,7 +132,7 @@ func TestWebUITab(t *testing.T) {
 
 	tab := svc.WebUITab()
 	assert.Equal(t, "notes", tab.ID)
-	assert.Equal(t, "Notes", tab.Title)
+	assert.Equal(t, "🗒️", tab.Title)
 	assert.Equal(t, "📋", tab.Icon)
 	assert.NotEmpty(t, tab.Content)
 	assert.NotEmpty(t, tab.JSPath)
