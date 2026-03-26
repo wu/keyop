@@ -1,0 +1,857 @@
+/*
+ * Movies tab — 3-column layout matching the notes tab chrome height convention.
+ * Chrome: header (~46px) + tab-nav (~36px) + main padding top (16px) + tab-content padding top (16px) = ~114px
+ */
+
+#movies-container {
+    margin: -1rem;
+}
+
+.movies-container {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 320px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "top-search  top-search   top-actions"
+        "body-tags   body-list    body-detail";
+    height: calc(100dvh - 114px);
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow: hidden;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+
+.movies-top-search {
+    grid-area: top-search;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    min-width: 0;
+}
+
+.movies-search-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.movies-search-wrap input {
+    width: 100%;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 28px 6px 10px;
+    font-size: 13px;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.movies-search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.movies-search-clear {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    line-height: 1;
+    opacity: 0.6;
+}
+
+.movies-search-clear:hover {
+    opacity: 1;
+    color: var(--text);
+}
+
+.movies-fulltext-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.movies-fulltext-label input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.movies-top-actions {
+    grid-area: top-actions;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background-color: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* ── Body panels ─────────────────────────────────────────── */
+
+.movies-tag-sidebar {
+    grid-area: body-tags;
+    border-right: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+}
+
+.movies-list-panel {
+    grid-area: body-list;
+    border-right: 1px solid var(--border);
+    background-color: var(--tab-content-bg);
+    overflow-x: hidden;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.movies-list {
+    overflow-y: auto;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.movies-detail-panel {
+    grid-area: body-detail;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+    background-color: var(--bg);
+}
+
+/* ── Tag sidebar ─────────────────────────────────────────── */
+
+.movies-tag-list {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0;
+}
+
+.movies-tag-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-left: 3px solid transparent;
+    transition: background 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.movies-tag-item:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.1));
+}
+
+.movies-tag-item.active {
+    background: var(--accent-blue-bg, rgba(59, 130, 246, 0.15));
+    border-left-color: var(--accent, #3b82f6);
+    font-weight: 600;
+}
+
+.movies-tag-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.movies-tag-count {
+    font-size: 11px;
+    opacity: 0.55;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+
+/* ── Movie list cards ────────────────────────────────────── */
+
+.movies-card {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.movies-card:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.movies-card.active {
+    background: var(--accent-blue-bg, rgba(59, 130, 246, 0.15));
+}
+
+.movies-card-thumb {
+    width: 48px;
+    height: 68px;
+    object-fit: cover;
+    border-radius: 3px;
+    background: var(--tab-content-bg);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: var(--text);
+    opacity: 0.4;
+    overflow: hidden;
+}
+
+.movies-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 3px;
+    display: block;
+}
+
+.movies-card-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    gap: 3px;
+}
+
+.movies-card-title {
+    font-size: 14px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.movies-card-meta {
+    font-size: 12px;
+    opacity: 0.6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.movies-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+
+/* ── Detail panel ────────────────────────────────────────── */
+
+.movies-detail {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.movies-detail-header {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.movies-detail-poster {
+    max-height: 300px;
+    max-width: 200px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    display: block;
+}
+
+.movies-detail-poster-placeholder {
+    width: 130px;
+    height: 190px;
+    border-radius: 6px;
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    flex-shrink: 0;
+}
+
+.movies-detail-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.movies-detail-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent, #3b82f6);
+    line-height: 1.2;
+}
+
+.movies-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.movies-detail-tagline {
+    font-style: italic;
+    opacity: 0.8;
+    font-size: 14px;
+}
+
+.movies-detail-plot {
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.movies-detail-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.5;
+    margin-bottom: 6px;
+}
+
+.movies-actor-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.movies-actor-chip {
+    background: var(--card-bg, var(--tab-content-bg));
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.movies-actor-chip-role {
+    opacity: 0.6;
+    font-size: 11px;
+}
+
+.movies-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.movies-tag-chip {
+    background: var(--tag-bg, rgba(59, 130, 246, 0.12));
+    border: 1px solid var(--tag-border, rgba(59, 130, 246, 0.3));
+    color: var(--tag-color, var(--accent, #3b82f6));
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-variant: small-caps;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.1s;
+}
+
+.movies-tag-chip:hover {
+    opacity: 0.75;
+}
+
+.movies-rating-star {
+    color: var(--accent-orange, #f59e0b);
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.movies-btn,
+.movies-top-actions button,
+.movies-top-search button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--tab-content-bg);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s, opacity 0.1s;
+}
+
+.movies-btn:hover,
+.movies-top-actions button:hover,
+.movies-top-search button:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.12));
+}
+
+.movies-btn-primary {
+    background: var(--accent, #3b82f6) !important;
+    color: var(--accent-text, #fff) !important;
+    border-color: var(--accent, #3b82f6) !important;
+}
+
+.movies-btn-primary:hover {
+    opacity: 0.85;
+}
+
+.movies-import-label {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--tab-content-bg);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.1s;
+}
+
+.movies-import-label:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.12));
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+
+.movies-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+}
+
+.movies-modal {
+    background: var(--header-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.movies-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.movies-modal-close {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    opacity: 0.7;
+}
+
+.movies-modal-close:hover {
+    opacity: 1;
+    background: var(--hover-bg, rgba(128, 128, 128, 0.12));
+}
+
+.movies-modal-body {
+    padding: 18px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+}
+
+.movies-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Form fields ─────────────────────────────────────────── */
+
+.movies-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.movies-field-row label {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.65;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.movies-field-row-2col {
+    flex-direction: row;
+    gap: 12px;
+}
+
+.movies-field-row-2col > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.movies-field-row input,
+.movies-field-row textarea {
+    background: var(--tab-content-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.movies-field-row input:focus,
+.movies-field-row textarea:focus {
+    outline: none;
+    border-color: var(--accent, #3b82f6);
+}
+
+/* ── TMDB results ────────────────────────────────────────── */
+
+.movies-tmdb-result {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+    align-items: flex-start;
+}
+
+.movies-tmdb-result:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.movies-tmdb-result-poster {
+    width: 48px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 3px;
+    flex-shrink: 0;
+    background: var(--tab-content-bg);
+}
+
+.movies-tmdb-result-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.movies-tmdb-result-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.movies-tmdb-result-meta {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.movies-tmdb-result-overview {
+    font-size: 12px;
+    opacity: 0.75;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ── Empty state ─────────────────────────────────────────── */
+
+.movies-empty {
+    padding: 40px 20px;
+    text-align: center;
+    opacity: 0.45;
+    font-size: 14px;
+}
+
+/* ── Mobile ──────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+    .movies-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        grid-template-areas:
+            "top-search"
+            "body-list";
+    }
+
+    .movies-top-actions,
+    .movies-tag-sidebar,
+    .movies-detail-panel {
+        display: none;
+    }
+
+    .movies-container.movie-selected {
+        grid-template-areas:
+            "top-actions"
+            "body-detail";
+    }
+
+    .movies-container.movie-selected .movies-top-search,
+    .movies-container.movie-selected .movies-list-panel,
+    .movies-container.movie-selected .movies-tag-sidebar {
+        display: none;
+    }
+
+    .movies-container.movie-selected .movies-top-actions,
+    .movies-container.movie-selected .movies-detail-panel {
+        display: flex;
+    }
+
+    .movies-container.movie-selected .movies-detail-panel {
+        display: block;
+    }
+}
+
+/* Last-played elapsed in movie list card */
+.movies-card-elapsed {
+    font-size: 11px;
+    color: var(--accent-orange);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Set/collection link in detail panel */
+.movies-detail-set,
+.movies-detail-lastplayed {
+    font-size: 13px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    opacity: 0.85;
+}
+
+.movies-set-link {
+    color: var(--accent);
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.15s;
+}
+
+.movies-set-link:hover {
+    text-decoration-color: var(--accent);
+}
+
+/* Actor chips — clickable */
+.movies-actor-chip {
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.movies-actor-chip:hover {
+    border-color: var(--accent-blue);
+    background-color: var(--accent-blue-bg);
+}
+
+/* List header (actor / set filter label) */
+.movies-list-header {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.movies-list-header-clear {
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    opacity: 0.7;
+    padding: 1px 6px;
+    font-size: 11px;
+    margin-left: auto;
+    line-height: 1.5;
+}
+
+.movies-list-header-clear:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Sort bar above the movie list */
+.movies-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.movies-sort-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 2px;
+}
+
+.movies-sort-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 8px;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.movies-sort-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+.movies-sort-btn.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.movies-collapse-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-left: 6px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.movies-collapse-label input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+/* Collection card in movie list */
+.movies-card-collection {
+    border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.movies-card-collection:hover {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.movies-card-collection-icon {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+.movies-card-info {
+    position: relative;
+}
+
+/* Poster upload overlay */
+.movies-detail-poster-wrap {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.movies-detail-poster-wrap:hover .movies-poster-upload-overlay {
+    opacity: 1;
+}
+
+.movies-poster-upload-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 6px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+}
+
+.movies-detail-poster-wrap .movies-detail-poster,
+.movies-detail-poster-wrap .movies-detail-poster-placeholder {
+    display: block;
+}
+
+/* Keyboard navigation focus ring */
+.movies-card.kbd-focused {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.movies-tag-item.kbd-focused {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    border-radius: 4px;
+}

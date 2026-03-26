@@ -25,6 +25,7 @@ import (
 	"keyop/x/messengerStats"
 	"keyop/x/metricmon"
 	"keyop/x/moon"
+	"keyop/x/movies"
 	"keyop/x/notes"
 	"keyop/x/notify"
 	"keyop/x/ollama"
@@ -94,6 +95,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"logManager": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return logManager.NewService(deps, cfg)
+	},
+	"movies": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return movies.NewService(deps, cfg)
 	},
 	"notes": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return notes.NewService(deps, cfg)

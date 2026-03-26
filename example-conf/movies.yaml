@@ -1,0 +1,6 @@
+name: movies
+type: movies
+config:
+  dbPath: ~/.keyop/sqlite/movies.sql
+  imagesDir: ~/.keyop/movies/images  # poster and fanart images stored here
+  tmdbApiKey: ""  # Get from https://www.themoviedb.org/settings/api

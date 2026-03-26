@@ -1,0 +1,150 @@
+<div class="movies-container" id="movies-container">
+    <!-- top search bar (spans tag+list columns) -->
+    <div class="movies-top-search">
+        <div class="movies-search-wrap">
+            <input id="movies-search" placeholder="Search titles..." type="text">
+            <button class="movies-search-clear" id="movies-search-clear" style="display:none" title="Clear search">✕
+            </button>
+        </div>
+        <label class="movies-fulltext-label" title="Search plot and tagline as well as title">
+            <input id="movies-fulltext" type="checkbox"> Full text
+        </label>
+        <button id="movies-tmdb-search-btn" title="Search TMDB">🔍 TMDB</button>
+    </div>
+    <!-- top actions bar (detail column) -->
+    <div class="movies-top-actions">
+        <button id="movies-new-btn">+ New</button>
+        <button id="movies-edit-btn" style="display:none">Edit</button>
+        <button id="movies-delete-btn" style="display:none">Delete</button>
+        <label class="movies-import-label">
+            📥 Import NFO
+            <input accept=".nfo" id="movies-nfo-input" multiple style="display:none" type="file">
+        </label>
+    </div>
+    <!-- tag sidebar -->
+    <div class="movies-tag-sidebar" id="movies-tag-sidebar">
+        <div class="movies-tag-list" id="movies-tag-list"></div>
+    </div>
+    <!-- movie list -->
+    <div class="movies-list-panel" id="movies-list-panel">
+        <div class="movies-sort-bar">
+            <span class="movies-sort-label">Sort</span>
+            <button class="movies-sort-btn active" data-sort="title">Title</button>
+            <button class="movies-sort-btn" data-sort="year">Year</button>
+            <button class="movies-sort-btn" data-sort="runtime">Runtime</button>
+            <button class="movies-sort-btn" data-sort="last">Last Watched</button>
+            <label class="movies-collapse-label">
+                <input checked id="movies-collapse-collections" type="checkbox">
+                Collapse collections
+            </label>
+        </div>
+        <div class="movies-list" id="movies-list"></div>
+    </div>
+    <!-- movie detail -->
+    <div class="movies-detail-panel" id="movies-detail-panel">
+        <div class="movies-detail" id="movies-detail"></div>
+        <input accept="image/*" id="movies-poster-upload" style="display:none" type="file">
+    </div>
+</div>
+
+<!-- Edit/Create Modal -->
+<div class="movies-modal-overlay" id="movies-modal-overlay" style="display:none">
+    <div class="movies-modal">
+        <div class="movies-modal-header">
+            <span id="movies-modal-title">Edit Movie</span>
+            <button class="movies-modal-close" id="movies-modal-close">✕</button>
+        </div>
+        <div class="movies-modal-body">
+            <div class="movies-field-row">
+                <label>Title</label>
+                <input id="movies-edit-title" placeholder="Movie title" type="text">
+            </div>
+            <div class="movies-field-row">
+                <label>Sort Title</label>
+                <input id="movies-edit-sort-title" placeholder="Sort title (e.g. Matrix, The)" type="text">
+            </div>
+            <div class="movies-field-row movies-field-row-2col">
+                <div>
+                    <label>Year</label>
+                    <input id="movies-edit-year" placeholder="Year" type="number">
+                </div>
+                <div>
+                    <label>Runtime (min)</label>
+                    <input id="movies-edit-runtime" placeholder="Runtime" type="number">
+                </div>
+            </div>
+            <div class="movies-field-row">
+                <label>Rating (0–10)</label>
+                <input id="movies-edit-rating" max="10" min="0" placeholder="Rating" step="0.1" type="number">
+            </div>
+            <div class="movies-field-row">
+                <label>Tagline</label>
+                <input id="movies-edit-tagline" placeholder="Tagline" type="text">
+            </div>
+            <div class="movies-field-row">
+                <label>Plot</label>
+                <textarea id="movies-edit-plot" placeholder="Plot summary" rows="4"></textarea>
+            </div>
+            <div class="movies-field-row movies-field-row-2col">
+                <div>
+                    <label>TMDB ID</label>
+                    <input id="movies-edit-tmdb-id" placeholder="TMDB ID" type="text">
+                </div>
+                <div>
+                    <label>IMDB ID</label>
+                    <input id="movies-edit-imdb-id" placeholder="tt1234567" type="text">
+                </div>
+            </div>
+            <div class="movies-field-row">
+                <label>Poster URL</label>
+                <input id="movies-edit-poster-url" placeholder="https://..." type="text">
+            </div>
+            <div class="movies-field-row">
+                <label>Set / Collection Name</label>
+                <input id="movies-edit-set-name" placeholder="e.g. The Matrix Collection" type="text">
+            </div>
+            <div class="movies-field-row">
+                <label>Last Played (YYYY-MM-DD)</label>
+                <input id="movies-edit-last-played" type="date">
+            </div>
+            <div class="movies-field-row">
+                <label>Tags (comma-separated)</label>
+                <input id="movies-edit-tags" placeholder="action, sci-fi, favorite" type="text">
+            </div>
+            <div class="movies-field-row">
+                <label>Actors (one per line: Name | Role)</label>
+                <textarea id="movies-edit-actors" placeholder="Keanu Reeves | Neo&#10;Laurence Fishburne | Morpheus"
+                          rows="4"></textarea>
+            </div>
+        </div>
+        <div class="movies-modal-footer">
+            <button class="movies-btn" id="movies-modal-cancel">Cancel</button>
+            <button class="movies-btn movies-btn-primary" id="movies-modal-save">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- TMDB Search Modal -->
+<div class="movies-modal-overlay" id="movies-tmdb-modal-overlay" style="display:none">
+    <div class="movies-modal">
+        <div class="movies-modal-header">
+            <span>Search The Movie Database</span>
+            <button class="movies-modal-close" id="movies-tmdb-modal-close">✕</button>
+        </div>
+        <div class="movies-modal-body">
+            <div class="movies-field-row movies-field-row-2col">
+                <div>
+                    <label>Title</label>
+                    <input id="movies-tmdb-query" placeholder="Movie title" type="text">
+                </div>
+                <div>
+                    <label>Year (optional)</label>
+                    <input id="movies-tmdb-year" placeholder="2023" type="text">
+                </div>
+            </div>
+            <button class="movies-btn movies-btn-primary" id="movies-tmdb-search-submit" style="margin-top:8px">Search
+            </button>
+            <div id="movies-tmdb-results" style="margin-top:12px"></div>
+        </div>
+    </div>
+</div>
