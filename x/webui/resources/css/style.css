@@ -1173,6 +1173,27 @@ input[type="date"]:focus {
     border-bottom: 1px solid var(--border);
 }
 
+.status-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.status-table th.sortable:hover {
+    background-color: var(--border);
+}
+
+.sort-indicator {
+    margin-left: 0.25rem;
+    font-size: 0.75rem;
+    opacity: 0.35;
+}
+
+.sort-indicator.active {
+    opacity: 1;
+    color: var(--accent, #7c3aed);
+}
+
 .status-table th:last-child {
     text-align: right;
 }

@@ -3,6 +3,10 @@ let currentStatuses = {}; // Cache of current status items keyed by "hostname:na
 const removedStatuses = new Set(); // Keys removed by the user; re-shown on new incoming message
 let lastRefreshTime = null;
 
+// Sort state: column key and direction ('asc' | 'desc')
+let sortCol = 'service';
+let sortDir = 'asc';
+
 import {formatElapsedTime, startElapsedTimeUpdates} from '/js/time-formatter.js';
 
 const LEVEL_COLORS = {
@@ -114,10 +118,43 @@ function renderStatusList() {
         return;
     }
 
-    // Sort by name
-    statuses.sort((a, b) => a.name.localeCompare(b.name));
+    // Severity order for 'status' column sort (higher = more severe)
+    const LEVEL_ORDER = {critical: 4, error: 3, warning: 2, ok: 1, info: 0};
 
-    // Calculate alert counts (excluding acknowledged problems)
+    // Stable sort: primary column, tie-break by service name then hostname
+    const colValue = (s) => {
+        switch (sortCol) {
+            case 'hostname':
+                return (s.hostname || '').toLowerCase();
+            case 'service':
+                return s.name.toLowerCase();
+            case 'status':
+                return LEVEL_ORDER[(s.level || 'ok').toLowerCase()] ?? 0;
+            case 'details':
+                return (s.details || '').toLowerCase();
+            case 'lastseen':
+                return s.lastSeen ? new Date(s.lastSeen).getTime() : 0;
+            default:
+                return s.name.toLowerCase();
+        }
+    };
+
+    statuses.sort((a, b) => {
+        const av = colValue(a);
+        const bv = colValue(b);
+        let cmp = 0;
+        if (typeof av === 'number' && typeof bv === 'number') {
+            cmp = av - bv;
+        } else {
+            cmp = String(av).localeCompare(String(bv));
+        }
+        if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+        // Tie-break for stability: service name then hostname
+        const nc = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        if (nc !== 0) return nc;
+        return (a.hostname || '').toLowerCase().localeCompare((b.hostname || '').toLowerCase());
+    });
+
     const unackedStatuses = statuses.filter(s => !s.acknowledged);
     const criticalCount = unackedStatuses.filter(s => (s.level || 'ok').toLowerCase() === 'critical').length;
     const warningCount = unackedStatuses.filter(s => (s.level || 'ok').toLowerCase() === 'warning').length;
@@ -161,15 +198,20 @@ function renderStatusList() {
         `;
     }).join('');
 
+    const sortIndicator = (col) => {
+        if (sortCol !== col) return '<span class="sort-indicator">↕</span>';
+        return `<span class="sort-indicator active">${sortDir === 'asc' ? '↑' : '↓'}</span>`;
+    };
+
     const html = `
         <table class="status-table">
             <thead>
                 <tr>
-                    <th>Hostname</th>
-                    <th>Service</th>
-                    <th>Status</th>
-                    <th>Details</th>
-                    <th>Last Seen</th>
+                    <th class="sortable" data-sort="hostname">Hostname ${sortIndicator('hostname')}</th>
+                    <th class="sortable" data-sort="service">Service ${sortIndicator('service')}</th>
+                    <th class="sortable" data-sort="status">Status ${sortIndicator('status')}</th>
+                    <th class="sortable" data-sort="details">Details ${sortIndicator('details')}</th>
+                    <th class="sortable" data-sort="lastseen">Last Seen ${sortIndicator('lastseen')}</th>
                     <th>Action</th>
                     <th></th>
                 </tr>
@@ -188,6 +230,7 @@ function renderStatusList() {
     // Attach click handlers to ack buttons
     attachAckHandlers();
     attachRemoveHandlers();
+    attachSortHandlers();
 }
 
 function updateStatusTabBadge(criticalCount, warningCount) {
@@ -221,6 +264,23 @@ function attachRemoveHandlers() {
         btn.addEventListener('click', handleRemoveClick);
     });
 }
+
+function attachSortHandlers() {
+    if (!statusmonContainer) return;
+    statusmonContainer.querySelectorAll('.status-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (sortCol === col) {
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortCol = col;
+                sortDir = 'asc';
+            }
+            renderStatusList();
+        });
+    });
+}
+
 
 async function handleRemoveClick(event) {
     event.stopPropagation();
