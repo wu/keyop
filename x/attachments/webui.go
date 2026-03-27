@@ -135,7 +135,7 @@ func (svc *Service) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Create date-based sub-directory.
 	dateDir := todayDir()
 	destDir := filepath.Join(svc.uploadDir, dateDir)
-	if err := os.MkdirAll(destDir, 0750); err != nil {
+	if err := os.MkdirAll(destDir, 0750); err != nil { //nolint:gosec // destDir is svc.uploadDir (configured path) + server-generated date string, not user input
 		logger.Error("attachments: failed to create date dir", "path", destDir, "error", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return

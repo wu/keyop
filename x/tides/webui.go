@@ -4,7 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"keyop/util"
+	"keyop/x/sun"
 	"keyop/x/webui"
 	"net/http"
 	"time"
@@ -222,9 +222,9 @@ func (svc *Service) fetchCurrentTide() (any, error) {
 
 	// Compute solar days for the sparkline window (12h before now to 24h after)
 	// using the server-side astral library so JS doesn't need to recalculate.
-	var solarDays []util.SolarDay
+	var solarDays []sun.SolarDay
 	if svc.lat != 0 || svc.lon != 0 {
-		solarDays = util.SolarDaysForRange(svc.lat, svc.lon, twelveHoursAgo, twentyFourHoursFromNow)
+		solarDays = sun.SolarDaysForRange(svc.lat, svc.lon, twelveHoursAgo, twentyFourHoursFromNow)
 	}
 
 	return map[string]any{

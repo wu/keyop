@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"keyop/util"
+	"keyop/x/sun"
 	"keyop/x/webui"
 	"net/http"
 	"time"
@@ -122,7 +122,7 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 		// This eliminates the need for JS to recalculate civil dawn/dusk.
 		// Start one day early so JS getLightType can look up the previous day's dusk for
 		// any periods that straddle UTC midnight near the start of the window.
-		var solarDays []util.SolarDay
+		var solarDays []sun.SolarDay
 		solarLat, solarLon := lat, lon
 		if solarLat == 0 && solarLon == 0 {
 			// Fall back to configured coordinates if the stored event has no location.
@@ -130,7 +130,7 @@ func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, err
 		}
 		if solarLat != 0 || solarLon != 0 {
 			now := time.Now().UTC()
-			solarDays = util.SolarDaysForRange(solarLat, solarLon, now.Add(-24*time.Hour), now.Add(72*time.Hour))
+			solarDays = sun.SolarDaysForRange(solarLat, solarLon, now.Add(-24*time.Hour), now.Add(72*time.Hour))
 		}
 
 		return map[string]any{"status": "ok", "current": current, "forecast": forecastResp, "solar_days": solarDays}, nil
