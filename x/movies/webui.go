@@ -117,7 +117,9 @@ func (svc *Service) handleMovieImage(w http.ResponseWriter, r *http.Request) {
 		ct = "image/jpeg"
 	}
 	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "max-age=86400")
+	// Images are keyed by UUID and never change once written — cache aggressively.
+	// "immutable" tells modern browsers not to revalidate on reload.
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	http.ServeContent(w, r, filepath.Base(matches[0]), fi.ModTime(), f)
 }
 

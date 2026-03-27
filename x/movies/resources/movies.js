@@ -165,8 +165,13 @@ export function canReturnToTabs() {
             if (idx < 0) idx = cards.findIndex(c => c.dataset.id == selectedMovieId);
             setListFocused(idx >= 0 ? idx : -1);
         } else {
-            // Not in list panel — just reset the index; identity is preserved in focusedListMovieId.
+            // Not in list panel — reset index but scroll the selected card back into view.
             focusedListIdx = -1;
+            if (selectedMovieId != null) {
+                const cards = listCards();
+                const idx = cards.findIndex(c => c.dataset.id == selectedMovieId);
+                if (idx >= 0) cards[idx].scrollIntoView({block: 'nearest'});
+            }
         }
     }
 
@@ -526,6 +531,10 @@ export function canReturnToTabs() {
         await loadMovies();
         if (result && result.id) {
             selectMovie(result.id);
+            // Scroll the card back into view without stealing keyboard focus.
+            const cards = listCards();
+            const idx = cards.findIndex(c => c.dataset.id == result.id);
+            if (idx >= 0) cards[idx].scrollIntoView({block: 'nearest'});
         }
     }
 

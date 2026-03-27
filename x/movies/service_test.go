@@ -1,7 +1,9 @@
 package movies
 
 import (
+	"fmt"
 	"testing"
+	"time"
 )
 
 // ── releaseYear ───────────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ func TestFloatParam(t *testing.T) {
 // ── movieToMap ────────────────────────────────────────────────────────────────
 
 func TestMovieToMap_Fields(t *testing.T) {
+	updatedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	m := movie{
 		ID:         42,
 		UUID:       "abc-123",
@@ -150,6 +153,7 @@ func TestMovieToMap_Fields(t *testing.T) {
 		LastPlayed: "2026-01-01",
 		Tags:       []string{"horror"},
 		Actors:     []movieActor{{Name: "Sigourney Weaver", Role: "Ripley", SortOrder: 0}},
+		UpdatedAt:  updatedAt,
 	}
 
 	result := movieToMap(m)
@@ -169,7 +173,7 @@ func TestMovieToMap_Fields(t *testing.T) {
 	check("rating", 8.5)
 	check("tmdb_id", "348")
 	check("imdb_id", "tt0078748")
-	check("poster_url", "/img/poster.jpg")
+	check("poster_url", fmt.Sprintf("/img/poster.jpg?v=%d", updatedAt.Unix()))
 	check("set_name", "Alien Collection")
 	check("last_played", "2026-01-01")
 

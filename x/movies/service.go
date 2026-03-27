@@ -202,6 +202,26 @@ func expandHome(path string) string {
 	return path
 }
 
+// versionedImageURL appends a ?v= cache-busting param to local image URLs so
+// that browsers re-fetch when a poster is replaced (updated_at changes) while
+// still caching unchanged images indefinitely. Any existing ?v= param is
+// stripped first to prevent double-versioning if a versioned URL was stored.
+func versionedImageURL(url string, updatedAt time.Time) string {
+	if url == "" || !strings.HasPrefix(url, "/") {
+		return url
+	}
+	return fmt.Sprintf("%s?v=%d", stripVersionParam(url), updatedAt.Unix())
+}
+
+// stripVersionParam removes the ?v= cache-busting query param from a local
+// image URL so that the clean path can be stored in the DB and compared.
+func stripVersionParam(url string) string {
+	if i := strings.Index(url, "?v="); i != -1 {
+		return url[:i]
+	}
+	return url
+}
+
 // movieToMap converts a movie struct to a map for JSON serialization.
 func movieToMap(m movie) map[string]any {
 	actors := make([]map[string]any, len(m.Actors))
@@ -230,8 +250,8 @@ func movieToMap(m movie) map[string]any {
 		"rating":      m.Rating,
 		"tmdb_id":     m.TmdbID,
 		"imdb_id":     m.ImdbID,
-		"poster_url":  m.PosterURL,
-		"fanart_url":  m.FanartURL,
+		"poster_url":  versionedImageURL(m.PosterURL, m.UpdatedAt),
+		"fanart_url":  versionedImageURL(m.FanartURL, m.UpdatedAt),
 		"set_name":    m.SetName,
 		"last_played": m.LastPlayed,
 		"tags":        tags,
@@ -569,8 +589,8 @@ func movieFromParams(params map[string]any) movie {
 		Rating:     floatParam(params, "rating"),
 		TmdbID:     stringParam(params, "tmdb_id"),
 		ImdbID:     stringParam(params, "imdb_id"),
-		PosterURL:  stringParam(params, "poster_url"),
-		FanartURL:  stringParam(params, "fanart_url"),
+		PosterURL:  stripVersionParam(stringParam(params, "poster_url")),
+		FanartURL:  stripVersionParam(stringParam(params, "fanart_url")),
 		SetName:    stringParam(params, "set_name"),
 		LastPlayed: stringParam(params, "last_played"),
 	}
