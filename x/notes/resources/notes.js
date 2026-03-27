@@ -11,7 +11,7 @@ export const handlesHorizontalNav = true;
     let currentSearch = '';
     let currentTag = 'all';
     let currentPage = 1;
-    let pageSize = 10;
+    let pageSize = 100;
     let totalCount = 0;
     let tagFilterText = '';
     let focusedNoteId = null;  // keyboard cursor — not yet committed
@@ -21,6 +21,7 @@ export const handlesHorizontalNav = true;
 
     const elements = {
         search: document.getElementById('notes-search'),
+        searchClear: document.getElementById('notes-search-clear'),
         searchContent: document.getElementById('notes-search-content'),
         newBtn: document.getElementById('notes-new-btn'),
         backBtn: document.getElementById('notes-back-btn'),
@@ -28,6 +29,7 @@ export const handlesHorizontalNav = true;
         pagination: document.getElementById('notes-pagination'),
         tagList: document.getElementById('notes-tag-list'),
         tagFilter: document.getElementById('notes-tag-filter'),
+        tagFilterClear: document.getElementById('notes-tag-filter-clear'),
         view: document.getElementById('notes-view'),
         edit: document.getElementById('notes-edit'),
         title: document.getElementById('notes-title'),
@@ -90,9 +92,9 @@ export const handlesHorizontalNav = true;
             offset: (currentPage - 1) * pageSize,
             search_content: searchContent,
         });
-        if (result && result.notes) {
-            allNotes = result.notes;
-            totalCount = result.total ?? 0;
+        if (result && result.total != null) {
+            allNotes = result.notes ?? [];
+            totalCount = result.total;
             renderNotesList();
             renderPagination();
         }
@@ -540,16 +542,40 @@ export const handlesHorizontalNav = true;
     // Event listeners
     elements.search.addEventListener('input', (e) => {
         currentSearch = e.target.value;
+        if (elements.searchClear) elements.searchClear.style.display = currentSearch ? '' : 'none';
         currentPage = 1;
         loadNotes();
         loadTagCounts();
     });
 
+    if (elements.searchClear) {
+        elements.searchClear.addEventListener('click', () => {
+            elements.search.value = '';
+            currentSearch = '';
+            elements.searchClear.style.display = 'none';
+            currentPage = 1;
+            loadNotes();
+            loadTagCounts();
+            elements.search.focus();
+        });
+    }
+
     if (elements.tagFilter) {
         elements.tagFilter.addEventListener('input', (e) => {
             tagFilterText = e.target.value;
+            if (elements.tagFilterClear) elements.tagFilterClear.style.display = tagFilterText ? '' : 'none';
             // Re-render the existing counts with the new filter — no server round-trip needed
             loadTagCounts();
+        });
+    }
+
+    if (elements.tagFilterClear) {
+        elements.tagFilterClear.addEventListener('click', () => {
+            elements.tagFilter.value = '';
+            tagFilterText = '';
+            elements.tagFilterClear.style.display = 'none';
+            loadTagCounts();
+            elements.tagFilter.focus();
         });
     }
 
@@ -900,30 +926,6 @@ export const handlesHorizontalNav = true;
     }
 
     // Dynamically size the page to fit the visible notes list area
-    let resizeDebounce = null;
-
-    function recalcPageSize() {
-        if (!elements.list) return;
-        const containerHeight = elements.list.clientHeight;
-        if (containerHeight <= 0) return;
-        // Measure the height of a rendered item; fall back to a CSS-derived estimate
-        const sampleItem = elements.list.querySelector('.notes-item');
-        const itemHeight = sampleItem ? sampleItem.offsetHeight : 64;
-        const newSize = Math.max(1, Math.floor(containerHeight / itemHeight));
-        if (newSize !== pageSize) {
-            pageSize = newSize;
-            currentPage = 1;
-            loadNotes();
-        }
-    }
-
-    if (elements.list && typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(() => {
-            clearTimeout(resizeDebounce);
-            resizeDebounce = setTimeout(recalcPageSize, 100);
-        }).observe(elements.list);
-    }
-
     // Initialize
     setFocusedPanel('notes');
     loadNotes();

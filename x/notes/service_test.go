@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createTestDeps(_ *testing.T) core.Dependencies {
@@ -15,6 +16,27 @@ func createTestDeps(_ *testing.T) core.Dependencies {
 	deps.SetMessenger(testutil.NewFakeMessenger())
 	deps.SetContext(context.Background())
 	return deps
+}
+
+// newTestSvcWithDB returns a Service backed by a real temp DB with schema
+// already initialised.  Use this for tests that exercise CRUD operations.
+func newTestSvcWithDB(t *testing.T) *Service {
+	t.Helper()
+	dbPath := openTestNotesDB(t)
+	deps := createTestDeps(t)
+	return &Service{
+		Cfg:    core.ServiceConfig{Name: "notes"},
+		Deps:   deps,
+		dbPath: dbPath,
+	}
+}
+
+// act calls HandleWebUIAction and fails the test on error.
+func act(t *testing.T, svc *Service, action string, params map[string]any) any {
+	t.Helper()
+	res, err := svc.HandleWebUIAction(action, params)
+	require.NoError(t, err)
+	return res
 }
 
 func TestNewService(t *testing.T) {
@@ -184,4 +206,119 @@ func TestDeleteNoteMissingID(t *testing.T) {
 	_, err := svc.deleteNote(map[string]any{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing or invalid id parameter")
+}
+
+// ---------------------------------------------------------------------------
+// CRUD tests via HandleWebUIAction using a real temp database
+// ---------------------------------------------------------------------------
+
+func TestHandleWebUIAction_DBGetNotes(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	insertTestNote(t, svc.dbPath, "Note A", "body", "")
+	insertTestNote(t, svc.dbPath, "Note B", "body", "")
+
+	res := act(t, svc, "get-notes", map[string]any{"limit": float64(10), "offset": float64(0)})
+	m := res.(map[string]any)
+	assert.Equal(t, 2, m["total"])
+	assert.Len(t, m["notes"], 2)
+}
+
+func TestHandleWebUIAction_DBGetNote(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	id := insertTestNote(t, svc.dbPath, "My Note", "hello", "tag1")
+
+	res := act(t, svc, "get-note", map[string]any{"id": float64(id)})
+	m := res.(map[string]any)
+	assert.Equal(t, id, m["id"])
+	assert.Equal(t, "My Note", m["title"])
+	assert.Equal(t, "hello", m["content"])
+}
+
+func TestHandleWebUIAction_DBCreateNote(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+
+	res := act(t, svc, "create-note", map[string]any{
+		"title":   "Created",
+		"content": "Content here",
+		"tags":    "new",
+	})
+	m := res.(map[string]any)
+	assert.Equal(t, "Created", m["title"])
+	assert.NotNil(t, m["id"])
+
+	list := act(t, svc, "get-notes", map[string]any{"limit": float64(10), "offset": float64(0)})
+	assert.Equal(t, 1, list.(map[string]any)["total"])
+}
+
+func TestHandleWebUIAction_DBUpdateNote(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	id := insertTestNote(t, svc.dbPath, "Before", "old", "")
+
+	res := act(t, svc, "update-note", map[string]any{
+		"id":      float64(id),
+		"title":   "After",
+		"content": "new body",
+		"tags":    "edited",
+	})
+	m := res.(map[string]any)
+	assert.Equal(t, "After", m["title"])
+	assert.Equal(t, "new body", m["content"])
+	assert.Equal(t, "edited", m["tags"])
+}
+
+func TestHandleWebUIAction_DBDeleteNote(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	id := insertTestNote(t, svc.dbPath, "Doomed", "bye", "")
+
+	res := act(t, svc, "delete-note", map[string]any{"id": float64(id)})
+	assert.Equal(t, true, res.(map[string]any)["deleted"])
+
+	_, err := svc.HandleWebUIAction("get-note", map[string]any{"id": float64(id)})
+	require.Error(t, err)
+}
+
+func TestHandleWebUIAction_DBGetTagCounts(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	insertTestNote(t, svc.dbPath, "Note X", "", "go,test")
+	insertTestNote(t, svc.dbPath, "Note Y", "", "go")
+	insertTestNote(t, svc.dbPath, "Note Z", "", "")
+
+	res := act(t, svc, "get-tag-counts", map[string]any{})
+	m := res.(map[string]any)
+	counts := m["counts"].(map[string]int)
+	assert.Equal(t, 3, counts["all"])
+	assert.Equal(t, 2, counts["go"])
+	assert.Equal(t, 1, counts["untagged"])
+}
+
+func TestHandleWebUIAction_DBGetNoteTitles(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	insertTestNote(t, svc.dbPath, "Short", "", "")
+	insertTestNote(t, svc.dbPath, "A very long title", "", "")
+
+	res := act(t, svc, "get-note-titles", map[string]any{})
+	m := res.(map[string]any)
+	assert.NotNil(t, m["titles"])
+}
+
+func TestHandleWebUIAction_DBImportNotes(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+
+	res := act(t, svc, "import-notes", map[string]any{
+		"files": []any{
+			map[string]any{"name": "first.md", "content": "# First\nbody"},
+			map[string]any{"name": "second.md", "content": "# Second\nbody"},
+		},
+	})
+	m := res.(map[string]any)
+	assert.Equal(t, 2, m["count"])
+
+	list := act(t, svc, "get-notes", map[string]any{"limit": float64(10), "offset": float64(0)})
+	assert.Equal(t, 2, list.(map[string]any)["total"])
+}
+
+func TestHandleWebUIAction_ImportNotesMissingFiles(t *testing.T) {
+	svc := newTestSvcWithDB(t)
+	_, err := svc.HandleWebUIAction("import-notes", map[string]any{})
+	require.Error(t, err)
 }

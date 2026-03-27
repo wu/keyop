@@ -151,6 +151,34 @@
     border-color: #0ea5e9;
 }
 
+.notes-search-wrap {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+}
+
+.notes-search-wrap .notes-search {
+    width: 100%;
+    padding-right: 28px;
+}
+
+.notes-search-clear {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted, #888);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+.notes-search-clear:hover {
+    color: var(--text);
+}
+
 .notes-btn {
     padding: 8px 12px;
     background-color: var(--tab-content-bg);

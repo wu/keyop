@@ -1,9 +1,18 @@
 <div class="notes-container" id="notes-container">
     <div class="notes-top-bar-filter">
-        <input class="notes-search tag-filter-input" id="notes-tag-filter" placeholder="Filter tags..." type="text">
+        <div class="notes-search-wrap">
+            <input class="notes-search tag-filter-input" id="notes-tag-filter" placeholder="Filter tags..." type="text">
+            <button class="notes-search-clear" id="notes-tag-filter-clear" style="display:none;"
+                    title="Clear tag filter">×
+            </button>
+        </div>
     </div>
     <div class="notes-top-bar-search">
-        <input class="notes-search" id="notes-search" placeholder="Search notes..." type="text">
+        <div class="notes-search-wrap">
+            <input class="notes-search" id="notes-search" placeholder="Search notes..." type="text">
+            <button class="notes-search-clear" id="notes-search-clear" style="display:none;" title="Clear search">×
+            </button>
+        </div>
         <label class="notes-search-extended-label"><input id="notes-search-content" type="checkbox"> full text</label>
     </div>
     <div class="notes-top-bar-actions">
