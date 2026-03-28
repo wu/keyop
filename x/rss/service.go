@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	defaultMaxAge  = 720 * time.Hour // 30 days
-	httpTimeout    = 15 * time.Second
-	httpUserAgent  = "keyop-rss/1.0"
-	maxArticles    = 1000
+	defaultMaxAge = 720 * time.Hour // 30 days
+	httpTimeout   = 15 * time.Second
+	httpUserAgent = "keyop-rss/1.0"
+	maxArticles   = 1000
 )
 
 // feedConfig holds the parsed configuration for a single RSS/Atom feed.
