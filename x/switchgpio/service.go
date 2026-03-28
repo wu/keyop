@@ -7,6 +7,7 @@ import (
 	"keyop/core"
 	"keyop/util"
 
+	"github.com/google/uuid"
 	rpio "github.com/stianeikeland/go-rpio/v4"
 )
 
@@ -31,7 +32,6 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		svc.pinNum = int(p)
 	}
 
-	svc.pin = rpio.Pin(svc.pinNum)
 	return svc
 }
 
@@ -50,12 +50,18 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize opens RPIO and subscribes to the switch command channel.
 func (svc *Service) Initialize() error {
+	logger := svc.Deps.MustGetLogger()
+	logger.Info("switch: opening rpio", "device", svc.Cfg.Name, "pin", svc.pinNum)
 	if err := rpio.Open(); err != nil {
+		svc.sendErrorEvent(fmt.Sprintf("switch: failed to open rpio: %v", err), "error")
 		return fmt.Errorf("switch: failed to open rpio: %w", err)
 	}
+	svc.pin = rpio.Pin(svc.pinNum)
 	svc.pin.Output()
+	logger.Info("switch: pin initialised", "device", svc.Cfg.Name, "pin", svc.pinNum, "state", pinState(svc.pin.Read()))
 
 	messenger := svc.Deps.MustGetMessenger()
+	logger.Info("switch: subscribing to channel", "device", svc.Cfg.Name, "channel", svc.Cfg.Subs["switch"].Name)
 	return messenger.Subscribe(
 		svc.Deps.MustGetContext(),
 		svc.Cfg.Name,
@@ -77,16 +83,18 @@ func (svc *Service) commandHandler(msg core.Message) error {
 		}
 	}
 	if cmd == nil {
+		logger.Warn("switch: received message with no SwitchCommand payload", "device", svc.Cfg.Name, "event", msg.Event)
 		return nil
 	}
 	if cmd.DeviceName != svc.Cfg.Name {
+		logger.Debug("switch: ignoring command for other device", "device", svc.Cfg.Name, "target", cmd.DeviceName)
 		return nil
 	}
 
 	currentState := pinState(svc.pin.Read())
 	targetState := cmd.State
 
-	logger.Info("switch: received command", "device", svc.Cfg.Name, "current", currentState, "target", targetState)
+	logger.Info("switch: received command", "device", svc.Cfg.Name, "pin", svc.pinNum, "current", currentState, "target", targetState)
 
 	if currentState != targetState {
 		if targetState == "ON" {
@@ -94,12 +102,34 @@ func (svc *Service) commandHandler(msg core.Message) error {
 		} else {
 			svc.pin.Low()
 		}
-		logger.Info("switch: pin state changed", "device", svc.Cfg.Name, "state", targetState)
+		logger.Info("switch: pin state changed", "device", svc.Cfg.Name, "pin", svc.pinNum, "state", targetState)
+	} else {
+		logger.Info("switch: pin already in target state, no write needed", "device", svc.Cfg.Name, "pin", svc.pinNum, "state", currentState)
 	}
 
-	newState := pinState(svc.pin.Read())
-	svc.emitEvent(msg, newState)
+	svc.emitEvent(msg, targetState)
 	return nil
+}
+
+func (svc *Service) sendErrorEvent(summary, level string) {
+	logger := svc.Deps.MustGetLogger()
+	messenger := svc.Deps.MustGetMessenger()
+	errEvent := core.ErrorEvent{
+		Summary: summary,
+		Text:    summary,
+		Level:   level,
+	}
+	if err := messenger.Send(core.Message{
+		Correlation: uuid.New().String(),
+		ChannelName: svc.Cfg.Name,
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Event:       "switch_error",
+		Text:        summary,
+		Data:        errEvent,
+	}); err != nil {
+		logger.Error("switch: failed to send error event", "err", err)
+	}
 }
 
 func (svc *Service) emitEvent(trigger core.Message, state string) {
