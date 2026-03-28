@@ -1,0 +1,18 @@
+x: rss
+freq: 1h
+
+config:
+  # List of RSS/Atom feed URLs to poll
+  feeds:
+    - url: https://feeds.arstechnica.com/arstechnica/index
+      title: Ars Technica
+    - url: https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml
+      title: NYT Technology
+
+  # How far back to look for articles (default: 720h = 30 days)
+  max_age: 720h
+
+  pub_preprocess:
+    - when: 'event eq "new_article"'
+      updates:
+        channelName: rss

@@ -1,0 +1,34 @@
+<div class="rss-container" id="rss-container">
+    <div class="rss-options-bar">
+        <label class="rss-opt-label"><input checked name="rss-view" type="radio" value="unseen"> Unseen</label>
+        <label class="rss-opt-label"><input name="rss-view" type="radio" value="read-later"> Read later</label>
+        <label class="rss-opt-label"><input name="rss-view" type="radio" value="seen"> Seen</label>
+        <label class="rss-opt-label"><input name="rss-view" type="radio" value="all"> All</label>
+        <span class="rss-opts-count" id="rss-article-count"></span>
+    </div>
+    <div class="rss-top-bar-feeds">
+        <span class="rss-sidebar-heading">Feeds</span>
+    </div>
+    <div class="rss-top-bar-articles">
+        <div class="rss-search">
+            <input id="rss-search-input" placeholder="Search titles..." type="search"/>
+            <button aria-label="Clear search" id="rss-search-clear" type="button">×</button>
+            <label class="rss-search-full-label"><input id="rss-search-full" type="checkbox"> Full text</label>
+        </div>
+    </div>
+    <div class="rss-top-bar-detail">
+        <button class="rss-mark-seen-btn" disabled id="rss-mark-seen-toolbar">Mark as seen</button>
+        <button class="rss-mark-seen-btn" disabled id="rss-read-later-toolbar">🔖 Read later</button>
+    </div>
+    <div class="rss-feeds-sidebar">
+        <div class="rss-feed-list" id="rss-feed-list"></div>
+    </div>
+    <div class="rss-articles-sidebar">
+        <div class="rss-article-list" id="rss-article-list"></div>
+    </div>
+    <div class="rss-main">
+        <div class="rss-detail" id="rss-detail">
+            <div class="rss-detail-empty">Select an article to read</div>
+        </div>
+    </div>
+</div>

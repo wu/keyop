@@ -1,0 +1,14 @@
+x: sqlite
+
+config:
+
+  dbPath: sqlite/rss.sql
+
+  payloadTypes:
+    - service.rss.article.v1
+
+subs:
+
+  rss:
+    name: rss
+    description: store incoming rss article events

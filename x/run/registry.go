@@ -33,6 +33,7 @@ import (
 	"keyop/x/pingMonitor"
 	"keyop/x/process"
 	"keyop/x/reminders"
+	"keyop/x/rss"
 	"keyop/x/slack"
 	"keyop/x/speak"
 	"keyop/x/sqlite"
@@ -155,6 +156,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"process": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return process.NewService(deps, cfg)
+	},
+	"rss": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return rss.NewService(deps, cfg)
 	},
 	"speak": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return speak.NewService(deps, cfg)
