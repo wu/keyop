@@ -105,9 +105,6 @@ func TestService_Check(t *testing.T) {
 	cfg := core.ServiceConfig{
 		Name: "kodi-test",
 		Type: "kodi",
-		Pubs: map[string]core.ChannelInfo{
-			"events": {Name: "kodi-events"},
-		},
 		Config: map[string]interface{}{
 			"host": host,
 			"port": port,
@@ -160,7 +157,7 @@ func TestService_Check(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "kodi-events", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "kodi-test", messenger.SentMessages[0].ChannelName)
 		assert.Contains(t, messenger.SentMessages[0].Text, "Movie started: The Matrix")
 		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "The Matrix", data["title"])
@@ -214,7 +211,7 @@ func TestService_Check(t *testing.T) {
 		assert.NoError(t, err)
 
 		require.Len(t, messenger.SentMessages, 1)
-		assert.Equal(t, "kodi-events", messenger.SentMessages[0].ChannelName)
+		assert.Equal(t, "kodi-test", messenger.SentMessages[0].ChannelName)
 		assert.Contains(t, messenger.SentMessages[0].Text, "Movie stopped: Inception")
 		data := messenger.SentMessages[0].Data.(map[string]string)
 		assert.Equal(t, "Inception", data["title"])

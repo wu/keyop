@@ -7,30 +7,36 @@ import (
 	"fmt"
 	"io"
 	"keyop/core"
-	"keyop/util"
+	movies "keyop/x/movies"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // Service connects to a Kodi instance, tracks playback state, and emits events for playback changes and status.
 type Service struct {
-	Deps     core.Dependencies
-	Cfg      core.ServiceConfig
-	Host     string
-	Port     int
-	Username string
-	Password string //nolint:gosec // configuration-provided credential
+	Deps               core.Dependencies
+	Cfg                core.ServiceConfig
+	Host               string
+	Port               int
+	Username           string
+	Password           string //nolint:gosec // configuration-provided credential
+	watchThresholdMins int
 }
 
 // State represents the observed state of a Kodi instance (e.g., playing, paused, idle) and related metadata.
 type State struct {
-	CurrentTitle string `json:"current_title"`
+	CurrentTitle     string    `json:"current_title"`
+	PlayingSince     time.Time `json:"playing_since"`
+	WatchedEventSent bool      `json:"watched_event_sent"`
 }
 
 // NewService creates a new service using the provided dependencies and configuration.
 func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc := &Service{
-		Deps: deps,
-		Cfg:  cfg,
+		Deps:               deps,
+		Cfg:                cfg,
+		watchThresholdMins: 10,
 	}
 
 	if host, ok := svc.Cfg.Config["host"].(string); ok {
@@ -54,13 +60,17 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 	svc.Username = username
 	svc.Password = password
 
+	if mins, ok := svc.Cfg.Config["watchThresholdMins"].(int); ok && mins > 0 {
+		svc.watchThresholdMins = mins
+	}
+
 	return svc
 }
 
 // ValidateConfig validates the service configuration and returns any validation errors.
 func (svc *Service) ValidateConfig() []error {
 	logger := svc.Deps.MustGetLogger()
-	errs := util.ValidateConfig("pubs", svc.Cfg.Pubs, []string{"events"}, logger)
+	var errs []error
 
 	if svc.Host == "" {
 		err := fmt.Errorf("config field 'host' is required")
@@ -175,20 +185,22 @@ func (svc *Service) Check() error {
 	// 4. Compare and send events
 	if currentTitle != prevState.CurrentTitle {
 		if currentTitle != "" {
-			// Movie started or changed
+			// Movie started or changed — reset playtime tracking.
+			prevState.PlayingSince = time.Now()
+			prevState.WatchedEventSent = false
 			logger.Info("Movie started", "title", currentTitle)
 			err = messenger.Send(core.Message{
-				ChannelName: svc.Cfg.Pubs["events"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Text:        fmt.Sprintf("Movie started: %s", currentTitle),
 				Data:        map[string]string{"title": currentTitle, "status": "playing", "time": playbackTime},
 			})
 		} else {
-			// Movie stopped
+			// Movie stopped.
 			logger.Info("Movie stopped", "previous_title", prevState.CurrentTitle)
 			err = messenger.Send(core.Message{
-				ChannelName: svc.Cfg.Pubs["events"].Name,
+				ChannelName: svc.Cfg.Name,
 				ServiceName: svc.Cfg.Name,
 				ServiceType: svc.Cfg.Type,
 				Text:        fmt.Sprintf("Movie stopped: %s", prevState.CurrentTitle),
@@ -207,10 +219,10 @@ func (svc *Service) Check() error {
 			logger.Error("Failed to save state", "error", err)
 		}
 	} else if currentTitle != "" {
-		// Movie still playing, send update with time
+		// Movie still playing — send update and check watch threshold.
 		logger.Debug("Movie still playing", "title", currentTitle, "time", playbackTime)
 		err = messenger.Send(core.Message{
-			ChannelName: svc.Cfg.Pubs["events"].Name,
+			ChannelName: svc.Cfg.Name,
 			ServiceName: svc.Cfg.Name,
 			ServiceType: svc.Cfg.Type,
 			Text:        fmt.Sprintf("Movie playing: %s (%s)", currentTitle, playbackTime),
@@ -218,6 +230,33 @@ func (svc *Service) Check() error {
 		})
 		if err != nil {
 			logger.Error("Failed to send playing update", "error", err)
+		}
+
+		// Send MovieWatchedEvent once the threshold is exceeded.
+		threshold := time.Duration(svc.watchThresholdMins) * time.Minute
+		if !prevState.WatchedEventSent && !prevState.PlayingSince.IsZero() &&
+			time.Since(prevState.PlayingSince) >= threshold {
+			watchedAt := time.Now()
+			watchedEvt := core.Message{
+				ChannelName: svc.Cfg.Name,
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Event:       "movie_watched",
+				Text:        fmt.Sprintf("Movie watched: %s", currentTitle),
+				Data: movies.MovieWatchedEvent{
+					Title:     currentTitle,
+					WatchedAt: watchedAt,
+				},
+			}
+			if sendErr := messenger.Send(watchedEvt); sendErr != nil {
+				logger.Error("Failed to send MovieWatchedEvent", "error", sendErr)
+			} else {
+				logger.Info("MovieWatchedEvent sent", "title", currentTitle)
+				prevState.WatchedEventSent = true
+				if saveErr := stateStore.Save(svc.Cfg.Name, prevState); saveErr != nil {
+					logger.Error("Failed to save state after watched event", "error", saveErr)
+				}
+			}
 		}
 	}
 
@@ -294,6 +333,10 @@ func (svc *Service) getPlayingTitle(url string, playerID int) (string, error) {
 	title := details.Item.Title
 	if title == "" {
 		title = details.Item.Label
+	}
+	// Strip trailing " 4K" (case-insensitive) added by some Kodi library entries.
+	if strings.HasSuffix(strings.ToLower(title), " 4k") {
+		title = title[:len(title)-3]
 	}
 	return title, nil
 }

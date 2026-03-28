@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS movie_tags (
     tag         TEXT    NOT NULL,
     UNIQUE(movie_id, tag)
 );
+
+CREATE TABLE IF NOT EXISTS movie_watch_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    movie_id   INTEGER REFERENCES movies(id) ON DELETE SET NULL,
+    title      TEXT     NOT NULL,
+    watched_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_movie_watch_events_movie_id ON movie_watch_events (movie_id);
+CREATE INDEX IF NOT EXISTS idx_movie_watch_events_watched_at ON movie_watch_events (watched_at DESC);
 `
 
 // migrateMoviesSchema adds columns introduced after the initial schema.
@@ -59,6 +70,7 @@ func migrateMoviesSchema(db *sql.DB) error {
 			return err
 		}
 	}
+	// movie_watch_events is created by the schema constant above; nothing to migrate.
 	return nil
 }
 
@@ -450,6 +462,36 @@ func getMovieActors(db *sql.DB, movieID int64) ([]movieActor, error) {
 		actors = []movieActor{}
 	}
 	return actors, nil
+}
+
+// insertWatchEvent records a movie watch event. movie_id is looked up by
+// case-insensitive title match; NULL is stored when no match is found.
+func insertWatchEvent(db *sql.DB, title string, watchedAt time.Time) error {
+	var movieID *int64
+	var id int64
+	if err := db.QueryRow(`SELECT id FROM movies WHERE LOWER(title)=LOWER(?)`, title).Scan(&id); err == nil {
+		movieID = &id
+	}
+	now := time.Now().UTC()
+	_, err := db.Exec(
+		`INSERT INTO movie_watch_events (movie_id, title, watched_at, created_at) VALUES (?, ?, ?, ?)`,
+		movieID, title, watchedAt.UTC().Format(time.RFC3339), now.Format(time.RFC3339),
+	)
+	return err
+}
+
+// updateMovieLastPlayed sets last_played on the movie matching title (case-insensitive).
+// Returns (true, nil) when a row was updated, (false, nil) when not found.
+func updateMovieLastPlayed(db *sql.DB, title string, playedAt time.Time) (bool, error) {
+	result, err := db.Exec(
+		`UPDATE movies SET last_played=?, updated_at=? WHERE LOWER(title)=LOWER(?)`,
+		playedAt.UTC().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339), title,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n > 0, err
 }
 
 func trimSpace(s string) string {

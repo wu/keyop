@@ -99,6 +99,85 @@ func (svc *Service) Initialize() error {
 	if err := migrateMoviesSchema(db); err != nil {
 		return fmt.Errorf("movies: failed to migrate schema: %w", err)
 	}
+
+	// Subscribe to the 'movie' channel to receive MovieWatchedEvent messages.
+	movieChan, ok := svc.Cfg.Subs["movie"]
+	if ok {
+		messenger := svc.Deps.MustGetMessenger()
+		if err := messenger.Subscribe(
+			svc.Deps.MustGetContext(),
+			svc.Cfg.Name,
+			movieChan.Name,
+			svc.Cfg.Type,
+			svc.Cfg.Name,
+			movieChan.MaxAge,
+			svc.handleMovieWatched,
+		); err != nil {
+			return fmt.Errorf("movies: failed to subscribe to movie channel: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// handleMovieWatched processes an incoming MovieWatchedEvent: updates last_played
+// on the matching movie and persists the watch event to movie_watch_events.
+func (svc *Service) handleMovieWatched(msg core.Message) error {
+	logger := svc.Deps.MustGetLogger()
+
+	var evt MovieWatchedEvent
+	switch d := msg.Data.(type) {
+	case *MovieWatchedEvent:
+		evt = *d
+	case MovieWatchedEvent:
+		evt = d
+	case map[string]interface{}:
+		// Fallback: decode from raw map.
+		if t, ok := d["title"].(string); ok {
+			evt.Title = t
+		}
+		if w, ok := d["watchedAt"].(string); ok {
+			evt.WatchedAt, _ = time.Parse(time.RFC3339, w)
+		}
+	default:
+		logger.Warn("movies: unexpected payload type for MovieWatchedEvent", "type", fmt.Sprintf("%T", msg.Data))
+		return nil
+	}
+
+	if evt.Title == "" {
+		return nil
+	}
+	if evt.WatchedAt.IsZero() {
+		evt.WatchedAt = time.Now()
+	}
+
+	updated, err := updateMovieLastPlayed(svc.db, evt.Title, evt.WatchedAt)
+	if err != nil {
+		logger.Error("movies: failed to update last_played", "title", evt.Title, "error", err)
+	} else if updated {
+		logger.Info("movies: updated last_played", "title", evt.Title)
+	} else {
+		logger.Warn("movies: movie not found for watched event", "title", evt.Title)
+		messenger := svc.Deps.MustGetMessenger()
+		alert := core.AlertEvent{
+			Summary: fmt.Sprintf("Movie watched but not in library: %s", evt.Title),
+			Text:    fmt.Sprintf("Received a Movie Watched event for \"%s\" but no matching title was found in the movie library.", evt.Title),
+			Level:   "warning",
+		}
+		_ = messenger.Send(core.Message{
+			ChannelName: svc.Cfg.Name,
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Event:       "movie.watched.not-found",
+			Text:        alert.Summary,
+			Data:        alert,
+		})
+	}
+
+	if err := insertWatchEvent(svc.db, evt.Title, evt.WatchedAt); err != nil {
+		logger.Error("movies: failed to insert watch event", "title", evt.Title, "error", err)
+	}
+
 	return nil
 }
 
