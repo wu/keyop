@@ -321,6 +321,40 @@ export const handlesHorizontalNav = true;
             elements.content.value = result.content || '';
             elements.tags.value = result.tags || '';
 
+            // Show note title above the meta bar
+            const titleHeader = document.createElement('div');
+            titleHeader.className = 'notes-view-title-header';
+            const copyLinkBtn = document.createElement('button');
+            copyLinkBtn.className = 'notes-btn notes-copy-link-btn';
+            copyLinkBtn.title = 'Copy internal link to clipboard';
+            copyLinkBtn.textContent = '🔗 Copy link';
+            copyLinkBtn.addEventListener('click', () => {
+                const mdLink = `[[${currentNoteTitle}]]`;
+                navigator.clipboard.writeText(mdLink).then(() => {
+                    copyLinkBtn.textContent = '✓ Copied';
+                    setTimeout(() => {
+                        copyLinkBtn.textContent = '🔗 Copy link';
+                    }, 1500);
+                }).catch(() => {
+                    // fallback for environments without clipboard API
+                    const ta = document.createElement('textarea');
+                    ta.value = mdLink;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    copyLinkBtn.textContent = '✓ Copied';
+                    setTimeout(() => {
+                        copyLinkBtn.textContent = '🔗 Copy link';
+                    }, 1500);
+                });
+            });
+            titleHeader.innerHTML = `<h1 class="notes-view-note-title">${escapeHtml(currentNoteTitle)}</h1>`;
+            titleHeader.appendChild(copyLinkBtn);
+            elements.view.appendChild(titleHeader);
+
             // Show the full modified time and tags above the note
             const timestamp = document.createElement('div');
             timestamp.className = 'notes-view-timestamp';
@@ -924,6 +958,17 @@ export const handlesHorizontalNav = true;
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // Global: allow other tabs to navigate to a note by title
+    window.openNoteByTitle = async function (title) {
+        if (!title) return;
+        if (window.switchTab) window.switchTab('notes');
+        const result = await callAction('get-notes', {search: title, limit: 50});
+        if (result && result.notes) {
+            const match = result.notes.find(n => n.title === title) || result.notes[0];
+            if (match) selectNote(match.id);
+        }
+    };
 
     // Dynamically size the page to fit the visible notes list area
     // Initialize

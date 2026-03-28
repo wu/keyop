@@ -263,6 +263,15 @@ function displayJournalEntry(content) {
             renderMarkdownFromBackend(content, (html) => {
                 viewContainer.innerHTML = html;
                 journalState.originalContent = content;
+                // Wire up wiki-link clicks to open the linked note in the notes tab
+                viewContainer.querySelectorAll('a[href="#wiki-link"]').forEach(link => {
+                    link.classList.add('wiki-link');
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const title = link.getAttribute('title') || link.textContent;
+                        if (window.openNoteByTitle) window.openNoteByTitle(title);
+                    });
+                });
             });
         }
     }

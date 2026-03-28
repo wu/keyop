@@ -559,6 +559,32 @@
     padding: 40px 20px;
 }
 
+.notes-view-title-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.notes-view-note-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    flex: 1;
+    line-height: 1.2;
+}
+
+.notes-copy-link-btn {
+    flex-shrink: 0;
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.notes-copy-link-btn:hover {
+    opacity: 1;
+}
+
 .notes-view-timestamp {
     font-size: 12px;
     color: #888888;
