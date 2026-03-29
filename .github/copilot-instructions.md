@@ -119,12 +119,534 @@
 
 - Store main service code in "service.go"
 - Store sqlite code in "sqlite.go"
-- Store web server code in "webui.go""
+- Store web server code in "webui.go"
 - Extract reusable code into domain-specific files (e.g., "aurora.go" for aurora-related functionality).
 - Store package-level docs in "doc.go" with a package comment.
 - Store payload definitions and registration in "payloads.go"
 - Store utilities that are used by multiple packages in a file with the same name as the package, e.g. "sun/sun.go"
 - Store html and css in package subdirectory 'resources'
+
+## Creating Web UI Services (Tabs)
+
+Services that provide a Web UI tab must implement the WebUI extension interfaces. This guide covers the patterns learned
+from implementing the links tab.
+
+### Package Organization
+
+A WebUI service should have this structure:
+
+```
+x/yourservice/
+├── doc.go                    # Package documentation
+├── service.go                # Service lifecycle (Check, ValidateConfig, Initialize)
+├── webui.go                  # WebUI integration (interfaces and handlers)
+├── yourservice.go            # Main business logic (e.g., sqlite.go, parse.go, etc.)
+├── errors.go                 # Custom error types (optional)
+└── resources/
+    ├── yourservice.js        # ES6 module with export async function init
+    ├── yourservice.css       # Styles (use CSS theme variables)
+    └── yourservice.html      # HTML template (can be embedded in webui.go)
+```
+
+### Service Implementation
+
+**service.go** must implement `core.Service`:
+
+```go
+type Service struct {
+Deps core.Dependencies
+Cfg  core.ServiceConfig
+// ... other fields
+}
+
+func NewService(deps core.Dependencies, cfg core.ServiceConfig) *Service {
+return &Service{Deps: deps, Cfg: cfg}
+}
+
+func (svc *Service) Check() error { return nil }
+func (svc *Service) ValidateConfig() []error { return nil }
+func (svc *Service) Initialize() error { return nil }
+```
+
+### WebUI Interfaces
+
+**webui.go** must implement these interfaces:
+
+1. **TabProvider** - Define the tab that appears in the UI:
+   ```go
+   func (svc *Service) WebUITab() webui.TabInfo {
+       return webui.TabInfo{
+           ID:    "yourservice",
+           Title: "🎯",  // Use emoji icon
+           Content: `<div id="yourservice-container">...HTML...</div>`,
+           JSPath: "/api/assets/yourservice/yourservice.js",
+       }
+   }
+   ```
+
+2. **ActionProvider** - Handle actions from the frontend:
+   ```go
+   func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
+       switch action {
+       case "my-action":
+           return svc.myAction(params)
+       default:
+           return nil, fmt.Errorf("unknown action: %s", action)
+       }
+   }
+   ```
+
+3. **AssetProvider** - Serve CSS, JS, and other resources:
+   ```go
+   //go:embed resources
+   var embeddedAssets embed.FS
+
+   func (svc *Service) WebUIAssets() http.FileSystem {
+       sub, _ := fs.Sub(embeddedAssets, "resources")
+       return http.FS(sub)
+   }
+   ```
+
+4. **RouteProvider** (optional) - Register custom HTTP routes:
+   ```go
+   func (svc *Service) RegisterRoutes(mux *http.ServeMux) {
+       mux.HandleFunc("GET /api/yourservice/custom", svc.handleCustomRoute)
+   }
+   ```
+
+### JavaScript Module Pattern
+
+**yourservice.js** must use proper ES6 module syntax and be loaded by the webui/app.js:
+
+```javascript
+let container = null;
+
+export async function init(container) {
+  // Called when the tab is first loaded
+  setupEventListeners();
+  await loadData();
+}
+
+async function callAction(action, params) {
+  const response = await fetch(`/api/tabs/yourservice/action/${action}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) throw new Error(response.statusText);
+  return await response.json();
+}
+
+async function loadData() {
+  try {
+    const result = await callAction('get-data', {});
+    render(result);
+  } catch (err) {
+    console.error('Error:', err);
+  }
+}
+
+function setupEventListeners() {
+  const btn = document.getElementById('my-button');
+  btn?.addEventListener('click', handleClick);
+}
+
+async function handleClick() {
+  try {
+    await callAction('do-something', {});
+    await loadData();  // Refresh
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+// Export additional lifecycle functions (optional)
+export function focusItems() {
+  // Called when user presses ArrowDown on the tab
+}
+
+export function canReturnToTabs() {
+  // Called when user presses ArrowUp from items
+  return true;
+}
+```
+
+### CSS Styling
+
+**yourservice.css** must scope all styles under the container ID and use CSS theme variables:
+
+```css
+#yourservice-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+#yourservice-container .sidebar {
+  width: 200px;
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  background-color: var(--bg);
+  overflow-y: auto;
+}
+
+#yourservice-container .sidebar-item {
+  padding: 8px;
+  background: var(--item-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#yourservice-container .sidebar-item:hover {
+  background: var(--hover-bg);
+}
+
+#yourservice-container input {
+  background: var(--item-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+#yourservice-container input:focus {
+  outline: none;
+  border-color: var(--accent, #007acc);
+  box-shadow: 0 0 0 2px var(--accent-dim, rgba(0, 122, 204, 0.2));
+}
+```
+
+**Available CSS theme variables:**
+
+- `--bg` - Primary background
+- `--item-bg` - Item/card background
+- `--border` - Border color
+- `--text` - Primary text color
+- `--text-muted` - Muted/secondary text
+- `--hover-bg` - Hover state background
+- `--accent` - Accent color (blue)
+- `--accent-dim` - Accent with opacity
+- `--shadow` - Shadow color
+
+### API Endpoint Pattern
+
+All frontend-to-backend communication uses this endpoint pattern:
+
+```
+POST /api/tabs/{tabId}/action/{action}
+
+Headers:
+  Content-Type: application/json
+
+Request Body:
+  JSON object with action parameters
+
+Response:
+  JSON object with results
+```
+
+Example:
+
+```javascript
+// Frontend
+const result = await fetch('/api/tabs/links/action/add-link', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({url: 'https://example.com', name: 'Example'})
+});
+
+// Backend (service.go)
+func(svc * Service)
+addLinkAction(params
+map[string]
+any
+)
+(any, error)
+{
+  url, _
+:
+  = params["url"].(string)
+  name, _
+:
+  = params["name"].(string)
+  // ... do work ...
+  return map[string]
+  any
+  {
+    "id"
+  :
+    id
+  }
+,
+  nil
+}
+```
+
+### Tab Ordering
+
+New tabs are positioned by their order in the `tabOrder` map in `x/webui/service.go`:
+
+```go
+tabOrder := map[string]int{
+"dashboard": 0,
+"alerts":    1,
+// ... other tabs ...
+"yourservice": 10, // Position in the tab bar
+}
+```
+
+Update the same order in `x/webui/resources/js/app.js`:
+
+```javascript
+const tabOrder = {
+  'dashboard': 0,
+  'alerts': 1,
+  // ... other tabs ...
+  'yourservice': 10,
+};
+```
+
+### Service Registration
+
+Register the service in `x/run/registry.go`:
+
+```go
+import "keyop/x/yourservice"
+
+var serviceRegistry = map[string]ServiceFactory{
+// ... other services ...
+"yourservice": func (deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+return yourservice.NewService(deps, cfg)
+},
+}
+```
+
+### Database Layer
+
+If using SQLite (recommended pattern):
+
+1. Create `yourservice.go` or `sqlite.go` with database functions
+2. Use modernc.org/sqlite (pure Go, no C dependencies)
+3. Follow the pattern:
+  - `openYourserviceDB()` - Open and initialize DB
+  - `initYourserviceDB()` - Create schema
+  - `addItem()`, `listItems()`, `deleteItem()` - CRUD operations
+4. Handle errors: Always close DB connections with `defer func() { _ = db.Close() }()`
+
+Example:
+
+```go
+func openYourserviceDB(dbPath string) (*sql.DB, error) {
+db, err := sql.Open("sqlite", dbPath)
+if err != nil {
+return nil, err
+}
+if err := initYourserviceDB(db); err != nil {
+_ = db.Close()
+return nil, err
+}
+return db, nil
+}
+
+func initYourserviceDB(db *sql.DB) error {
+schema := `
+    CREATE TABLE IF NOT EXISTS items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_at DATETIME NOT NULL
+    );
+    `
+_, err := db.Exec(schema)
+return err
+}
+
+func addItem(dbPath, name string) error {
+db, err := openYourserviceDB(dbPath)
+if err != nil {
+return err
+}
+defer func () { _ = db.Close() }()
+
+_, err = db.Exec(
+`INSERT INTO items (name, created_at) VALUES (?,?)`,
+name, time.Now().UTC().Format(time.RFC3339),
+)
+return err
+}
+```
+
+### Common Patterns
+
+**Split Layout** (sidebar + content):
+
+```javascript
+// In CSS
+#container
+{
+  display: flex;
+  height: 100 %;
+}
+#sidebar
+{
+  width: 200
+  px;
+  border - right
+:
+  1
+  px
+  solid
+  var (
+  --border
+)
+  ;
+}
+#content
+{
+  flex: 1;
+  overflow - y
+:
+  auto;
+}
+
+// In HTML
+<div id="container">
+  <div id="sidebar">Filters...</div>
+  <div id="content">Items...</div>
+</div>
+```
+
+**Search + Sort**:
+
+```javascript
+<input id="search" placeholder="Search...">
+  <select id="sort">
+    <option value="date-desc">Newest</option>
+    <option value="date-asc">Oldest</option>
+  </select>
+
+  // JavaScript
+  const search = document.getElementById('search').value;
+  const sort = document.getElementById('sort').value;
+  const result = await callAction('list-items', {search, sort});
+```
+
+**Tag Filtering**:
+
+```javascript
+// Backend: Return tag counts
+async function getTagCounts(params) {
+  // ... query DB ...
+  return map[string]
+  int
+  {
+    "tag1"
+  :
+    5, "tag2"
+  :
+    3
+  }
+}
+
+// Frontend: Render clickable tags
+<div class="tag" onclick="filterByTag('tag1');">tag1 (5)</div>
+```
+
+**Error Handling**:
+
+```javascript
+try {
+  const result = await callAction('action', {});
+} catch (err) {
+  console.error('Action failed:', err);
+  alert('Error: ' + err.message);
+}
+```
+
+**Bulk Operations with Feedback**:
+When implementing bulk import/add operations, return count information and optionally failed items:
+
+```go
+// Backend
+return map[string]any{
+"imported": 10,
+"updated": 5,
+"failed": 2,
+"failed_urls": []string{"url1", "url2"}, // Optional detail
+}, nil
+
+// Frontend
+const result = await callAction('bulk-import', { text: input });
+let msg = `Imported ${result.imported}, updated ${result.updated}`;
+if (result.failed > 0) {
+msg += `\n\nFailed: ${result.failed}`;
+if (result.failed_urls?.length) {
+msg += '\n' + result.failed_urls.join('\n');
+}
+}
+alert(msg)
+```
+
+**Favicon/Icon Fetching**:
+For services that fetch external resources (favicons, images), do it asynchronously after initial save:
+
+```go
+// Background goroutine
+go func (id, url string) {
+if icon, err := FetchIcon(url); err == nil {
+_ = UpdateIcon(dbPath, id, icon)  // Ignore errors in goroutine
+}
+}(id, url)
+```
+
+**Date/Time Handling**:
+JavaScript datetime-local inputs expect local time, not UTC. Convert properly:
+
+```javascript
+// ISO → local time for display
+function dateToLocalInput(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 16);  // YYYY-MM-DDTHH:mm
+}
+
+// Local time → ISO for storage
+function localInputToISO(localInput) {
+  if (!localInput) return '';
+  const parts = localInput.split('T');
+  const date = new Date(parts[0] + 'T' + parts[1] + ':00Z');
+  return date.toISOString();
+}
+```
+
+**Database Path and Directory Management**:
+Always expand `~` in paths and ensure directories exist:
+
+```go
+func (svc *Service) getDataDir() string {
+    homeDir, _ := os.UserHomeDir()
+    dataDir := filepath.Join(homeDir, ".keyop", "data", "yourservice")
+    os.MkdirAll(dataDir, 0700)
+    return dataDir
+}
+
+### Testing Checklist
+
+Before deploying a WebUI service:
+
+- [ ] Service implements all required interfaces (Service, TabProvider, ActionProvider, etc.)
+- [ ] JavaScript uses proper ES6 module pattern with `export async function init`
+- [ ] CSS uses theme variables, not hardcoded colors
+- [ ] CSS scopes all rules under container ID
+- [ ] API actions use correct endpoint pattern: `/api/tabs/{tabId}/action/{action}`
+- [ ] JavaScript calls `callAction()` with proper error handling
+- [ ] Tab ID added to `tabOrder` map in both Go and JavaScript
+- [ ] Service registered in `x/run/registry.go`
+- [ ] Binary builds without errors
+- [ ] All existing tests still pass
+- [ ] CSS looks good in dark theme
+- [ ] Actions load data and handle user input
+- [ ] Forms validate inputs before submitting
 
 ## Policy
 
