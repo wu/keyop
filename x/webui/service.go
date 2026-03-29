@@ -80,6 +80,10 @@ type Service struct {
 	panelOrder   []string
 	panelOrderMu sync.RWMutex
 
+	// Tab order persistence
+	tabOrder   map[string]int
+	tabOrderMu sync.RWMutex
+
 	// Passkey authentication (nil when auth is disabled)
 	auth *authManager
 }
@@ -102,6 +106,7 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		port:           port,
 		clients:        make(map[chan []byte]bool),
 		panelOrder:     []string{},
+		tabOrder:       make(map[string]int),
 	}
 }
 
@@ -145,6 +150,14 @@ func (svc *Service) Initialize() error {
 			svc.panelOrderMu.Lock()
 			svc.panelOrder = order
 			svc.panelOrderMu.Unlock()
+		}
+
+		// Load tab order from state store
+		var tabOrder map[string]int
+		if err := ss.Load("webui_tab_order", &tabOrder); err == nil {
+			svc.tabOrderMu.Lock()
+			svc.tabOrder = tabOrder
+			svc.tabOrderMu.Unlock()
 		}
 	}
 
@@ -295,15 +308,18 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 		tabs = append(tabs, p.WebUITab())
 	}
 
-	// Sort tabs in the specified order (case-insensitive)
-	tabOrder := map[string]int{
+	// Build the effective tab order: saved order + hardcoded defaults
+	svc.tabOrderMu.RLock()
+	effectiveOrder := make(map[string]int)
+	// Start with hardcoded defaults
+	defaultOrder := map[string]int{
 		"dashboard": 0,
 		"alerts":    1,
 		"errors":    2,
 		"statusmon": 3,
 		"tasks":     4,
 		"notes":     5,
-		"🔗":         6,
+		"links":     6,
 		"journal":   7,
 		"idle":      8,
 		"aurora":    9,
@@ -312,10 +328,18 @@ func (svc *Service) handleGetTabs(w http.ResponseWriter, _ *http.Request) {
 		"temps":     12,
 		"messages":  13,
 	}
+	for k, v := range defaultOrder {
+		effectiveOrder[k] = v
+	}
+	// Override with saved order
+	for k, v := range svc.tabOrder {
+		effectiveOrder[k] = v
+	}
+	svc.tabOrderMu.RUnlock()
 
 	sort.Slice(tabs, func(i, j int) bool {
-		orderI, okI := tabOrder[strings.ToLower(tabs[i].Title)]
-		orderJ, okJ := tabOrder[strings.ToLower(tabs[j].Title)]
+		orderI, okI := effectiveOrder[strings.ToLower(tabs[i].Title)]
+		orderJ, okJ := effectiveOrder[strings.ToLower(tabs[j].Title)]
 
 		// If both are in the order list, use the order
 		if okI && okJ {
@@ -344,6 +368,29 @@ func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
 	logger := svc.Deps.MustGetLogger()
 	tabID := r.PathValue("id")
 	action := r.PathValue("action")
+
+	// Handle webui service's own actions
+	if tabID == "webui" {
+		var params map[string]any
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+				logger.Warn("Failed to decode JSON", "error", err)
+				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				return
+			}
+		}
+
+		result, err := svc.HandleWebUIAction(action, params)
+		if err != nil {
+			logger.Error("HandleWebUIAction error", "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+		return
+	}
 
 	svc.providersMu.RLock()
 	var provider TabProvider
@@ -410,6 +457,45 @@ func (svc *Service) handleTabAction(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+// HandleWebUIAction handles actions from the webui tab itself (tab reordering).
+func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
+	switch action {
+	case "get-tab-order":
+		svc.tabOrderMu.RLock()
+		defer svc.tabOrderMu.RUnlock()
+		return map[string]any{"order": svc.tabOrder}, nil
+
+	case "save-tab-order":
+		if order, ok := params["order"].(map[string]any); ok {
+			// Convert map[string]any to map[string]int
+			newOrder := make(map[string]int)
+			for tabID, pos := range order {
+				if posInt, ok := pos.(float64); ok {
+					newOrder[tabID] = int(posInt)
+				}
+			}
+
+			// Save to state store
+			if ss := svc.Deps.GetStateStore(); ss != nil {
+				if err := ss.Save("webui_tab_order", newOrder); err != nil {
+					return nil, fmt.Errorf("failed to save tab order: %w", err)
+				}
+			}
+
+			// Update in-memory order
+			svc.tabOrderMu.Lock()
+			svc.tabOrder = newOrder
+			svc.tabOrderMu.Unlock()
+
+			return map[string]any{"ok": true}, nil
+		}
+		return nil, fmt.Errorf("invalid order format")
+
+	default:
+		return nil, fmt.Errorf("unknown action: %s", action)
+	}
 }
 
 func (svc *Service) handleEvents(w http.ResponseWriter, r *http.Request) {

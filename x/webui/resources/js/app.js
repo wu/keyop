@@ -7,31 +7,53 @@ const tabsContent = document.getElementById('tabs-content');
 let activeTabId = null;
 const tabsModules = {};
 
+// Default hardcoded tab order (used as fallback)
+const defaultTabOrder = {
+    'dashboard': 0,
+    'alerts': 1,
+    'errors': 2,
+    'statusmon': 3,
+    'tasks': 4,
+    'notes': 5,
+    'links': 6,
+    'journal': 7,
+    'idle': 8,
+    'aurora': 9,
+    'tides': 10,
+    'gps': 11,
+    'temps': 12,
+    'messages': 13
+};
+
+// Load the saved tab order from the backend
+async function getTabOrder() {
+    try {
+        const response = await fetch('/api/tabs/webui/action/get-tab-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        });
+        const data = await response.json();
+        return data.order || {};
+    } catch (err) {
+        console.warn('Failed to load saved tab order, using defaults:', err);
+        return {};
+    }
+}
+
 async function loadTabs() {
     const response = await fetch('/api/tabs');
     const tabs = await response.json();
 
-    // Sort tabs in the specified order
-    const tabOrder = {
-        'dashboard': 0,
-        'alerts': 1,
-        'errors': 2,
-        'statusmon': 3,
-        'tasks': 4,
-        'notes': 5,
-        'links': 6,
-        'journal': 7,
-        'idle': 8,
-        'aurora': 9,
-        'tides': 10,
-        'gps': 11,
-        'temps': 12,
-        'messages': 13
-    };
+    // Load the saved tab order
+    const savedOrder = await getTabOrder();
+
+    // Merge saved order with defaults
+    const effectiveOrder = {...defaultTabOrder, ...savedOrder};
     
     tabs.sort((a, b) => {
-        const orderA = tabOrder[a.id] ?? 999;
-        const orderB = tabOrder[b.id] ?? 999;
+        const orderA = effectiveOrder[a.id] ?? 999;
+        const orderB = effectiveOrder[b.id] ?? 999;
         if (orderA !== orderB) return orderA - orderB;
         // Fallback to alphabetical if same priority
         return a.title.localeCompare(b.title);
@@ -42,6 +64,7 @@ async function loadTabs() {
         const link = document.createElement('div');
         link.className = 'tab-link';
         link.dataset.tabId = tab.id;
+        link.draggable = true;
         link.onclick = () => switchTab(tab.id);
         if (tab.id === 'dashboard') {
             const label = document.createElement('span');
@@ -59,6 +82,8 @@ async function loadTabs() {
             pinnedTabs.appendChild(link);
         } else {
             tabsNav.appendChild(link);
+            // Add drag-and-drop handlers for non-dashboard tabs
+            setupTabDragAndDrop(link);
         }
 
         // Create tab content container
@@ -81,6 +106,100 @@ async function loadTabs() {
         const preferred = tabs.find(t => t.id === 'dashboard' || (t.title && t.title.toLowerCase() === 'dashboard'));
         const first = preferred || tabs[0];
         switchTab(first.id);
+    }
+}
+
+let draggedElement = null;  // Global state for drag-and-drop
+
+function setupTabDragAndDrop(link) {
+    link.addEventListener('dragstart', (e) => {
+        draggedElement = link;
+        link.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', link.innerHTML);
+    });
+
+    link.addEventListener('dragend', (e) => {
+        draggedElement = null;
+        link.classList.remove('dragging');
+        document.querySelectorAll('.tab-link').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+    });
+
+    link.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        // Only show drag-over if we're dragging a different element
+        if (draggedElement && draggedElement !== link) {
+            link.classList.add('drag-over');
+        }
+    });
+
+    link.addEventListener('dragleave', (e) => {
+        // Only remove if leaving this specific element
+        if (e.target === link) {
+            link.classList.remove('drag-over');
+        }
+    });
+
+    link.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!draggedElement || draggedElement === link) {
+            return;
+        }
+
+        // Remove all drag-over classes
+        document.querySelectorAll('.tab-link').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+
+        // Perform the swap
+        const tabsNavContainer = tabsNav;
+        const allLinks = Array.from(tabsNavContainer.querySelectorAll('.tab-link'));
+        const draggedIndex = allLinks.indexOf(draggedElement);
+        const targetIndex = allLinks.indexOf(link);
+
+        if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+            // Insert at the correct position
+            if (draggedIndex < targetIndex) {
+                // Moving right: insert after target
+                link.parentNode.insertBefore(draggedElement, link.nextSibling);
+            } else {
+                // Moving left: insert before target
+                link.parentNode.insertBefore(draggedElement, link);
+            }
+
+            // Save the new tab order
+            await saveTabOrder();
+        }
+    });
+}
+
+async function saveTabOrder() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    const newOrder = {};
+
+    tabLinks.forEach((link, index) => {
+        const tabId = link.dataset.tabId;
+        newOrder[tabId] = index;
+    });
+
+    try {
+        const response = await fetch('/api/tabs/webui/action/save-tab-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({order: newOrder})
+        });
+
+        if (!response.ok) {
+            console.error('Failed to save tab order:', response.statusText);
+        }
+    } catch (err) {
+        console.error('Error saving tab order:', err);
     }
 }
 
@@ -118,6 +237,9 @@ let allTabIds = [];      // List of tab IDs in order
 
 function setupTabKeyboardNavigation() {
     document.addEventListener('keydown', (e) => {
+        // Don't process keyboard navigation if we're currently dragging
+        if (draggedElement) return;
+        
         // Get all tab links
         const tabLinks = Array.from(document.querySelectorAll('.tab-link'));
         if (tabLinks.length === 0) return;
