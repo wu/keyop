@@ -19,6 +19,7 @@ import (
 	"keyop/x/idle"
 	"keyop/x/journal"
 	"keyop/x/kodi"
+	"keyop/x/links"
 	"keyop/x/logManager"
 	"keyop/x/macosBluetoothBattery"
 	"keyop/x/memoryMonitor"
@@ -93,6 +94,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"journal": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return journal.NewService(deps, cfg)
+	},
+	"links": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return links.NewService(deps, cfg)
 	},
 	"logManager": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return logManager.NewService(deps, cfg)

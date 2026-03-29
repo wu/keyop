@@ -19,13 +19,14 @@ async function loadTabs() {
         'statusmon': 3,
         'tasks': 4,
         'notes': 5,
-        'journal': 6,
-        'idle': 7,
-        'aurora': 8,
-        'tides': 9,
-        'gps': 10,
-        'temps': 11,
-        'messages': 12
+        'links': 6,
+        'journal': 7,
+        'idle': 8,
+        'aurora': 9,
+        'tides': 10,
+        'gps': 11,
+        'temps': 12,
+        'messages': 13
     };
     
     tabs.sort((a, b) => {
