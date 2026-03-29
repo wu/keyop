@@ -64,14 +64,14 @@ export const handlesHorizontalNav = true;
     if (els.toolbarMarkBtn) {
         els.toolbarMarkBtn.addEventListener('click', () => {
             const art = getCurrentArticle();
-            if (art && (!art.seen || art.readLater)) markSeen(art);
+            if (art) markSeen(art);
         });
     }
 
     if (els.toolbarReadLaterBtn) {
         els.toolbarReadLaterBtn.addEventListener('click', () => {
             const art = getCurrentArticle();
-            if (art && !art.readLater) markReadLater(art);
+            if (art) markReadLater(art);
         });
     }
 
@@ -253,33 +253,41 @@ export const handlesHorizontalNav = true;
         }
 
         if (toolbarBtn) {
-            if (article.readLater) {
+            if (article.readLater && !article.seen) {
+                // Read-later but not yet seen
                 toolbarBtn.textContent = '✓ Done reading';
                 toolbarBtn.disabled = false;
                 toolbarBtn.classList.remove('seen');
                 toolbarBtn.dataset.doneReading = '1';
+                delete toolbarBtn.dataset.unseen;
             } else if (article.seen) {
+                // Seen (could be read-later or not) - allow marking unseen
                 toolbarBtn.textContent = '✓ Seen';
-                toolbarBtn.disabled = true;
+                toolbarBtn.disabled = false;
                 toolbarBtn.classList.add('seen');
+                toolbarBtn.dataset.unseen = '1';
                 delete toolbarBtn.dataset.doneReading;
             } else {
+                // Unseen and not read-later
                 toolbarBtn.textContent = 'Mark as seen';
                 toolbarBtn.disabled = false;
                 toolbarBtn.classList.remove('seen');
                 delete toolbarBtn.dataset.doneReading;
+                delete toolbarBtn.dataset.unseen;
             }
         }
 
         if (readLaterBtn) {
             if (article.readLater) {
                 readLaterBtn.textContent = '🔖 Saved';
-                readLaterBtn.disabled = true;
+                readLaterBtn.disabled = false;  // Enable to allow unmarking
                 readLaterBtn.classList.add('seen');
+                readLaterBtn.dataset.saved = '1';
             } else {
                 readLaterBtn.textContent = '🔖 Read later';
                 readLaterBtn.disabled = false;
                 readLaterBtn.classList.remove('seen');
+                delete readLaterBtn.dataset.saved;
             }
         }
 
@@ -302,6 +310,33 @@ export const handlesHorizontalNav = true;
     }
 
     async function markSeen(article) {
+        // Check if the button is in "mark unseen" mode
+        const toolbarBtn = document.getElementById('rss-mark-seen-toolbar');
+        const isMarkingUnseen = toolbarBtn && toolbarBtn.dataset.unseen === '1';
+
+        if (isMarkingUnseen) {
+            // Mark as unseen
+            await callAction('mark-unseen', {id: article.id});
+            article.seen = false;
+
+            // update toolbar button and list item
+            if (toolbarBtn) {
+                toolbarBtn.textContent = 'Mark as seen';
+                toolbarBtn.disabled = false;
+                toolbarBtn.classList.remove('seen');
+                delete toolbarBtn.dataset.unseen;
+            }
+
+            const items = Array.from(els.articleList.querySelectorAll('.rss-article-item'));
+            const idx = items.findIndex(el => parseInt(el.dataset.id) === article.id);
+            items[idx] && items[idx].classList.remove('seen');
+
+            showDetail(article);
+            await Promise.all([refreshBadge(), loadFeeds()]);
+            return;
+        }
+
+        // Mark as seen (original behavior)
         const isDoneReading = article.readLater;
         if (isDoneReading) {
             await callAction('mark-done-reading', {id: article.id});
@@ -313,11 +348,11 @@ export const handlesHorizontalNav = true;
         }
 
         // update toolbar button
-        const toolbarBtn = document.getElementById('rss-mark-seen-toolbar');
         if (toolbarBtn) {
             toolbarBtn.textContent = '✓ Seen';
-            toolbarBtn.disabled = true;
+            toolbarBtn.disabled = false;  // Enable to allow marking unseen
             toolbarBtn.classList.add('seen');
+            toolbarBtn.dataset.unseen = '1';
             delete toolbarBtn.dataset.id;
         }
 
@@ -349,36 +384,45 @@ export const handlesHorizontalNav = true;
     }
 
     async function markReadLater(article) {
-        await callAction('mark-read-later', {id: article.id});
-        article.readLater = true;
-
         const readLaterBtn = document.getElementById('rss-read-later-toolbar');
-        if (readLaterBtn) {
-            readLaterBtn.textContent = '🔖 Saved';
-            readLaterBtn.disabled = true;
-            readLaterBtn.classList.add('seen');
-        }
+        const toolbarBtn = document.getElementById('rss-mark-seen-toolbar');
+        const isSaved = readLaterBtn && readLaterBtn.dataset.saved === '1';
 
-        if (viewMode === 'unseen' || viewMode === 'seen') {
-            // article leaves the current view — advance to next
-            const items = Array.from(els.articleList.querySelectorAll('.rss-article-item'));
-            const idx = items.findIndex(el => parseInt(el.dataset.id) === article.id);
-            const nextItem = items[idx + 1] || items[idx - 1];
-            const nextId = nextItem ? parseInt(nextItem.dataset.id) : null;
-            const nextArticle = nextId != null ? filteredArticles().find(a => a.id === nextId) : null;
+        if (isSaved) {
+            // Unmark as read-later
+            await callAction('unmark-read-later', {id: article.id});
+            article.readLater = false;
 
-            items[idx] && items[idx].remove();
-            const remaining = els.articleList.querySelectorAll('.rss-article-item').length;
-            els.articleCount.textContent = `${remaining} article${remaining !== 1 ? 's' : ''}`;
+            // update button
+            if (readLaterBtn) {
+                readLaterBtn.textContent = '🔖 Read later';
+                readLaterBtn.disabled = false;
+                readLaterBtn.classList.remove('seen');
+                delete readLaterBtn.dataset.saved;
+            }
+        } else {
+            // Mark as read-later (which auto-marks as seen)
+            await callAction('mark-read-later', {id: article.id});
+            article.readLater = true;
+            article.seen = true;  // Backend now auto-marks as seen
 
-            if (nextArticle) {
-                selectArticle(nextArticle);
-            } else {
-                currentArticleId = null;
-                showDetail(null);
+            // update read-later button
+            if (readLaterBtn) {
+                readLaterBtn.textContent = '🔖 Saved';
+                readLaterBtn.disabled = false;
+                readLaterBtn.classList.add('seen');
+                readLaterBtn.dataset.saved = '1';
+            }
+
+            // update mark-seen button to show "Mark as unseen" (with unseen indicator)
+            if (toolbarBtn) {
+                toolbarBtn.textContent = 'Mark as unseen';
+                toolbarBtn.classList.add('seen');
+                toolbarBtn.dataset.unseen = '1';
             }
         }
 
+        showDetail(article);
         await Promise.all([refreshBadge(), loadFeeds()]);
     }
 

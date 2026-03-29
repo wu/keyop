@@ -49,8 +49,12 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		return svc.fetchArticle(params)
 	case "mark-seen":
 		return svc.markSeen(params)
+	case "mark-unseen":
+		return svc.markUnseen(params)
 	case "mark-read-later":
 		return svc.markReadLater(params)
+	case "unmark-read-later":
+		return svc.unmarkReadLater(params)
 	case "mark-done-reading":
 		return svc.markDoneReading(params)
 	case "fetch-unseen-count":
@@ -222,7 +226,24 @@ func (svc *Service) markSeen(params map[string]any) (any, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-// markReadLater sets read_later=1 on the given article id.
+// markUnseen sets seen=0 on the given article id.
+func (svc *Service) markUnseen(params map[string]any) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("rss: database not available")
+	}
+	id, ok := params["id"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("rss: id param required")
+	}
+	_, err := (*svc.db).Exec(`UPDATE rss_articles SET seen=0 WHERE id=?`, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("rss: mark-unseen failed: %w", err)
+	}
+	return map[string]any{"ok": true}, nil
+}
+
+// markReadLater sets read_later=1 and seen=1 on the given article id.
+// Articles marked as read-later are automatically marked as seen.
 func (svc *Service) markReadLater(params map[string]any) (any, error) {
 	if svc.db == nil || *svc.db == nil {
 		return nil, fmt.Errorf("rss: database not available")
@@ -231,9 +252,25 @@ func (svc *Service) markReadLater(params map[string]any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("rss: id param required")
 	}
-	_, err := (*svc.db).Exec(`UPDATE rss_articles SET read_later=1 WHERE id=?`, int64(id))
+	_, err := (*svc.db).Exec(`UPDATE rss_articles SET read_later=1, seen=1 WHERE id=?`, int64(id))
 	if err != nil {
 		return nil, fmt.Errorf("rss: mark-read-later failed: %w", err)
+	}
+	return map[string]any{"ok": true}, nil
+}
+
+// unmarkReadLater sets read_later=0 on the given article id.
+func (svc *Service) unmarkReadLater(params map[string]any) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("rss: database not available")
+	}
+	id, ok := params["id"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("rss: id param required")
+	}
+	_, err := (*svc.db).Exec(`UPDATE rss_articles SET read_later=0 WHERE id=?`, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("rss: unmark-read-later failed: %w", err)
 	}
 	return map[string]any{"ok": true}, nil
 }
