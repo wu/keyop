@@ -400,6 +400,9 @@ export const handlesHorizontalNav = true;
                 readLaterBtn.classList.remove('seen');
                 delete readLaterBtn.dataset.saved;
             }
+
+            showDetail(article);
+            await Promise.all([refreshBadge(), loadFeeds()]);
         } else {
             // Mark as read-later (which auto-marks as seen)
             await callAction('mark-read-later', {id: article.id});
@@ -420,10 +423,32 @@ export const handlesHorizontalNav = true;
                 toolbarBtn.classList.add('seen');
                 toolbarBtn.dataset.unseen = '1';
             }
-        }
 
-        showDetail(article);
-        await Promise.all([refreshBadge(), loadFeeds()]);
+            // If we're in unseen view, this item leaves the view — advance to next
+            if (viewMode === 'unseen') {
+                const items = Array.from(els.articleList.querySelectorAll('.rss-article-item'));
+                const idx = items.findIndex(el => parseInt(el.dataset.id) === article.id);
+
+                const nextItem = items[idx + 1] || items[idx - 1];
+                const nextId = nextItem ? parseInt(nextItem.dataset.id) : null;
+                const nextArticle = nextId != null ? filteredArticles().find(a => a.id === nextId) : null;
+
+                items[idx] && items[idx].remove();
+                const remaining = els.articleList.querySelectorAll('.rss-article-item').length;
+                els.articleCount.textContent = `${remaining} article${remaining !== 1 ? 's' : ''}`;
+
+                if (nextArticle) {
+                    selectArticle(nextArticle);
+                } else {
+                    currentArticleId = null;
+                    showDetail(null);
+                }
+            } else {
+                showDetail(article);
+            }
+
+            await Promise.all([refreshBadge(), loadFeeds()]);
+        }
     }
 
     // ── Safety helpers ──────────────────────────────────────────────────────
