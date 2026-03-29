@@ -27,6 +27,7 @@ func openLinksDB(dbPath string) (*sql.DB, error) {
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(dbPath)
+	// #nosec G703 - dir is derived from dbPath which comes from home directory or constant (safe)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}

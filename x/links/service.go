@@ -92,6 +92,7 @@ func (svc *Service) handleIconUpload(w http.ResponseWriter, r *http.Request) {
 	// Generate unique filename based on timestamp
 	dataDir := svc.getDataDir()
 	iconsDir := filepath.Join(dataDir, "icons")
+	// #nosec G703 - iconsDir is derived from svc.getDataDir() (safe, not user-controlled)
 	if err := os.MkdirAll(iconsDir, 0o750); err != nil {
 		http.Error(w, "Failed to create icons directory", http.StatusInternalServerError)
 		return

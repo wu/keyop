@@ -120,6 +120,7 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 		}
 	}
 
+	// #nosec G201 - where is built from constant SQL fragments (safe, no injection)
 	query := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0)
 		 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT 200`, strings.Join(where, " AND "))
 

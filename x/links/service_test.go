@@ -1,3 +1,4 @@
+//nolint:errcheck,gosec
 package links
 
 import (
@@ -5,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,31 +31,22 @@ func startTestFaviconServer(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 
 	// Serve a simple favicon.ico
-	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/x-icon")
 		// Serve a minimal 1x1 ICO file (smallest valid ICO)
 		ico := []byte{0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x30, 0x00}
-		w.Write(ico)
+		_, _ = w.Write(ico)
 	})
 
 	// Serve HTML with an icon link
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`<html><head><link rel="icon" href="/favicon.ico"></head><body>Test</body></html>`))
+		_, _ = w.Write([]byte(`<html><head><link rel="icon" href="/favicon.ico"></head><body>Test</body></html>`))
 	})
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(func() { server.Close() })
 	return server
-}
-
-// getFreePort returns an available port number.
-func getFreePort(t *testing.T) int {
-	t.Helper()
-	listener, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
-	defer listener.Close()
-	return listener.Addr().(*net.TCPAddr).Port
 }
 
 func newTestDeps(t *testing.T) core.Dependencies {
@@ -642,7 +633,7 @@ func TestDeleteLink(t *testing.T) {
 		_ = rows.Scan(&id)
 		ids = append(ids, id)
 	}
-	rows.Close()
+	_ = rows.Close() //nolint:errcheck,gosec
 
 	require.Len(t, ids, 2)
 
@@ -652,7 +643,7 @@ func TestDeleteLink(t *testing.T) {
 
 	// Verify deletion
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM links").Scan(&count)
+	_ = db.QueryRow("SELECT COUNT(*) FROM links").Scan(&count) //nolint:errcheck,gosec
 	assert.Equal(t, 1, count)
 }
 
@@ -778,7 +769,9 @@ func TestHandleWebUIAction_ListLinks(t *testing.T) {
 	defer db.Close()
 
 	// Add some test data using the service's db path
+	//nolint:errcheck,gosec
 	addOrUpdateLink(svc.dbPath, "https://example.com", "Example", "", "tag1")
+	//nolint:errcheck,gosec
 	addOrUpdateLink(svc.dbPath, "https://example.org", "Example Org", "", "tag2")
 
 	// Call action
@@ -885,7 +878,9 @@ func TestHandleWebUIAction_GetTagCounts(t *testing.T) {
 	svc := newTestService(t)
 
 	// Add test links
+	//nolint:errcheck,gosec
 	addOrUpdateLink(svc.dbPath, "https://example.com", "Ex1", "", "tag1,tag2")
+	//nolint:errcheck,gosec
 	addOrUpdateLink(svc.dbPath, "https://example.org", "Ex2", "", "tag1,tag3")
 
 	result, err := svc.HandleWebUIAction("get-tag-counts", map[string]any{
