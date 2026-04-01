@@ -3011,6 +3011,36 @@ export function init(container) {
     elements.tagList = container.querySelector('.tag-list');
     elements.tasksList = container.querySelector('#tasks-list');
     elements.searchInput = container.querySelector('#task-search');
+
+    // Handle navigation from search results
+    container.addEventListener('navigate-to-item', (e) => {
+        const {itemId, sourceType} = e.detail;
+        if (itemId && sourceType === 'tasks') {
+            // Convert string ID to number if needed
+            const taskId = parseInt(itemId, 10) || itemId;
+            // Load tasks and navigate to this one
+            loadAndSelectTask(taskId);
+        }
+    });
+}
+
+// Helper function to load and select a task from search navigation
+async function loadAndSelectTask(taskId) {
+    try {
+        // Load tasks for current view
+        await loadTasks();
+
+        // Find and click the task in the DOM
+        const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskItem) {
+            // Scroll into view
+            taskItem.scrollIntoView({behavior: 'smooth', block: 'center'});
+            // Click to open the task editor
+            taskItem.click();
+        }
+    } catch (err) {
+        console.error('Error navigating to task:', err);
+    }
 }
 
 // Export navigation functions for app.js

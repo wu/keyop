@@ -2,24 +2,27 @@
 // (left/right switch between the tags panel and the notes list).
 export const handlesHorizontalNav = true;
 
-(() => {
-    let currentNoteId = null;
-    let currentNoteTitle = '';
-    let currentNoteUpdatedAt = '';
-    let isEditing = false;
-    let allNotes = [];
-    let currentSearch = '';
-    let currentTag = 'all';
-    let currentPage = 1;
-    let pageSize = 100;
-    let totalCount = 0;
-    let tagFilterText = '';
-    let focusedNoteId = null;  // keyboard cursor — not yet committed
-    let focusedTagTag = null;  // keyboard cursor — not yet committed
-    const recentNotes = []; // [{id, title}], most recent first, max 20
-    const maxRecent = 20;
+// Module-level state
+let currentNoteId = null;
+let currentNoteTitle = '';
+let currentNoteUpdatedAt = '';
+let isEditing = false;
+let allNotes = [];
+let currentSearch = '';
+let currentTag = 'all';
+let currentPage = 1;
+let pageSize = 100;
+let totalCount = 0;
+let tagFilterText = '';
+let focusedNoteId = null;  // keyboard cursor — not yet committed
+let focusedTagTag = null;  // keyboard cursor — not yet committed
+const recentNotes = []; // [{id, title}], most recent first, max 20
+const maxRecent = 20;
 
-    const elements = {
+let elements;
+
+export async function init(container) {
+    elements = {
         search: document.getElementById('notes-search'),
         searchClear: document.getElementById('notes-search-clear'),
         searchContent: document.getElementById('notes-search-content'),
@@ -62,6 +65,18 @@ export const handlesHorizontalNav = true;
     if (elements.backBtn) {
         elements.backBtn.addEventListener('click', () => showListPanel());
     }
+
+    // Handle navigation from search results - container is the tab-content-notes div
+    container.addEventListener('navigate-to-item', (e) => {
+        console.log('notes: received navigate-to-item event', e.detail);
+        const {itemId} = e.detail;
+        if (itemId) {
+            // Convert string ID to number for notes API
+            const noteId = parseInt(itemId, 10) || itemId;
+            selectNote(noteId);
+            showNotePanel();
+        }
+    });
 
     async function callAction(action, params) {
         try {
@@ -121,11 +136,15 @@ export const handlesHorizontalNav = true;
 
     function renderNotesList() {
         elements.list.innerHTML = '';
+        let activeItem = null;
         allNotes.forEach(note => {
             const item = document.createElement('div');
             item.className = 'notes-item' +
                 (note.id === currentNoteId ? ' active' : '') +
                 (note.id === focusedNoteId ? ' kbd-focused' : '');
+            if (note.id === currentNoteId) {
+                activeItem = item;
+            }
             const tagParts = note.tags ? note.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
             item.innerHTML = `
                 <div class="notes-item-title">${escapeHtml(note.title)}</div>
@@ -144,6 +163,11 @@ export const handlesHorizontalNav = true;
             });
             elements.list.appendChild(item);
         });
+
+        // Scroll the active item into view if it exists
+        if (activeItem) {
+            activeItem.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
 
         // Show a pinned indicator when the current note is filtered out of the list
         const indicator = document.getElementById('notes-current-indicator');
@@ -309,8 +333,18 @@ export const handlesHorizontalNav = true;
         isEditing = false;
         showNotePanel();
         updateEditMode();
-        renderNotesList();
 
+        // Clear filters to ensure the note is visible in the list
+        currentSearch = '';
+        currentTag = 'all';
+        currentPage = 1;
+        if (elements.search) elements.search.value = '';
+        if (elements.tagFilter) elements.tagFilter.value = '';
+
+        // Reload notes list without filters
+        await loadNotes();
+
+        // Get the note details
         const result = await callAction('get-note', {id});
         if (result) {
             currentNoteTitle = result.title || '(untitled)';
@@ -320,6 +354,9 @@ export const handlesHorizontalNav = true;
             elements.title.value = result.title || '';
             elements.content.value = result.content || '';
             elements.tags.value = result.tags || '';
+
+            // Re-render the list to ensure correct highlighting
+            renderNotesList();
 
             // Show note title above the meta bar
             const titleHeader = document.createElement('div');
@@ -971,9 +1008,9 @@ export const handlesHorizontalNav = true;
     };
 
     // Dynamically size the page to fit the visible notes list area
-    // Initialize
+    // Initialize - wait for initial data load before allowing navigation
     setFocusedPanel('notes');
-    loadNotes();
-    loadTagCounts();
+    await loadNotes();
+    await loadTagCounts();
     elements.view.innerHTML = '<div class="notes-view-empty">Select a note or create a new one</div>';
-})();
+}

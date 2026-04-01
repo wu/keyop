@@ -7,7 +7,7 @@
         <span class="rss-opts-count" id="rss-article-count"></span>
     </div>
     <div class="rss-top-bar-feeds">
-        <span class="rss-sidebar-heading">Feeds</span>
+        <span class="rss-sidebar-heading">Feeds & Tags</span>
     </div>
     <div class="rss-top-bar-articles">
         <div class="rss-search">
@@ -19,12 +19,27 @@
     <div class="rss-top-bar-detail">
         <button class="rss-mark-seen-btn" disabled id="rss-mark-seen-toolbar">Mark as seen</button>
         <button class="rss-mark-seen-btn" disabled id="rss-read-later-toolbar">🔖 Read later</button>
+        <button class="rss-mark-seen-btn rss-delete-btn" disabled id="rss-delete-toolbar">🗑️ Delete</button>
     </div>
     <div class="rss-feeds-sidebar">
-        <div class="rss-feed-list" id="rss-feed-list"></div>
+        <div class="rss-sidebar-section">
+            <div class="rss-sidebar-group-header" id="rss-feeds-header">
+                <span class="rss-sidebar-group-title">📰 Feeds</span>
+                <span class="rss-sidebar-collapse-toggle">▼</span>
+            </div>
+            <div class="rss-feed-list" id="rss-feed-list"></div>
+        </div>
+        <div class="rss-sidebar-section">
+            <div class="rss-sidebar-group-header" id="rss-tags-header">
+                <span class="rss-sidebar-group-title">🏷️ Tags</span>
+                <span class="rss-sidebar-collapse-toggle">▼</span>
+            </div>
+            <div class="rss-tag-list" id="rss-tag-list"></div>
+        </div>
     </div>
     <div class="rss-articles-sidebar">
         <div class="rss-article-list" id="rss-article-list"></div>
+        <div class="rss-pagination" id="rss-pagination" style="display: none;"></div>
     </div>
     <div class="rss-main">
         <div class="rss-detail" id="rss-detail">

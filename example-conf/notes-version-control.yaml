@@ -1,0 +1,18 @@
+x: git
+
+config:
+
+  dir: /home/keyop/.keyop/notes
+
+  pub_preprocess:
+
+    - when: 'event eq "error"'
+      updates:
+        channelName: errors
+
+subs:
+  input:
+    name: note-changes
+    description: Subscribe to local note change events
+
+

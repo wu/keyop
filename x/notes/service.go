@@ -2,11 +2,13 @@ package notes
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"keyop/core"
 	"keyop/util"
 	"keyop/x/git"
+	"keyop/x/search"
 	"sync"
 )
 
@@ -138,7 +140,62 @@ func (svc *Service) createNote(params map[string]any) (any, error) {
 		tags = ""
 	}
 
-	return createNotesEntry(svc.dbPath, title, content, tags)
+	result, err := createNotesEntry(svc.dbPath, title, content, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	// Emit search index event
+	if resultMap, ok := result.(map[string]any); ok {
+		if id, ok := resultMap["id"].(float64); ok {
+			svc.emitSearchIndexEvent("upsert", int64(id), title, content, tags)
+		}
+	}
+
+	return result, nil
+}
+
+// emitSearchIndexEvent sends a search index event to the search service.
+func (svc *Service) emitSearchIndexEvent(op string, id int64, title, content, tags string) {
+	defer func() {
+		// Recover from any panics - search events are best-effort
+		_ = recover()
+	}()
+
+	var tagList []string
+	if tags != "" {
+		for _, tag := range strings.Split(tags, ",") {
+			if t := strings.TrimSpace(tag); t != "" {
+				tagList = append(tagList, t)
+			}
+		}
+	}
+
+	doc := search.SearchableDocument{
+		ID:         fmt.Sprintf("notes:%d", id),
+		SourceType: "notes",
+		SourceID:   fmt.Sprintf("%d", id),
+		Title:      title,
+		Body:       content,
+		Tags:       tagList,
+		UpdatedAt:  time.Now(),
+	}
+
+	evt := search.SearchIndexEvent{
+		Op:       op,
+		Document: doc,
+		ID:       doc.ID,
+	}
+
+	messenger := svc.Deps.MustGetMessenger()
+	_ = messenger.Send(core.Message{
+		ChannelName: "search.index",
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Data:        evt,
+	})
+	// Search events are best-effort; ignore errors
+
 }
 
 // updateNote updates an existing note and emits a ContentChange event with the old and new content.
@@ -228,6 +285,9 @@ func (svc *Service) updateNote(params map[string]any) (any, error) {
 		logger.Error("notes: failed to send ContentChange event", "error", sendErr, "id", id)
 	}
 
+	// Emit search index event
+	svc.emitSearchIndexEvent("upsert", int64(id), title, content, tags)
+
 	return res, nil
 }
 
@@ -268,6 +328,27 @@ func (svc *Service) deleteNote(params map[string]any) (any, error) {
 		}); sendErr != nil {
 			svc.Deps.MustGetLogger().Error("notes: failed to send ContentRemove event", "error", sendErr, "id", id)
 		}
+
+		// Emit search index delete event
+		func() {
+			defer func() {
+				// Recover from any panics - search events are best-effort
+				_ = recover()
+			}()
+
+			docID := fmt.Sprintf("notes:%d", int64(id))
+			evt := search.SearchIndexEvent{
+				Op: "delete",
+				ID: docID,
+			}
+			messenger := svc.Deps.MustGetMessenger()
+			_ = messenger.Send(core.Message{
+				ChannelName: "search.index",
+				ServiceName: svc.Cfg.Name,
+				ServiceType: svc.Cfg.Type,
+				Data:        evt,
+			})
+		}()
 	}
 
 	return res, nil
@@ -326,4 +407,74 @@ func (svc *Service) importNotes(params map[string]any) (any, error) {
 	}
 
 	return map[string]any{"imported": imported, "count": len(imported)}, nil
+}
+
+// SearchSourceType implements search.IndexProvider.
+func (svc *Service) SearchSourceType() string {
+	return "notes"
+}
+
+// BulkIndex implements search.IndexProvider.
+func (svc *Service) BulkIndex() (<-chan search.SearchableDocument, error) {
+	ch := make(chan search.SearchableDocument)
+	go func() {
+		defer close(ch)
+
+		db, err := openNotesDB(svc.dbPath)
+		if err != nil {
+			return
+		}
+		defer func() {
+			_ = db.Close()
+		}()
+
+		rows, err := db.Query(`
+			SELECT id, title, content, tags, created_at, updated_at 
+			FROM notes 
+			ORDER BY updated_at DESC
+		`)
+		if err != nil {
+			return
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+
+		for rows.Next() {
+			var id int64
+			var title, content, tags, createdAt, updatedAt string
+			if err := rows.Scan(&id, &title, &content, &tags, &createdAt, &updatedAt); err != nil {
+				continue
+			}
+
+			// Parse tags from comma-separated string
+			var tagList []string
+			if tags != "" {
+				for _, tag := range strings.Split(tags, ",") {
+					if t := strings.TrimSpace(tag); t != "" {
+						tagList = append(tagList, t)
+					}
+				}
+			}
+
+			// Parse updated_at timestamp
+			updatedTime, err := time.Parse(time.RFC3339, updatedAt)
+			if err != nil {
+				updatedTime = time.Now()
+			}
+
+			doc := search.SearchableDocument{
+				ID:         fmt.Sprintf("notes:%d", id),
+				SourceType: "notes",
+				SourceID:   fmt.Sprintf("%d", id),
+				Title:      title,
+				Body:       content,
+				Tags:       tagList,
+				UpdatedAt:  updatedTime,
+			}
+
+			ch <- doc
+		}
+	}()
+	return ch, nil
 }

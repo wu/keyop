@@ -106,15 +106,24 @@ func (svc *Service) Initialize() error {
 	for payloadType, provider := range svc.providers {
 		schema := provider.SQLiteSchema()
 		if schema != "" {
-			// Execute the schema. For migration purposes, we handle some errors gracefully.
-			if _, err := db.Exec(schema); err != nil {
-				// Check if this is a "duplicate column" error (for ALTER TABLE migrations)
-				errMsg := err.Error()
-				if strings.Contains(errMsg, "duplicate column") || strings.Contains(errMsg, "already exists") {
-					logger.Debug("SQLite: migration already applied", "payloadType", payloadType)
-				} else {
-					svc.mu.RUnlock()
-					return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
+			// Split multiple statements and execute them separately
+			// SQLite driver doesn't support multiple statements in a single Exec() call
+			statements := strings.Split(schema, ";")
+			for _, stmt := range statements {
+				stmt = strings.TrimSpace(stmt)
+				if stmt == "" {
+					continue
+				}
+				// Execute the statement. For migration purposes, we handle some errors gracefully.
+				if _, err := db.Exec(stmt); err != nil {
+					// Check if this is a "duplicate column" error (for ALTER TABLE migrations)
+					errMsg := err.Error()
+					if strings.Contains(errMsg, "duplicate column") || strings.Contains(errMsg, "already exists") {
+						logger.Debug("SQLite: migration already applied", "payloadType", payloadType, "stmt", stmt[:min(50, len(stmt))])
+					} else {
+						svc.mu.RUnlock()
+						return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
+					}
 				}
 			}
 		}
@@ -231,4 +240,11 @@ func (svc *Service) AcceptsPayloadType(payloadType string) bool {
 		}
 	}
 	return true
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

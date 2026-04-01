@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"keyop/core"
+	"keyop/x/search"
 	"keyop/x/sqlite"
 	"keyop/x/webui"
 	"os"
@@ -191,7 +192,35 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 				}
 			}
 		}
+
+		// Note: IndexProvider registration moved to final pass below to ensure
+		// deduplication and that search service is fully initialized
 	}
+
+	// Register all IndexProviders with search service (after all services created)
+	// This is the only registration point to avoid duplicates
+	var searchSvc *search.Service
+	for _, sw := range services {
+		if svc, ok := sw.Service.(*search.Service); ok {
+			searchSvc = svc
+			break
+		}
+	}
+	if searchSvc != nil {
+		// Track which providers have already been registered to avoid duplicates
+		registered := make(map[string]bool)
+		for _, sw := range services {
+			if indexProv, ok := sw.Service.(search.IndexProvider); ok {
+				sourceType := indexProv.SearchSourceType()
+				if !registered[sourceType] {
+					searchSvc.RegisterIndexProvider(indexProv)
+					registered[sourceType] = true
+				}
+			}
+		}
+	}
+
+	// Removed duplicate final pass - using single unified registration above
 
 	// validate all service configs before initializing any services
 	// Propagate sqlite DB path mappings from the webui service config.

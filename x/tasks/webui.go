@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"keyop/core"
 	"keyop/x/recurrence"
+	"keyop/x/search"
 	"keyop/x/webui"
 	"net/http"
 	"strconv"
@@ -1287,6 +1288,10 @@ func (svc *Service) createTask(params map[string]any) (any, error) {
 		}
 	}
 
+	// Emit search index event
+	note, _ := params["note"].(string)
+	svc.emitSearchIndexEvent("upsert", taskID, title, note, tags)
+
 	return map[string]any{"status": "ok", "taskId": taskID}, nil
 }
 
@@ -1334,6 +1339,19 @@ func (svc *Service) deleteTask(taskID int64) (any, error) {
 			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
 		}
 	}
+
+	// Emit search delete event
+	docID := fmt.Sprintf("tasks:%d", taskID)
+	evt := search.SearchIndexEvent{
+		Op: "delete",
+		ID: docID,
+	}
+	_ = messenger.Send(core.Message{
+		ChannelName: "search.index",
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Data:        evt,
+	})
 
 	return map[string]any{"status": "ok"}, nil
 }
@@ -2303,6 +2321,26 @@ func (svc *Service) updateTask(taskID int64, params map[string]any) (any, error)
 		if err := messenger.Send(msg); err != nil {
 			svc.Deps.MustGetLogger().Warn("tasks: failed to send SSE message", "error", err)
 		}
+	}
+
+	// Emit search index event
+	// Fetch current task data to send complete indexing event
+	var currentTitle, currentNote, currentTags string
+	err = svc.db.QueryRow("SELECT title, note, tags FROM tasks WHERE id = ?", taskID).Scan(&currentTitle, &currentNote, &currentTags)
+	if err == nil {
+		// Use updated title from params if provided, otherwise use current
+		if t, ok := params["title"].(string); ok && t != "" {
+			currentTitle = t
+		}
+		// Use updated note from params if provided
+		if n, ok := params["note"].(string); ok {
+			currentNote = n
+		}
+		// Use updated tags from params if provided
+		if tgs, ok := params["tags"].(string); ok {
+			currentTags = tgs
+		}
+		svc.emitSearchIndexEvent("upsert", taskID, currentTitle, currentNote, currentTags)
 	}
 
 	return map[string]any{"status": "ok"}, nil

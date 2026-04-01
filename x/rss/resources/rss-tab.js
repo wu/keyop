@@ -2,12 +2,20 @@ export const handlesHorizontalNav = true;
 
 (() => {
     let allArticles = [];
+    let allTags = [];
     let currentFeedURL = '';   // '' = all feeds
+    let currentTag = null;     // null = no tag filter
     let currentArticleId = null;
     let viewMode = 'unseen';   // 'unseen' | 'read-later' | 'seen' | 'all'
+    let feedsCollapsed = false;
+    let tagsCollapsed = false;
+    let totalArticles = 0;
+    let currentPage = 0;
+    const PAGE_SIZE = 50;
 
     const els = {
         feedList: document.getElementById('rss-feed-list'),
+        tagList: document.getElementById('rss-tag-list'),
         articleList: document.getElementById('rss-article-list'),
         detail: document.getElementById('rss-detail'),
         articleCount: document.getElementById('rss-article-count'),
@@ -17,6 +25,10 @@ export const handlesHorizontalNav = true;
         searchFull: document.getElementById('rss-search-full'),
         toolbarMarkBtn: document.getElementById('rss-mark-seen-toolbar'),
         toolbarReadLaterBtn: document.getElementById('rss-read-later-toolbar'),
+        toolbarDeleteBtn: document.getElementById('rss-delete-toolbar'),
+        feedsHeader: document.getElementById('rss-feeds-header'),
+        tagsHeader: document.getElementById('rss-tags-header'),
+        pagination: document.getElementById('rss-pagination'),
     };
     if (!els.feedList) return;
 
@@ -24,6 +36,7 @@ export const handlesHorizontalNav = true;
         radio.addEventListener('change', () => {
             if (radio.checked) {
                 viewMode = radio.value;
+                currentPage = 0;
                 loadArticles();
             }
         });
@@ -55,6 +68,35 @@ export const handlesHorizontalNav = true;
         });
     }
 
+    // Collapsible headers
+    if (els.feedsHeader) {
+        els.feedsHeader.addEventListener('click', () => {
+            feedsCollapsed = !feedsCollapsed;
+            const section = els.feedsHeader.closest('.rss-sidebar-section');
+            if (feedsCollapsed) {
+                section.classList.add('collapsed');
+                els.feedsHeader.classList.add('collapsed');
+            } else {
+                section.classList.remove('collapsed');
+                els.feedsHeader.classList.remove('collapsed');
+            }
+        });
+    }
+
+    if (els.tagsHeader) {
+        els.tagsHeader.addEventListener('click', () => {
+            tagsCollapsed = !tagsCollapsed;
+            const section = els.tagsHeader.closest('.rss-sidebar-section');
+            if (tagsCollapsed) {
+                section.classList.add('collapsed');
+                els.tagsHeader.classList.add('collapsed');
+            } else {
+                section.classList.remove('collapsed');
+                els.tagsHeader.classList.remove('collapsed');
+            }
+        });
+    }
+
     // Toolbar helper
     function getCurrentArticle() {
         if (!currentArticleId) return null;
@@ -72,6 +114,13 @@ export const handlesHorizontalNav = true;
         els.toolbarReadLaterBtn.addEventListener('click', () => {
             const art = getCurrentArticle();
             if (art) markReadLater(art);
+        });
+    }
+
+    if (els.toolbarDeleteBtn) {
+        els.toolbarDeleteBtn.addEventListener('click', () => {
+            const art = getCurrentArticle();
+            if (art) deleteArticle(art);
         });
     }
 
@@ -131,6 +180,11 @@ export const handlesHorizontalNav = true;
         }
     }
 
+    function parseTags(tagsStr) {
+        if (!tagsStr) return [];
+        return tagsStr.split(',').map(t => t.trim()).filter(t => t !== '');
+    }
+
     // ── Badge ───────────────────────────────────────────────────────────────
 
     function updateBadge(count) {
@@ -179,8 +233,41 @@ export const handlesHorizontalNav = true;
 
     function selectFeed(url) {
         currentFeedURL = url;
+        currentTag = null;
         currentArticleId = null;
+        currentPage = 0;
         renderFeeds();
+        renderTags();
+        renderArticles();
+        showDetail(null);
+    }
+
+    // ── Tags sidebar ────────────────────────────────────────────────────────
+
+    function renderTags() {
+        els.tagList.innerHTML = '';
+
+        if (allTags.length === 0) {
+            els.tagList.innerHTML = '<div class="rss-detail-empty">No tags</div>';
+            return;
+        }
+
+        allTags.forEach(tag => {
+            const item = document.createElement('div');
+            item.className = 'rss-tag-item' + (currentTag === tag ? ' active' : '');
+            // Count articles with this tag
+            const count = allArticles.filter(a => parseTags(a.tags).includes(tag)).length;
+            item.innerHTML = `<span class="rss-tag-label">${escHtml(tag)}</span><span class="rss-tag-count">${count}</span>`;
+            item.addEventListener('click', () => selectTag(tag));
+            els.tagList.appendChild(item);
+        });
+    }
+
+    function selectTag(tag) {
+        currentTag = tag;
+        currentArticleId = null;
+        currentPage = 0;
+        renderTags();
         renderArticles();
         showDetail(null);
     }
@@ -189,25 +276,48 @@ export const handlesHorizontalNav = true;
 
     function filteredArticles() {
         let articles = allArticles;
+        // Feed and tag filtering - these happen on the frontend
         if (currentFeedURL) articles = articles.filter(a => a.feedUrl === currentFeedURL);
-        if (viewMode === 'unseen') articles = articles.filter(a => !a.seen && !a.readLater);
-        else if (viewMode === 'seen') articles = articles.filter(a => a.seen && !a.readLater);
-        else if (viewMode === 'read-later') articles = articles.filter(a => a.readLater);
-        // 'all': no additional filter
+        if (currentTag) articles = articles.filter(a => parseTags(a.tags).includes(currentTag));
+        // View mode filtering already done on backend, no need to filter again
         return articles;
     }
 
     function renderArticles() {
         const articles = filteredArticles();
-        els.articleCount.textContent = `${articles.length} article${articles.length !== 1 ? 's' : ''}`;
+        const hasFilters = currentFeedURL !== '' || currentTag !== null;
+        
+        // Calculate total for display
+        let displayTotal = totalArticles;
+        if (hasFilters) {
+            // When filters are active, the total shown is the filtered total
+            displayTotal = articles.length;
+        }
+        
+        els.articleCount.textContent = `${articles.length} article${articles.length !== 1 ? 's' : ''}${hasFilters ? '' : ` (${displayTotal} total)`}`;
         els.articleList.innerHTML = '';
 
         if (articles.length === 0) {
             els.articleList.innerHTML = '<div class="rss-detail-empty">No articles</div>';
+            els.pagination.style.display = 'none';
             return;
         }
 
-        articles.forEach(a => {
+        let displayArticles = articles;
+        let totalPages = 1;
+        
+        if (hasFilters) {
+            // Client-side pagination for filtered results
+            totalPages = Math.ceil(articles.length / PAGE_SIZE);
+            const start = currentPage * PAGE_SIZE;
+            const end = start + PAGE_SIZE;
+            displayArticles = articles.slice(start, end);
+        } else {
+            // Backend pagination - articles are already paginated
+            totalPages = Math.ceil(totalArticles / PAGE_SIZE);
+        }
+
+        displayArticles.forEach(a => {
             const item = document.createElement('div');
             item.className = 'rss-article-item' + (a.id === currentArticleId ? ' active' : '') + (a.seen ? ' seen' : '');
             item.dataset.id = a.id;
@@ -220,6 +330,56 @@ export const handlesHorizontalNav = true;
             item.addEventListener('click', () => selectArticle(a));
             els.articleList.appendChild(item);
         });
+        
+        // Show pagination if needed
+        if (totalPages > 1) {
+            els.pagination.style.display = 'block';
+            els.pagination.innerHTML = '';
+            
+            const pageInfo = document.createElement('div');
+            pageInfo.className = 'rss-pagination-info';
+            pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+            els.pagination.appendChild(pageInfo);
+            
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'rss-pagination-buttons';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← Previous';
+            prevBtn.disabled = currentPage === 0;
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    if (hasFilters) {
+                        renderArticles();
+                    } else {
+                        loadArticles();
+                    }
+                    els.articleList.scrollTop = 0;
+                }
+            });
+            buttonContainer.appendChild(prevBtn);
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = 'Next →';
+            nextBtn.disabled = currentPage >= totalPages - 1;
+            nextBtn.addEventListener('click', () => {
+                if (currentPage < totalPages - 1) {
+                    currentPage++;
+                    if (hasFilters) {
+                        renderArticles();
+                    } else {
+                        loadArticles();
+                    }
+                    els.articleList.scrollTop = 0;
+                }
+            });
+            buttonContainer.appendChild(nextBtn);
+            
+            els.pagination.appendChild(buttonContainer);
+        } else {
+            els.pagination.style.display = 'none';
+        }
     }
 
     function selectArticle(article) {
@@ -236,6 +396,7 @@ export const handlesHorizontalNav = true;
     function showDetail(article) {
         const toolbarBtn = document.getElementById('rss-mark-seen-toolbar');
         const readLaterBtn = document.getElementById('rss-read-later-toolbar');
+        const deleteBtn = document.getElementById('rss-delete-toolbar');
 
         if (!article) {
             if (toolbarBtn) {
@@ -247,6 +408,9 @@ export const handlesHorizontalNav = true;
                 readLaterBtn.textContent = '🔖 Read later';
                 readLaterBtn.disabled = true;
                 readLaterBtn.classList.remove('seen');
+            }
+            if (deleteBtn) {
+                deleteBtn.disabled = true;
             }
             els.detail.innerHTML = '<div class="rss-detail-empty">Select an article to read</div>';
             return;
@@ -291,8 +455,17 @@ export const handlesHorizontalNav = true;
             }
         }
 
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+        }
+
         const body = article.description
             ? `<div class="rss-detail-body">${sanitizeHtml(article.description, article.link)}</div>`
+            : '';
+
+        const tags = parseTags(article.tags);
+        const tagsHtml = tags.length > 0
+            ? `<div class="rss-detail-tags">${tags.map(t => `<span class="rss-detail-tag">${escHtml(t)}<span class="rss-detail-tag-remove" data-tag="${escAttr(t)}">×</span></span>`).join('')}</div>`
             : '';
 
         els.detail.innerHTML = `
@@ -303,10 +476,45 @@ export const handlesHorizontalNav = true;
                 <span class="rss-detail-feed">${escHtml(article.feedTitle)}</span>
                 <span>${formatFullDate(article.published)}</span>
             </div>
+            ${tagsHtml}
             ${body}
+            <div class="rss-tag-input-section">
+                <label class="rss-tag-input-label">Add tag</label>
+                <div class="rss-tag-input-wrapper">
+                    <input type="text" id="rss-new-tag-input" placeholder="New tag..." />
+                    <button id="rss-add-tag-btn">Add</button>
+                </div>
+            </div>
             <a class="rss-open-link" href="${escAttr(article.link)}" target="_blank" rel="noopener noreferrer">
                 Open original ↗
             </a>`;
+
+        // Attach event listeners to tag remove buttons
+        els.detail.querySelectorAll('.rss-detail-tag-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tag = btn.dataset.tag;
+                removeTagFromArticle(article, tag);
+            });
+        });
+
+        // Attach event listeners to add tag button
+        const addTagBtn = els.detail.querySelector('#rss-add-tag-btn');
+        const newTagInput = els.detail.querySelector('#rss-new-tag-input');
+        if (addTagBtn && newTagInput) {
+            addTagBtn.addEventListener('click', () => {
+                const newTag = newTagInput.value.trim();
+                if (newTag) {
+                    addTagToArticle(article, newTag);
+                    newTagInput.value = '';
+                }
+            });
+            newTagInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    addTagBtn.click();
+                }
+            });
+        }
     }
 
     async function markSeen(article) {
@@ -448,6 +656,56 @@ export const handlesHorizontalNav = true;
             }
 
             await Promise.all([refreshBadge(), loadFeeds()]);
+        }
+    }
+
+    async function deleteArticle(article) {
+        if (!confirm(`Delete article "${article.title}"?`)) {
+            return;
+        }
+
+        await callAction('delete-article', {id: article.id});
+        
+        // Remove from allArticles
+        allArticles = allArticles.filter(a => a.id !== article.id);
+
+        // Remove from display
+        const items = Array.from(els.articleList.querySelectorAll('.rss-article-item'));
+        const idx = items.findIndex(el => parseInt(el.dataset.id) === article.id);
+
+        const nextItem = items[idx + 1] || items[idx - 1];
+        const nextId = nextItem ? parseInt(nextItem.dataset.id) : null;
+        const nextArticle = nextId != null ? filteredArticles().find(a => a.id === nextId) : null;
+
+        items[idx] && items[idx].remove();
+        const remaining = els.articleList.querySelectorAll('.rss-article-item').length;
+        els.articleCount.textContent = `${remaining} article${remaining !== 1 ? 's' : ''}`;
+
+        currentArticleId = null;
+        if (nextArticle) {
+            selectArticle(nextArticle);
+        } else {
+            showDetail(null);
+        }
+
+        await Promise.all([refreshBadge(), loadFeeds(), loadTags()]);
+    }
+
+    async function addTagToArticle(article, tag) {
+        const result = await callAction('add-tag', {id: article.id, tag: tag});
+        if (result && result.ok) {
+            article.tags = result.tags;
+            showDetail(article);
+            await loadTags();
+        }
+    }
+
+    async function removeTagFromArticle(article, tag) {
+        const result = await callAction('remove-tag', {id: article.id, tag: tag});
+        if (result && result.ok) {
+            article.tags = result.tags;
+            showDetail(article);
+            await loadTags();
         }
     }
 
@@ -596,11 +854,35 @@ export const handlesHorizontalNav = true;
         }
     }
 
-    async function loadArticles() {
-        const params = {view: viewMode, q: searchQuery || '', full: !!searchFullText};
+    async function loadTags() {
+        const result = await callAction('fetch-all-tags', {});
+        if (result && result.tags) {
+            allTags = result.tags;
+            renderTags();
+        }
+    }
+
+    async function loadArticles(loadAll = false) {
+        // When filters are active, we need all articles for client-side pagination
+        // When no filters, use backend pagination (unless loadAll is true for search navigation)
+        const hasFilters = currentFeedURL !== '' || currentTag !== null;
+        const params = {
+            view: viewMode,
+            q: searchQuery || '',
+            full: !!searchFullText,
+            feed_url: hasFilters ? currentFeedURL : '',
+        };
+        
+        if (!hasFilters && !loadAll) {
+            // Use backend pagination when no filters
+            params.offset = currentPage * PAGE_SIZE;
+            params.limit = PAGE_SIZE;
+        }
+        
         const result = await callAction('fetch-articles', params);
         if (result && result.articles) {
             allArticles = result.articles;
+            totalArticles = result.total || 0;
             renderArticles();
             // If selected article is no longer present, clear selection
             if (currentArticleId && !allArticles.some(a => a.id === currentArticleId)) {
@@ -610,6 +892,33 @@ export const handlesHorizontalNav = true;
             }
         }
     }
+    
+    async function loadArticlePage(articleId) {
+        // Load the page containing a specific article
+        const hasFilters = currentFeedURL !== '' || currentTag !== null;
+        const params = {
+            view: viewMode,
+            q: searchQuery || '',
+            full: !!searchFullText,
+            feed_url: hasFilters ? currentFeedURL : '',
+            'contains-id': articleId,
+        };
+        
+        if (!hasFilters) {
+            params.limit = PAGE_SIZE;
+        }
+        
+        const result = await callAction('fetch-articles', params);
+        if (result && result.articles) {
+            allArticles = result.articles;
+            totalArticles = result.total || 0;
+            // Update currentPage based on the offset returned from backend
+            if (result.offset !== undefined) {
+                currentPage = Math.floor(result.offset / PAGE_SIZE);
+            }
+            renderArticles();
+        }
+    }
 
     // ── SSE refresh ──────────────────────────────────────────────────────────
 
@@ -617,13 +926,49 @@ export const handlesHorizontalNav = true;
         try {
             const msg = JSON.parse(e.detail);
             if (msg.event === 'new_article') {
-                Promise.all([loadArticles(), loadFeeds(), refreshBadge()]);
+                Promise.all([loadArticles(), loadFeeds(), loadTags(), refreshBadge()]);
             }
         } catch (_) {
         }
     });
 
+    // ── Navigation from search tab ───────────────────────────────────────────
+
+    // Listen on document since event is dispatched to tab-content-rss parent
+    document.addEventListener('navigate-to-item', (e) => {
+        const { itemId, sourceType } = e.detail || {};
+        console.log('RSS: navigate-to-item event received', {itemId, sourceType});
+        if (itemId && sourceType === 'rss') {
+            // Convert string ID to number if needed
+            const articleId = parseInt(itemId, 10) || itemId;
+            console.log('RSS: Navigating to article', articleId);
+            
+            // Switch to 'all' view to ensure article is visible regardless of status
+            viewMode = 'all';
+            currentPage = 0;
+            currentFeedURL = '';
+            currentTag = null;
+            const allRadio = document.querySelector('input[name="rss-view"][value="all"]');
+            if (allRadio) {
+                allRadio.checked = true;
+                // Trigger change event to ensure proper handling
+                allRadio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            
+            // Load the page containing this article
+            loadArticlePage(articleId).then(() => {
+                const article = allArticles.find(a => a.id === articleId);
+                console.log('RSS: Found article:', article, 'in', allArticles.length, 'articles on page');
+                if (article) {
+                    selectArticle(article);
+                } else {
+                    console.warn('RSS: Article not found with id', articleId);
+                }
+            });
+        }
+    });
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
-    Promise.all([loadFeeds(), loadArticles(), refreshBadge()]);
+    Promise.all([loadFeeds(), loadTags(), loadArticles(), refreshBadge()]);
 })();

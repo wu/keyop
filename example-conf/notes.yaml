@@ -1,3 +1,8 @@
+# Notes service configuration
+#
+# Provides a note-taking service with SQLite storage and WebUI tab.
+# Notes are automatically indexed by the search service.
+
 x: notes
 
 config:

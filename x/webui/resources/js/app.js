@@ -16,13 +16,14 @@ const defaultTabOrder = {
     'tasks': 4,
     'notes': 5,
     'links': 6,
-    'journal': 7,
-    'idle': 8,
-    'aurora': 9,
-    'tides': 10,
-    'gps': 11,
-    'temps': 12,
-    'messages': 13
+    'search': 7,
+    'journal': 8,
+    'idle': 9,
+    'aurora': 10,
+    'tides': 11,
+    'gps': 12,
+    'temps': 13,
+    'messages': 14
 };
 
 // Load the saved tab order from the backend

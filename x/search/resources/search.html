@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search</title>
+    <style>
+        #search-container {
+            padding: 16px;
+            height: 100%;
+            overflow: auto;
+            background-color: var(--bg, #1e1e1e);
+            color: var(--text, #fff);
+        }
+
+        #search-input-group {
+            margin-bottom: 16px;
+        }
+
+        #search-query {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border, #444);
+            background-color: var(--item-bg, #2d2d2d);
+            color: var(--text, #fff);
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        #search-query:focus {
+            outline: none;
+            border-color: var(--accent, #007acc);
+        }
+
+        #search-filters {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            padding: 4px 8px;
+            background-color: var(--item-bg, #2d2d2d);
+            border: 1px solid var(--border, #444);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--text, #fff);
+            transition: background-color 0.2s;
+        }
+
+        .filter-chip:hover {
+            background-color: var(--hover-bg, #3d3d3d);
+        }
+
+        .filter-chip.active {
+            background-color: var(--accent, #007acc);
+            border-color: var(--accent, #007acc);
+        }
+
+        #search-results {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .search-result {
+            padding: 12px;
+            background-color: var(--item-bg, #2d2d2d);
+            border: 1px solid var(--border, #444);
+            border-radius: 4px;
+        }
+
+        .search-result-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .search-result-title a {
+            color: var(--accent, #007acc);
+            text-decoration: none;
+        }
+
+        .search-result-title a:hover {
+            text-decoration: underline;
+        }
+
+        .search-result-meta {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .source-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: var(--accent-dim, rgba(0, 122, 204, 0.2));
+            color: var(--accent, #007acc);
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .result-date {
+            font-size: 12px;
+            color: var(--text-muted, #999);
+        }
+
+        .result-tags {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .result-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: var(--border, #444);
+            border-radius: 3px;
+            font-size: 11px;
+            color: var(--text, #fff);
+        }
+
+        .search-result-url {
+            font-size: 12px;
+            margin: 4px 0;
+            color: var(--text-muted, #999);
+            word-break: break-all;
+        }
+
+        .result-url-link {
+            color: var(--accent, #007acc);
+            text-decoration: none;
+        }
+
+        .result-url-link:hover {
+            text-decoration: underline;
+        }
+
+        .search-result-title {
+            cursor: pointer;
+            color: var(--accent, #007acc);
+        }
+
+        .search-result-title:hover {
+            text-decoration: underline;
+        }
+
+        .search-result-snippet {
+            font-size: 13px;
+            color: var(--text-muted, #999);
+            line-height: 1.4;
+        }
+
+        #search-empty {
+            text-align: center;
+            padding: 32px 16px;
+            color: var(--text-muted, #999);
+        }
+
+        #search-help-toggle {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background-color: transparent;
+            border: 1px solid var(--border, #444);
+            border-radius: 4px;
+            color: var(--accent, #007acc);
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+
+        #search-help-toggle:hover {
+            background-color: var(--item-bg, #2d2d2d);
+        }
+
+        #search-help {
+            display: none;
+            background-color: var(--item-bg, #2d2d2d);
+            border: 1px solid var(--border, #444);
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        #search-help.open {
+            display: block;
+        }
+
+        #search-help h3 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: var(--accent, #007acc);
+        }
+
+        #search-help ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        #search-help li {
+            margin: 4px 0;
+            color: var(--text, #fff);
+        }
+
+        #search-help code {
+            background-color: var(--bg, #1e1e1e);
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-family: monospace;
+            color: var(--accent, #007acc);
+        }
+    </style>
+</head>
+<body>
+<div id="search-container">
+    <div id="search-input-group">
+        <input id="search-query" placeholder="Search..." type="text"/>
+    </div>
+    <button id="search-help-toggle">? Help</button>
+    <div id="search-help">
+        <h3>Search Syntax</h3>
+        <ul>
+            <li><code>term1 term2</code> - Find documents with both terms (AND)</li>
+            <li><code>term1 OR term2</code> - Find documents with either term</li>
+            <li><code>"exact phrase"</code> - Search for exact phrases</li>
+            <li><code>term1 -term2</code> - Include term1 but exclude term2</li>
+            <li><code>+term1 term2</code> - term1 is required, term2 is optional</li>
+            <li><code>term*</code> - Wildcard search (e.g., <code>test*</code> matches test, testing, tested)</li>
+        </ul>
+    </div>
+    <div id="search-filters"></div>
+    <div id="search-results"></div>
+    <div id="search-empty" style="display: none;">No results found</div>
+</div>
+</body>
+</html>

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"keyop/core"
+	"keyop/x/search"
 )
 
 // Service manages saved links with SQLite storage and favicon caching.
@@ -237,4 +238,98 @@ func (svc *Service) getDataDir() string {
 		home = "."
 	}
 	return filepath.Join(home, ".keyop", "links")
+}
+
+// SearchSourceType implements search.IndexProvider.
+func (svc *Service) SearchSourceType() string {
+	return "links"
+}
+
+// BulkIndex implements search.IndexProvider.
+func (svc *Service) BulkIndex() (<-chan search.SearchableDocument, error) {
+	ch := make(chan search.SearchableDocument)
+	go func() {
+		defer close(ch)
+
+		logger := svc.Deps.MustGetLogger()
+		logger.Info("links BulkIndex started", "dbPath", svc.dbPath)
+
+		db, err := openLinksDB(svc.dbPath)
+		if err != nil {
+			logger.Error("links BulkIndex: failed to open DB", "error", err)
+			return
+		}
+		defer func() {
+			_ = db.Close()
+		}()
+
+		rows, err := db.Query(`
+			SELECT id, url, domain, name, notes, tags, created_at, updated_at 
+			FROM links 
+			ORDER BY updated_at DESC
+		`)
+		if err != nil {
+			logger.Error("links BulkIndex: query failed", "error", err)
+			return
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+
+		docCount := 0
+		for rows.Next() {
+			var id string
+			var url, domain, name, notes, tags, createdAt, updatedAt string
+			if err := rows.Scan(&id, &url, &domain, &name, &notes, &tags, &createdAt, &updatedAt); err != nil {
+				logger.Error("links BulkIndex: scan error", "error", err)
+				continue
+			}
+
+			// Parse tags from comma-separated string
+			var tagList []string
+			if tags != "" {
+				for _, tag := range strings.Split(tags, ",") {
+					if t := strings.TrimSpace(tag); t != "" {
+						tagList = append(tagList, t)
+					}
+				}
+			}
+
+			// Use name if available, otherwise domain
+			title := name
+			if title == "" {
+				title = domain
+			}
+
+			// Build body from notes and URL
+			body := notes
+			if body == "" {
+				body = url
+			}
+
+			// Parse updated_at timestamp
+			updatedTime, err := time.Parse(time.RFC3339, updatedAt)
+			if err != nil {
+				updatedTime = time.Now()
+			}
+
+			doc := search.SearchableDocument{
+				ID:         fmt.Sprintf("links:%s", id),
+				SourceType: "links",
+				SourceID:   id,
+				Title:      title,
+				Body:       body,
+				Tags:       tagList,
+				URL:        url,
+				UpdatedAt:  updatedTime,
+			}
+
+			logger.Info("links BulkIndex: creating document", "id", doc.ID, "title", doc.Title, "body_len", len(doc.Body), "sourceType", doc.SourceType)
+
+			ch <- doc
+			docCount++
+		}
+		logger.Info("links BulkIndex completed", "documents_indexed", docCount)
+	}()
+	return ch, nil
 }

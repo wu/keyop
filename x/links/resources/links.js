@@ -112,6 +112,21 @@ function setupEventListeners() {
         });
     }
 
+    // Handle navigation from search results
+    if (linksContainer) {
+        linksContainer.addEventListener('navigate-to-item', (e) => {
+            console.log('links: received navigate-to-item event', e.detail);
+            const {itemId} = e.detail;
+            if (itemId) {
+                // Scroll the link into view
+                const linkElement = document.querySelector(`[data-link-id="${itemId}"]`);
+                if (linkElement) {
+                    linkElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
+            }
+        });
+    }
+
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
         // Only handle keyboard nav if links tab is active

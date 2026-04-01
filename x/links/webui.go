@@ -4,9 +4,12 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"keyop/core"
+	"keyop/x/search"
 	"keyop/x/webui"
 	"net/http"
 	"strings"
+	"time"
 )
 
 //go:embed resources
@@ -263,6 +266,10 @@ func (svc *Service) addLinkAction(params map[string]any) (any, error) {
 	if link.FaviconPath != "" {
 		link.FaviconPath = "/api/links/favicon/" + link.ID
 	}
+
+	// Emit search index event
+	svc.emitSearchIndexEvent("upsert", link.ID, link.URL, link.Name, link.Notes, link.Tags)
+
 	return link, nil
 }
 
@@ -377,6 +384,10 @@ func (svc *Service) updateLinkAction(params map[string]any) (any, error) {
 	if link.FaviconPath != "" {
 		link.FaviconPath = "/api/links/favicon/" + link.ID
 	}
+
+	// Emit search index event
+	svc.emitSearchIndexEvent("upsert", link.ID, link.URL, link.Name, link.Notes, link.Tags)
+
 	return link, nil
 }
 
@@ -390,6 +401,28 @@ func (svc *Service) deleteLinkAction(params map[string]any) (any, error) {
 	if err := deleteLink(svc.dbPath, id); err != nil {
 		return nil, err
 	}
+
+	// Emit search index delete event if messenger is available
+	func() {
+		defer func() {
+			// Recover from any panics - search events are best-effort
+			_ = recover()
+		}()
+
+		docID := fmt.Sprintf("links:%s", id)
+		evt := search.SearchIndexEvent{
+			Op: "delete",
+			ID: docID,
+		}
+		messenger := svc.Deps.MustGetMessenger()
+		_ = messenger.Send(core.Message{
+			ChannelName: "search.index",
+			ServiceName: svc.Cfg.Name,
+			ServiceType: svc.Cfg.Type,
+			Data:        evt,
+		})
+	}()
+
 	return map[string]string{"status": "ok"}, nil
 }
 
@@ -489,4 +522,60 @@ func (svc *Service) bulkTagAction(params map[string]any) (any, error) {
 	}
 
 	return map[string]int{"updated": count}, nil
+}
+
+// emitSearchIndexEvent sends a search index event to the search service.
+func (svc *Service) emitSearchIndexEvent(op string, id string, url, name, notes, tags string) {
+	defer func() {
+		// Recover from any panics - search events are best-effort
+		_ = recover()
+	}()
+
+	var tagList []string
+	if tags != "" {
+		for _, tag := range strings.Split(tags, ",") {
+			if t := strings.TrimSpace(tag); t != "" {
+				tagList = append(tagList, t)
+			}
+		}
+	}
+
+	// Use name if available, otherwise extract domain
+	title := name
+	if title == "" {
+		title = extractDomain(url)
+	}
+
+	// Build body from notes and URL
+	body := notes
+	if body == "" {
+		body = url
+	}
+
+	doc := search.SearchableDocument{
+		ID:         fmt.Sprintf("links:%s", id),
+		SourceType: "links",
+		SourceID:   id,
+		Title:      title,
+		Body:       body,
+		Tags:       tagList,
+		URL:        url,
+		UpdatedAt:  time.Now(),
+	}
+
+	evt := search.SearchIndexEvent{
+		Op:       op,
+		Document: doc,
+		ID:       doc.ID,
+	}
+
+	messenger := svc.Deps.MustGetMessenger()
+	_ = messenger.Send(core.Message{
+		ChannelName: "search.index",
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Data:        evt,
+	})
+	// Search events are best-effort; ignore errors
+
 }

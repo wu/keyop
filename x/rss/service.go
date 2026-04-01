@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"keyop/core"
+	"keyop/x/search"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -44,19 +45,11 @@ func NewService(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 }
 
 // ValidateConfig validates the service configuration.
+// Note: feeds and frequency are optional to allow web-UI-only instances.
 func (svc *Service) ValidateConfig() []error {
 	var errs []error
 
-	feeds, err := parseFeedConfigs(svc.Cfg.Config)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("rss: %w", err))
-		return errs
-	}
-	if len(feeds) == 0 {
-		errs = append(errs, fmt.Errorf("rss: feeds must contain at least one entry with a non-empty url"))
-		return errs
-	}
-
+	// feeds are optional (allows web UI without polling)
 	if raw, ok := svc.Cfg.Config["max_age"].(string); ok && raw != "" {
 		if _, err := time.ParseDuration(raw); err != nil {
 			errs = append(errs, fmt.Errorf("rss: invalid max_age %q: %w", raw, err))
@@ -76,6 +69,7 @@ func (svc *Service) Initialize() error {
 		for _, stmt := range []string{
 			`ALTER TABLE rss_articles ADD COLUMN seen INTEGER DEFAULT 0`,
 			`ALTER TABLE rss_articles ADD COLUMN read_later INTEGER DEFAULT 0`,
+			`ALTER TABLE rss_articles ADD COLUMN tags TEXT DEFAULT ''`,
 		} {
 			if _, err := db.Exec(stmt); err != nil {
 				// "duplicate column name" is expected on already-migrated databases.
@@ -111,7 +105,15 @@ func (svc *Service) Check() error {
 
 	feeds, err := parseFeedConfigs(svc.Cfg.Config)
 	if err != nil {
-		return fmt.Errorf("rss: %w", err)
+		// If feeds can't be parsed, just skip polling (web UI still works)
+		logger.Debug("rss: no feeds configured, skipping poll", "error", err)
+		return nil
+	}
+	
+	if len(feeds) == 0 {
+		// No feeds configured; web UI mode only
+		logger.Debug("rss: no feeds configured, skipping poll")
+		return nil
 	}
 
 	// Load persisted state.
@@ -181,11 +183,8 @@ func (svc *Service) Check() error {
 				continue
 			}
 
-			// Prefer full content over summary description.
-			body := item.Content
-			if body == "" {
-				body = item.Description
-			}
+			// Get description from content, description, or media:description (YouTube feeds)
+			body := getItemDescription(item)
 
 			event := &ArticleEvent{
 				GUID:        guid,
@@ -239,10 +238,12 @@ func (svc *Service) Check() error {
 }
 
 // parseFeedConfigs parses the "feeds" key from a service config map.
+// Returns an empty list if feeds is not configured (web UI only mode).
 func parseFeedConfigs(cfg map[string]any) ([]feedConfig, error) {
 	raw, ok := cfg["feeds"]
 	if !ok {
-		return nil, fmt.Errorf("feeds is required")
+		// Feeds are optional - allows web UI without polling
+		return []feedConfig{}, nil
 	}
 
 	list, ok := raw.([]any)
@@ -265,4 +266,129 @@ func parseFeedConfigs(cfg map[string]any) ([]feedConfig, error) {
 	}
 
 	return feeds, nil
+}
+
+// SearchSourceType implements search.IndexProvider.
+func (svc *Service) SearchSourceType() string {
+	return "rss"
+}
+
+// getItemDescription extracts description from an item, preferring content > description > media:description.
+func getItemDescription(item *gofeed.Item) string {
+	// Prefer full content over summary description
+	if item.Content != "" {
+		return item.Content
+	}
+	
+	if item.Description != "" {
+		return item.Description
+	}
+	
+	// Check for media:description (used by YouTube feeds)
+	if item.Extensions != nil {
+		if mediaExt, ok := item.Extensions["media"]; ok {
+			// mediaExt is map[string][]Extension
+			if descriptions, ok := mediaExt["description"]; ok && len(descriptions) > 0 {
+				// Extension has a Value field
+				if descriptions[0].Value != "" {
+					return descriptions[0].Value
+				}
+			}
+		}
+	}
+	
+	return ""
+}
+
+
+// stripHTML removes HTML tags from text for clean search indexing.
+func stripHTML(html string) string {
+	var result strings.Builder
+	inTag := false
+	for _, r := range html {
+		if r == '<' {
+			inTag = true
+			continue
+		}
+		if r == '>' {
+			inTag = false
+			result.WriteRune(' ')
+			continue
+		}
+		if !inTag {
+			result.WriteRune(r)
+		}
+	}
+
+	// Clean up whitespace
+	text := result.String()
+	text = strings.TrimSpace(text)
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.Join(strings.Fields(text), " ")
+	return text
+}
+
+// BulkIndex implements search.IndexProvider and returns all RSS articles for indexing.
+func (svc *Service) BulkIndex() (<-chan search.SearchableDocument, error) {
+	ch := make(chan search.SearchableDocument)
+	go func() {
+		defer close(ch)
+
+		if svc.db == nil || *svc.db == nil {
+			return
+		}
+		db := *svc.db
+
+		rows, err := db.Query(`
+			SELECT id, title, description, link, published, feed_title, COALESCE(tags,'')
+			FROM rss_articles
+			ORDER BY published DESC
+		`)
+		if err != nil {
+			// If query fails, might be because tags column doesn't exist
+			rows, err = db.Query(`
+				SELECT id, title, description, link, published, feed_title, ''
+				FROM rss_articles
+				ORDER BY published DESC
+			`)
+			if err != nil {
+				return
+			}
+		}
+		defer func() { _ = rows.Close() }()
+
+		for rows.Next() {
+			var id int64
+			var title, description, link, feedTitle, tagsStr string
+			var published time.Time
+			if err := rows.Scan(&id, &title, &description, &link, &published, &feedTitle, &tagsStr); err != nil {
+				continue
+			}
+
+			tags := []string{}
+			if tagsStr != "" {
+				for _, t := range strings.Split(tagsStr, ",") {
+					t = strings.TrimSpace(t)
+					if t != "" {
+						tags = append(tags, t)
+					}
+				}
+			}
+
+			ch <- search.SearchableDocument{
+				ID:         fmt.Sprintf("rss:%d", id),
+				SourceType: "rss",
+				SourceID:   fmt.Sprintf("%d", id),
+				Title:      title,
+				Body:       stripHTML(description),
+				URL:        link,
+				UpdatedAt:  published,
+				Tags:       tags,
+				Extra: map[string]string{
+					"feed_title": feedTitle,
+				},
+			}
+		}
+	}()
+	return ch, nil
 }

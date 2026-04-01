@@ -1,13 +1,16 @@
 package rss
 
 import (
+	"database/sql"
 	"embed"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
+	"keyop/core"
 	"keyop/x/webui"
 )
 
@@ -40,6 +43,25 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 
 // HandleWebUIAction handles actions from the WebUI.
 func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
+	result, err := svc.handleWebUIActionInternal(action, params)
+	if err != nil {
+		// Send error to error channel if configured
+		if errorChan, ok := svc.Cfg.Pubs["errors"]; ok {
+			messenger := svc.Deps.MustGetMessenger()
+			messenger.Send(core.Message{
+				ChannelName: errorChan.Name,
+				ServiceName: svc.Cfg.Name,
+				Event:       action,
+				Status:      "error",
+				Uuid:        fmt.Sprintf("rss-error-%s", action),
+				Timestamp:   time.Now(),
+			})
+		}
+	}
+	return result, err
+}
+
+func (svc *Service) handleWebUIActionInternal(action string, params map[string]any) (any, error) {
 	switch action {
 	case "fetch-articles":
 		return svc.fetchArticles(params)
@@ -59,6 +81,14 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		return svc.markDoneReading(params)
 	case "fetch-unseen-count":
 		return svc.fetchUnseenCount()
+	case "delete-article":
+		return svc.deleteArticle(params)
+	case "add-tag":
+		return svc.addTag(params)
+	case "remove-tag":
+		return svc.removeTag(params)
+	case "fetch-all-tags":
+		return svc.fetchAllTags()
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
@@ -76,19 +106,42 @@ type articleRow struct {
 	Published   string `json:"published"`
 	Seen        bool   `json:"seen"`
 	ReadLater   bool   `json:"readLater"`
+	Tags        string `json:"tags"`
 }
 
 // fetchArticles queries the rss_articles table ordered by published DESC.
 // Pass show_seen=true to include already-seen articles.
 func (svc *Service) fetchArticles(params map[string]any) (any, error) {
+	logger := svc.Deps.MustGetLogger()
+	
 	if svc.db == nil || *svc.db == nil {
-		return map[string]any{"articles": []any{}}, nil
+		logger.Error("rss: fetchArticles - database not available")
+		return map[string]any{"articles": []any{}, "total": 0}, nil
 	}
+	
+	logger.Debug("rss: fetchArticles called", "view", params["view"])
+	
 	db := *svc.db
 	feedURL, _ := params["feed_url"].(string)
 	view, _ := params["view"].(string) // 'unseen' | 'read-later' | 'seen' | 'all'
 	q, _ := params["q"].(string)
 	full, _ := params["full"].(bool)
+	offset := 0
+	limit := 200
+	if o, ok := params["offset"].(float64); ok {
+		offset = int(o)
+	}
+	if l, ok := params["limit"].(float64); ok {
+		limit = int(l)
+	}
+
+	// If contains-id is provided, find which page the article is on
+	var containsID int64
+	if cid, ok := params["contains-id"].(float64); ok {
+		containsID = int64(cid)
+	} else if cidStr, ok := params["contains-id"].(string); ok {
+		fmt.Sscanf(cidStr, "%d", &containsID)
+	}
 
 	where := []string{"1=1"}
 	args := []any{}
@@ -120,14 +173,75 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 		}
 	}
 
-	// #nosec G201 - where is built from constant SQL fragments (safe, no injection)
-	query := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0)
-		 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT 200`, strings.Join(where, " AND "))
+	whereClause := strings.Join(where, " AND ")
 
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("rss: failed to query articles: %w", err)
+	// If contains-id is set, find the article's position and calculate the offset
+	if containsID > 0 {
+		// Count how many articles come before this one
+		countBeforeQuery := fmt.Sprintf(`SELECT COUNT(*) FROM rss_articles 
+			WHERE %s AND published >= (SELECT published FROM rss_articles WHERE id = ?)`, whereClause)
+		var countBefore int
+		err := db.QueryRow(countBeforeQuery, append(args, containsID)...).Scan(&countBefore)
+		if err == nil && countBefore > 0 {
+			// Position 0 means the article is first, so offset = 0
+			// Position 1 means it's 2nd, so offset = 0 (still on first page)
+			// Calculate page: position / pageSize, then offset = page * pageSize
+			offset = ((countBefore - 1) / limit) * limit
+			logger.Debug("rss: found article at position", "id", containsID, "position", countBefore, "offset", offset)
+		}
 	}
+
+	// Get total count
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM rss_articles WHERE %s", whereClause)
+	var total int
+	if err := db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		total = 0
+	}
+
+	// #nosec G201 - where is built from constant SQL fragments (safe, no injection)
+	// Try to select with tags column; fall back to without if column doesn't exist
+	queryWithTags := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0), COALESCE(tags,'')
+		 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := db.Query(queryWithTags, append(args, limit, offset)...)
+	if err != nil {
+		// If query fails, it might be because tags column doesn't exist
+		// Try without tags column
+		queryWithoutTags := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0)
+			 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT ? OFFSET ?`, whereClause)
+		rows, err = db.Query(queryWithoutTags, append(args, limit, offset)...)
+		if err != nil {
+			return nil, fmt.Errorf("rss: failed to query articles: %w", err)
+		}
+		result, _ := fetchArticlesWithoutTags(rows)
+		if resultMap, ok := result.(map[string]any); ok {
+			resultMap["total"] = total
+			resultMap["offset"] = offset
+			return resultMap, nil
+		}
+		return result, nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	articles := make([]articleRow, 0)
+	for rows.Next() {
+		var r articleRow
+		var timestamp, published time.Time
+		var seenInt, readLaterInt int
+		if err := rows.Scan(&r.ID, &timestamp, &r.FeedURL, &r.FeedTitle, &r.GUID, &r.Title, &r.Description, &r.Link, &published, &seenInt, &readLaterInt, &r.Tags); err != nil {
+			continue
+		}
+		r.Timestamp = timestamp.Format(time.RFC3339)
+		r.Published = published.Format(time.RFC3339)
+		r.Seen = seenInt != 0
+		r.ReadLater = readLaterInt != 0
+		articles = append(articles, r)
+	}
+	return map[string]any{"articles": articles, "total": total, "offset": offset}, nil
+}
+
+// fetchArticlesWithoutTags processes rows from a query without the tags column
+func fetchArticlesWithoutTags(rows *sql.Rows) (any, error) {
 	defer func() { _ = rows.Close() }()
 
 	articles := make([]articleRow, 0)
@@ -142,6 +256,7 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 		r.Published = published.Format(time.RFC3339)
 		r.Seen = seenInt != 0
 		r.ReadLater = readLaterInt != 0
+		r.Tags = ""
 		articles = append(articles, r)
 	}
 	return map[string]any{"articles": articles}, nil
@@ -159,13 +274,25 @@ func (svc *Service) fetchArticle(params map[string]any) (any, error) {
 	db := *svc.db
 	var r articleRow
 	var timestamp, published time.Time
+	
+	// Try with tags column first
 	err := db.QueryRow(
-		`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published
+		`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(tags,'')
 		 FROM rss_articles WHERE id = ?`, int64(id),
-	).Scan(&r.ID, &timestamp, &r.FeedURL, &r.FeedTitle, &r.GUID, &r.Title, &r.Description, &r.Link, &published)
+	).Scan(&r.ID, &timestamp, &r.FeedURL, &r.FeedTitle, &r.GUID, &r.Title, &r.Description, &r.Link, &published, &r.Tags)
+	
 	if err != nil {
-		return nil, fmt.Errorf("rss: article not found: %w", err)
+		// Try without tags column
+		err = db.QueryRow(
+			`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published
+			 FROM rss_articles WHERE id = ?`, int64(id),
+		).Scan(&r.ID, &timestamp, &r.FeedURL, &r.FeedTitle, &r.GUID, &r.Title, &r.Description, &r.Link, &published)
+		if err != nil {
+			return nil, fmt.Errorf("rss: article not found: %w", err)
+		}
+		r.Tags = ""
 	}
+	
 	r.Timestamp = timestamp.Format(time.RFC3339)
 	r.Published = published.Format(time.RFC3339)
 	return r, nil
@@ -173,10 +300,23 @@ func (svc *Service) fetchArticle(params map[string]any) (any, error) {
 
 // fetchFeeds returns configured feeds with per-feed article counts from SQLite.
 func (svc *Service) fetchFeeds() (any, error) {
+	logger := svc.Deps.MustGetLogger()
+	
+	// Check if database is available
+	if svc.db == nil || *svc.db == nil {
+		logger.Error("rss: database not available - sqlite-rss service not enabled or failed to initialize")
+		return nil, fmt.Errorf("rss: sqlite database instance not available - ensure sqlite-rss service is enabled")
+	}
+
+	logger.Debug("rss: fetchFeeds called, database is available")
+	
 	feeds, err := parseFeedConfigs(svc.Cfg.Config)
 	if err != nil {
+		logger.Warn("rss: failed to parse feed configs", "error", err)
 		return nil, fmt.Errorf("rss: %w", err)
 	}
+	
+	logger.Debug("rss: fetchFeeds - configured feeds", "count", len(feeds))
 
 	type feedRow struct {
 		URL         string `json:"url"`
@@ -187,17 +327,32 @@ func (svc *Service) fetchFeeds() (any, error) {
 
 	type countRow struct{ total, unseen int }
 	counts := map[string]countRow{}
-	if svc.db != nil && *svc.db != nil {
-		rows, qErr := (*svc.db).Query(
-			`SELECT feed_url, COUNT(*), SUM(CASE WHEN COALESCE(seen,0)=0 AND COALESCE(read_later,0)=0 THEN 1 ELSE 0 END)
-			 FROM rss_articles GROUP BY feed_url`)
+	
+	db := *svc.db
+	rows, qErr := db.Query(
+		`SELECT feed_url, COUNT(*), SUM(CASE WHEN COALESCE(seen,0)=0 AND COALESCE(read_later,0)=0 THEN 1 ELSE 0 END)
+		 FROM rss_articles GROUP BY feed_url`)
+	if qErr == nil {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var u string
+			var total, unseen int
+			if rows.Scan(&u, &total, &unseen) == nil {
+				counts[u] = countRow{total, unseen}
+			}
+		}
+	}
+
+	// If no feeds are configured, extract them from the database
+	if len(feeds) == 0 {
+		rows, qErr := db.Query(
+			`SELECT DISTINCT feed_url, feed_title FROM rss_articles ORDER BY feed_title`)
 		if qErr == nil {
 			defer func() { _ = rows.Close() }()
 			for rows.Next() {
-				var u string
-				var total, unseen int
-				if rows.Scan(&u, &total, &unseen) == nil {
-					counts[u] = countRow{total, unseen}
+				var url, title string
+				if rows.Scan(&url, &title) == nil {
+					feeds = append(feeds, feedConfig{URL: url, Title: title})
 				}
 			}
 		}
@@ -303,4 +458,147 @@ func (svc *Service) fetchUnseenCount() (any, error) {
 		return map[string]any{"count": 0}, nil
 	}
 	return map[string]any{"count": count}, nil
+}
+
+// deleteArticle removes an article from the database.
+func (svc *Service) deleteArticle(params map[string]any) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("rss: database not available")
+	}
+	id, ok := params["id"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("rss: id param required")
+	}
+	_, err := (*svc.db).Exec(`DELETE FROM rss_articles WHERE id=?`, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("rss: delete-article failed: %w", err)
+	}
+	return map[string]any{"ok": true}, nil
+}
+
+// addTag adds a tag to an article (tags are comma-separated).
+func (svc *Service) addTag(params map[string]any) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("rss: database not available")
+	}
+	id, ok := params["id"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("rss: id param required")
+	}
+	tag, ok := params["tag"].(string)
+	if !ok || tag == "" {
+		return nil, fmt.Errorf("rss: tag param required")
+	}
+
+	var currentTags string
+	err := (*svc.db).QueryRow(`SELECT COALESCE(tags,'') FROM rss_articles WHERE id=?`, int64(id)).Scan(&currentTags)
+	if err != nil {
+		return nil, fmt.Errorf("rss: article not found: %w", err)
+	}
+
+	// Parse existing tags
+	var tagList []string
+	if currentTags != "" {
+		tagList = strings.Split(currentTags, ",")
+	}
+
+	// Add tag if not already present
+	tagExists := false
+	for _, t := range tagList {
+		if strings.TrimSpace(t) == tag {
+			tagExists = true
+			break
+		}
+	}
+	if !tagExists {
+		tagList = append(tagList, tag)
+	}
+
+	newTags := strings.Join(tagList, ",")
+	_, err = (*svc.db).Exec(`UPDATE rss_articles SET tags=? WHERE id=?`, newTags, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("rss: add-tag failed: %w", err)
+	}
+	return map[string]any{"ok": true, "tags": newTags}, nil
+}
+
+// removeTag removes a tag from an article.
+func (svc *Service) removeTag(params map[string]any) (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return nil, fmt.Errorf("rss: database not available")
+	}
+	id, ok := params["id"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("rss: id param required")
+	}
+	tag, ok := params["tag"].(string)
+	if !ok || tag == "" {
+		return nil, fmt.Errorf("rss: tag param required")
+	}
+
+	var currentTags string
+	err := (*svc.db).QueryRow(`SELECT COALESCE(tags,'') FROM rss_articles WHERE id=?`, int64(id)).Scan(&currentTags)
+	if err != nil {
+		return nil, fmt.Errorf("rss: article not found: %w", err)
+	}
+
+	// Parse existing tags
+	var tagList []string
+	if currentTags != "" {
+		tagList = strings.Split(currentTags, ",")
+	}
+
+	// Remove the tag
+	filtered := make([]string, 0, len(tagList))
+	for _, t := range tagList {
+		if strings.TrimSpace(t) != tag {
+			filtered = append(filtered, t)
+		}
+	}
+
+	newTags := strings.Join(filtered, ",")
+	_, err = (*svc.db).Exec(`UPDATE rss_articles SET tags=? WHERE id=?`, newTags, int64(id))
+	if err != nil {
+		return nil, fmt.Errorf("rss: remove-tag failed: %w", err)
+	}
+	return map[string]any{"ok": true, "tags": newTags}, nil
+}
+
+// fetchAllTags returns all unique tags used across articles.
+func (svc *Service) fetchAllTags() (any, error) {
+	if svc.db == nil || *svc.db == nil {
+		return map[string]any{"tags": []string{}}, nil
+	}
+
+	rows, err := (*svc.db).Query(`SELECT DISTINCT tags FROM rss_articles WHERE tags != ''`)
+	if err != nil {
+		return map[string]any{"tags": []string{}}, nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	tagSet := make(map[string]bool)
+	for rows.Next() {
+		var tagsStr string
+		if err := rows.Scan(&tagsStr); err != nil {
+			continue
+		}
+		if tagsStr != "" {
+			tags := strings.Split(tagsStr, ",")
+			for _, t := range tags {
+				t = strings.TrimSpace(t)
+				if t != "" {
+					tagSet[t] = true
+				}
+			}
+		}
+	}
+
+	// Convert to sorted list
+	tags := make([]string, 0, len(tagSet))
+	for t := range tagSet {
+		tags = append(tags, t)
+	}
+	sort.Strings(tags)
+
+	return map[string]any{"tags": tags}, nil
 }

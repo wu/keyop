@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"keyop/core"
 	"keyop/x/logicalday"
+	"keyop/x/search"
 	"path/filepath"
 	"strings"
 	"time"
@@ -255,4 +256,136 @@ func (svc *Service) ensureInProgressColumns() error {
 		}
 	}
 	return nil
+}
+
+// SearchSourceType implements search.IndexProvider.
+func (svc *Service) SearchSourceType() string {
+	return "tasks"
+}
+
+// BulkIndex implements search.IndexProvider.
+func (svc *Service) BulkIndex() (<-chan search.SearchableDocument, error) {
+	ch := make(chan search.SearchableDocument)
+	go func() {
+		defer close(ch)
+
+		db, err := sql.Open("sqlite", svc.expandDBPath(svc.dbPath))
+		if err != nil {
+			return
+		}
+		defer func() {
+			_ = db.Close()
+		}()
+
+		rows, err := db.Query(`
+			SELECT id, title, note, tags, updated_at 
+			FROM tasks 
+			ORDER BY updated_at DESC
+		`)
+		if err != nil {
+			return
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+
+		for rows.Next() {
+			var id int64
+			var title string
+			var note sql.NullString
+			var tags sql.NullString
+			var updatedAt string
+			if err := rows.Scan(&id, &title, &note, &tags, &updatedAt); err != nil {
+				continue
+			}
+
+			// Parse tags from comma-separated string
+			var tagList []string
+			if tags.Valid && tags.String != "" {
+				for _, tag := range strings.Split(tags.String, ",") {
+					if t := strings.TrimSpace(tag); t != "" {
+						tagList = append(tagList, t)
+					}
+				}
+			}
+
+			// Parse updated_at timestamp
+			updatedTime, err := time.Parse(time.RFC3339Nano, updatedAt)
+			if err != nil {
+				updatedTime = time.Now()
+			}
+
+			body := ""
+			if note.Valid {
+				body = note.String
+			}
+
+			doc := search.SearchableDocument{
+				ID:         fmt.Sprintf("tasks:%d", id),
+				SourceType: "tasks",
+				SourceID:   fmt.Sprintf("%d", id),
+				Title:      title,
+				Body:       body,
+				Tags:       tagList,
+				UpdatedAt:  updatedTime,
+			}
+
+			ch <- doc
+		}
+	}()
+	return ch, nil
+}
+
+// emitSearchIndexEvent sends a search index event to the search service.
+func (svc *Service) emitSearchIndexEvent(op string, taskID int64, title, note, tags string) {
+	defer func() {
+		// Recover from any panics - search events are best-effort
+		_ = recover()
+	}()
+
+	var tagList []string
+	if tags != "" {
+		for _, tag := range strings.Split(tags, ",") {
+			if t := strings.TrimSpace(tag); t != "" {
+				tagList = append(tagList, t)
+			}
+		}
+	}
+
+	doc := search.SearchableDocument{
+		ID:         fmt.Sprintf("tasks:%d", taskID),
+		SourceType: "tasks",
+		SourceID:   fmt.Sprintf("%d", taskID),
+		Title:      title,
+		Body:       note,
+		Tags:       tagList,
+		UpdatedAt:  time.Now(),
+	}
+
+	evt := search.SearchIndexEvent{
+		Op:       op,
+		Document: doc,
+		ID:       doc.ID,
+	}
+
+	messenger := svc.Deps.MustGetMessenger()
+	_ = messenger.Send(core.Message{
+		ChannelName: "search.index",
+		ServiceName: svc.Cfg.Name,
+		ServiceType: svc.Cfg.Type,
+		Data:        evt,
+	})
+	// Search events are best-effort; ignore errors
+}
+
+// expandDBPath expands the tilde prefix in a database path.
+func (svc *Service) expandDBPath(dbPath string) string {
+	if strings.HasPrefix(dbPath, "~/") {
+		home, err := svc.Deps.MustGetOsProvider().UserHomeDir()
+		if err != nil {
+			return dbPath
+		}
+		return filepath.Join(home, dbPath[2:])
+	}
+	return dbPath
 }

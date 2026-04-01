@@ -35,6 +35,7 @@ import (
 	"keyop/x/process"
 	"keyop/x/reminders"
 	"keyop/x/rss"
+	"keyop/x/search"
 	"keyop/x/slack"
 	"keyop/x/speak"
 	"keyop/x/sqlite"
@@ -163,6 +164,9 @@ var ServiceRegistry = map[string]func(deps core.Dependencies, cfg core.ServiceCo
 	},
 	"rss": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return rss.NewService(deps, cfg)
+	},
+	"search": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
+		return search.NewService(deps, cfg)
 	},
 	"speak": func(deps core.Dependencies, cfg core.ServiceConfig) core.Service {
 		return speak.NewService(deps, cfg)

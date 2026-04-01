@@ -1,0 +1,13 @@
+# Links service configuration
+#
+# Provides a link bookmarking service with SQLite storage, favicon caching, and WebUI tab.
+# Links are automatically indexed by the search service.
+
+x: links
+
+subs:
+  links:
+    name: links
+    description: read links from local channel
+
+

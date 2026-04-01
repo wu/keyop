@@ -1,0 +1,17 @@
+# Search service configuration
+#
+# Provides full-text search indexing and querying across all services.
+# Indexes documents from notes, links, and any other service that implements
+# the IndexProvider interface.
+
+x: search
+subs: { }
+
+config:
+  # Path to the Bleve search index
+  # Defaults to ~/.keyop/search/index
+  # index_path: ~/.keyop/search/index
+
+  # Set to true to trigger a full re-index on startup
+  # Useful after adding new services or if the index becomes corrupted
+  reindex_on_start: false

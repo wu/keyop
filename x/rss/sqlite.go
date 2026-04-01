@@ -21,7 +21,8 @@ func (svc *Service) SQLiteSchema() string {
 		published   DATETIME,
 		data        TEXT,
 		seen        INTEGER DEFAULT 0,
-		read_later  INTEGER DEFAULT 0
+		read_later  INTEGER DEFAULT 0,
+		tags        TEXT DEFAULT ''
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS rss_articles_guid ON rss_articles(guid);`
 }
@@ -71,6 +72,10 @@ func (svc *Service) SQLiteInsert(msg core.Message) (string, []any) {
 // SetSQLiteDB allows the runtime to provide a pointer to the shared DB instance.
 func (svc *Service) SetSQLiteDB(db **sql.DB) {
 	svc.db = db
+	if db != nil {
+		logger := svc.Deps.MustGetLogger()
+		logger.Debug("rss: SetSQLiteDB called successfully", "dbPath", svc.dbPath)
+	}
 }
 
 // SetDBPath allows the runtime to provide the database file path.
