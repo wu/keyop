@@ -648,6 +648,178 @@ Before deploying a WebUI service:
 - [ ] Actions load data and handle user input
 - [ ] Forms validate inputs before submitting
 
+## Integrating Services with Full-Text Search
+
+Services can be integrated with the search tab to make their data searchable.This allows users to search across notes, links, and other services.
+
+### Overview
+
+The search system uses Bleve for full-text indexing and provides:
+- Cross-service search with type filtering
+- Configurable field storage and searching
+- Automatic indexing of service data
+- Real-time updates when data changes
+
+### Step 1: Implement IndexProvider in Your Service
+
+Add an `IndexProvider` interface implementation to your service's `webui.go`:
+
+```go
+// IndexProvider implementation
+func (svc *Service) BulkIndex() ([]search.SearchableDocument, error) {
+    // Fetch all items from your service
+    // Return array of SearchableDocument with all fields populated
+    docs := make([]search.SearchableDocument, 0)
+    
+    // Example: for each item in your service
+    docs = append(docs, search.SearchableDocument{
+        ID:         fmt.Sprintf("yourservice:%s", item.ID),
+        SourceType: "yourservice",
+        SourceID:   item.ID,
+        Title:      item.Title,
+        Body:       item.Body,
+        Tags:       item.Tags,
+        UpdatedAt:  item.UpdatedAt,
+    })
+    
+    return docs, nil
+}
+```
+
+**Key points:**
+
+- ID must be formatted as `{serviceType}:{itemID}`
+- SourceType should match your service name (e.g., "notes", "links")
+- SourceID should be the unique ID of the item
+- Title is the primary searchable field
+- Body/content is searchable and displayed in snippets
+- Tags should be an array of tag strings
+- UpdatedAt should be an ISO 8601 timestamp
+- All string IDs from the service should be preserved as-is
+
+### Step 2: Emit Search Events on Changes
+
+In your service's action handlers, emit `SearchIndexEvent` when data changes:
+
+```go
+// After creating/updating an item
+svc.Deps.Messenger.Send(core.Message{
+To:       "search",
+From:     "yourservice",
+Subject:  "index-events",
+DataType: "search:SearchIndexEvent",
+Data: search.SearchIndexEvent{
+Type: search.EventTypeUpsert,
+Doc: search.SearchableDocument{
+ID:         fmt.Sprintf("yourservice:%s", item.ID),
+SourceType: "yourservice",
+SourceID:   item.ID,
+Title:      item.Title,
+Body:       item.Body,
+Tags:       item.Tags,
+UpdatedAt:  item.UpdatedAt,
+},
+},
+})
+
+// After deleting an item
+svc.Deps.Messenger.Send(core.Message{
+To:       "search",
+From:     "yourservice",
+Subject:  "index-events",
+DataType: "search:SearchIndexEvent",
+Data: search.SearchIndexEvent{
+Type: search.EventTypeDelete,
+ID:   fmt.Sprintf("yourservice:%s", item.ID),
+},
+})
+```
+
+### Step 3: Wire the IndexProvider in x/run/run.go
+
+The search service automatically discovers and registers IndexProviders:
+
+```go
+// In x/run/run.go, add your service to the provider registration
+if indexProvider, ok := svc.(search.IndexProvider); ok {
+searchSvc.RegisterIndexProvider(indexProvider)
+}
+```
+
+This is handled automatically - just ensure your service implements `search.IndexProvider`.
+
+### Step 4: Handle Navigation from Search Results
+
+When users click on a search result, a `navigate-to-item` event is dispatched to the target tab. Your service's
+JavaScript module should listen for this:
+
+```javascript
+// In your service's init function (export async function init(container))
+container.addEventListener('navigate-to-item', (e) => {
+  const {itemId, sourceType} = e.detail;
+  if (itemId && sourceType === 'yourservice') {
+    // Navigate to the item in your service
+    selectItem(itemId);
+    // Show the item view (not just the list)
+  }
+});
+```
+
+**Important:** Your service's JavaScript must be an ES6 module with `export async function init(container)`, not an
+IIFE. The container parameter is the tab-content wrapper element.
+
+### Step 5: Update Navigation in Other Services
+
+If another service needs to navigate to items, you can send navigation events:
+
+```javascript
+// Navigate to a note from links or other services
+container.dispatchEvent(new CustomEvent('navigate-to-item', {
+  detail: {itemId: '3627', sourceType: 'notes'}
+}));
+```
+
+Then click the tab to switch to it.
+
+### Search Field Storage
+
+**Critical:** For fields to appear in search results, they must have `Store: true` in the Bleve field mapping:
+
+```go
+// In search/index.go buildIndexMapping()
+docMapping.AddFieldMappingsAt("title", titleFieldMapping)
+```
+
+Without `Store: true`, fields are indexed but not stored, so they won't appear in search result snippets or metadata.
+The search service automatically handles this for all standard fields (title, body, tags, sourceType, etc.).
+
+### Type Coercion for IDs
+
+**Important:** When receiving IDs from search results in JavaScript, convert string IDs to the correct type for your
+backend API:
+
+```javascript
+// Search returns string IDs, but your API might expect numbers
+const itemId = parseInt(itemId, 10) || itemId; // For numeric IDs
+selectItem(itemId); // Pass the converted ID
+```
+
+Check your service's action handlers to see what type they expect for IDs.
+
+### Common Issues
+
+1. **Note not appearing in list after selection:** Clear filters and reload the full list (without search/tag filters)
+   so the note appears in default sort order. Use the pinned indicator if the note is on a different page.
+
+2. **Fields not appearing in search results:** Ensure all fields have `Store: true` in the Bleve mapping and that
+   `Dynamic: false` is set (otherwise dynamic fields won't be stored).
+
+3. **Tags display with wrong colors:** Use hardcoded hex colors in CSS instead of CSS variables that might not be
+   available. Example: use `#8a52da` instead of `var(--accent-blue)` for guaranteed consistency.
+
+4. **Navigation event not received:** Ensure your service exports an ESM init function that receives the container. Old
+   IIFE patterns won't work - convert to `export async function init(container)`.
+
 ## Policy
 
 Policy: Never run git commands (add/commit/push/branch/tag) or modify the repository without explicit, written approval
@@ -659,6 +831,7 @@ Policy: Do not look for server process ids or attempt to kill processes unless y
 repo owner as part of a specific task. You can make requests to the server process. Ask me and I will provide the
 local port.
 
+Policy: Always discuss with me before adding backward compatibility or implementing fallback mechanisms.
 
 
 ---
