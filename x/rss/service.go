@@ -61,6 +61,8 @@ func (svc *Service) ValidateConfig() []error {
 
 // Initialize does not subscribe to any channels; polling is driven by Check().
 func (svc *Service) Initialize() error {
+	logger := svc.Deps.MustGetLogger()
+
 	// Run migrations for columns added after the initial schema.
 	// Each ALTER TABLE is executed separately so a "duplicate column" error
 	// on an already-migrated DB doesn't block the others.
@@ -74,8 +76,12 @@ func (svc *Service) Initialize() error {
 			if _, err := db.Exec(stmt); err != nil {
 				// "duplicate column name" is expected on already-migrated databases.
 				if !isDuplicateColumnErr(err) {
+					logger.Error("rss migration failed", "stmt", stmt, "err", err)
 					return fmt.Errorf("rss: migration failed: %w", err)
 				}
+				logger.Debug("rss migration: column already exists", "stmt", stmt)
+			} else {
+				logger.Debug("rss migration: column added", "stmt", stmt)
 			}
 		}
 	}
@@ -109,7 +115,7 @@ func (svc *Service) Check() error {
 		logger.Debug("rss: no feeds configured, skipping poll", "error", err)
 		return nil
 	}
-	
+
 	if len(feeds) == 0 {
 		// No feeds configured; web UI mode only
 		logger.Debug("rss: no feeds configured, skipping poll")
@@ -279,11 +285,11 @@ func getItemDescription(item *gofeed.Item) string {
 	if item.Content != "" {
 		return item.Content
 	}
-	
+
 	if item.Description != "" {
 		return item.Description
 	}
-	
+
 	// Check for media:description (used by YouTube feeds)
 	if item.Extensions != nil {
 		if mediaExt, ok := item.Extensions["media"]; ok {
@@ -296,10 +302,9 @@ func getItemDescription(item *gofeed.Item) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
-
 
 // stripHTML removes HTML tags from text for clean search indexing.
 func stripHTML(html string) string {

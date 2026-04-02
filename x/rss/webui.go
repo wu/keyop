@@ -113,14 +113,14 @@ type articleRow struct {
 // Pass show_seen=true to include already-seen articles.
 func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 	logger := svc.Deps.MustGetLogger()
-	
+
 	if svc.db == nil || *svc.db == nil {
 		logger.Error("rss: fetchArticles - database not available")
 		return map[string]any{"articles": []any{}, "total": 0}, nil
 	}
-	
+
 	logger.Debug("rss: fetchArticles called", "view", params["view"])
-	
+
 	db := *svc.db
 	feedURL, _ := params["feed_url"].(string)
 	view, _ := params["view"].(string) // 'unseen' | 'read-later' | 'seen' | 'all'
@@ -274,13 +274,13 @@ func (svc *Service) fetchArticle(params map[string]any) (any, error) {
 	db := *svc.db
 	var r articleRow
 	var timestamp, published time.Time
-	
+
 	// Try with tags column first
 	err := db.QueryRow(
 		`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(tags,'')
 		 FROM rss_articles WHERE id = ?`, int64(id),
 	).Scan(&r.ID, &timestamp, &r.FeedURL, &r.FeedTitle, &r.GUID, &r.Title, &r.Description, &r.Link, &published, &r.Tags)
-	
+
 	if err != nil {
 		// Try without tags column
 		err = db.QueryRow(
@@ -292,7 +292,7 @@ func (svc *Service) fetchArticle(params map[string]any) (any, error) {
 		}
 		r.Tags = ""
 	}
-	
+
 	r.Timestamp = timestamp.Format(time.RFC3339)
 	r.Published = published.Format(time.RFC3339)
 	return r, nil
@@ -301,7 +301,7 @@ func (svc *Service) fetchArticle(params map[string]any) (any, error) {
 // fetchFeeds returns configured feeds with per-feed article counts from SQLite.
 func (svc *Service) fetchFeeds() (any, error) {
 	logger := svc.Deps.MustGetLogger()
-	
+
 	// Check if database is available
 	if svc.db == nil || *svc.db == nil {
 		logger.Error("rss: database not available - sqlite-rss service not enabled or failed to initialize")
@@ -309,13 +309,13 @@ func (svc *Service) fetchFeeds() (any, error) {
 	}
 
 	logger.Debug("rss: fetchFeeds called, database is available")
-	
+
 	feeds, err := parseFeedConfigs(svc.Cfg.Config)
 	if err != nil {
 		logger.Warn("rss: failed to parse feed configs", "error", err)
 		return nil, fmt.Errorf("rss: %w", err)
 	}
-	
+
 	logger.Debug("rss: fetchFeeds - configured feeds", "count", len(feeds))
 
 	type feedRow struct {
@@ -327,7 +327,7 @@ func (svc *Service) fetchFeeds() (any, error) {
 
 	type countRow struct{ total, unseen int }
 	counts := map[string]countRow{}
-	
+
 	db := *svc.db
 	rows, qErr := db.Query(
 		`SELECT feed_url, COUNT(*), SUM(CASE WHEN COALESCE(seen,0)=0 AND COALESCE(read_later,0)=0 THEN 1 ELSE 0 END)
@@ -478,6 +478,8 @@ func (svc *Service) deleteArticle(params map[string]any) (any, error) {
 
 // addTag adds a tag to an article (tags are comma-separated).
 func (svc *Service) addTag(params map[string]any) (any, error) {
+	logger := svc.Deps.MustGetLogger()
+
 	if svc.db == nil || *svc.db == nil {
 		return nil, fmt.Errorf("rss: database not available")
 	}
@@ -490,11 +492,15 @@ func (svc *Service) addTag(params map[string]any) (any, error) {
 		return nil, fmt.Errorf("rss: tag param required")
 	}
 
+	logger.Debug("addTag", "id", int64(id), "tag", tag)
+
 	var currentTags string
 	err := (*svc.db).QueryRow(`SELECT COALESCE(tags,'') FROM rss_articles WHERE id=?`, int64(id)).Scan(&currentTags)
 	if err != nil {
 		return nil, fmt.Errorf("rss: article not found: %w", err)
 	}
+
+	logger.Debug("currentTags", "tags", currentTags)
 
 	// Parse existing tags
 	var tagList []string
@@ -515,10 +521,14 @@ func (svc *Service) addTag(params map[string]any) (any, error) {
 	}
 
 	newTags := strings.Join(tagList, ",")
+	logger.Debug("newTags", "tags", newTags)
+
 	_, err = (*svc.db).Exec(`UPDATE rss_articles SET tags=? WHERE id=?`, newTags, int64(id))
 	if err != nil {
 		return nil, fmt.Errorf("rss: add-tag failed: %w", err)
 	}
+
+	logger.Debug("tag added successfully")
 	return map[string]any{"ok": true, "tags": newTags}, nil
 }
 

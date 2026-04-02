@@ -24,7 +24,10 @@ func (svc *Service) SQLiteSchema() string {
 		read_later  INTEGER DEFAULT 0,
 		tags        TEXT DEFAULT ''
 	);
-	CREATE UNIQUE INDEX IF NOT EXISTS rss_articles_guid ON rss_articles(guid);`
+	CREATE UNIQUE INDEX IF NOT EXISTS rss_articles_guid ON rss_articles(guid);
+	ALTER TABLE rss_articles ADD COLUMN seen INTEGER DEFAULT 0;
+	ALTER TABLE rss_articles ADD COLUMN read_later INTEGER DEFAULT 0;
+	ALTER TABLE rss_articles ADD COLUMN tags TEXT DEFAULT '';`
 }
 
 // SQLiteInsert returns an INSERT OR IGNORE for new_article events.

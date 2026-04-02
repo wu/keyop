@@ -286,14 +286,14 @@ export const handlesHorizontalNav = true;
     function renderArticles() {
         const articles = filteredArticles();
         const hasFilters = currentFeedURL !== '' || currentTag !== null;
-        
+
         // Calculate total for display
         let displayTotal = totalArticles;
         if (hasFilters) {
             // When filters are active, the total shown is the filtered total
             displayTotal = articles.length;
         }
-        
+
         els.articleCount.textContent = `${articles.length} article${articles.length !== 1 ? 's' : ''}${hasFilters ? '' : ` (${displayTotal} total)`}`;
         els.articleList.innerHTML = '';
 
@@ -305,7 +305,7 @@ export const handlesHorizontalNav = true;
 
         let displayArticles = articles;
         let totalPages = 1;
-        
+
         if (hasFilters) {
             // Client-side pagination for filtered results
             totalPages = Math.ceil(articles.length / PAGE_SIZE);
@@ -330,20 +330,20 @@ export const handlesHorizontalNav = true;
             item.addEventListener('click', () => selectArticle(a));
             els.articleList.appendChild(item);
         });
-        
+
         // Show pagination if needed
         if (totalPages > 1) {
             els.pagination.style.display = 'block';
             els.pagination.innerHTML = '';
-            
+
             const pageInfo = document.createElement('div');
             pageInfo.className = 'rss-pagination-info';
             pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
             els.pagination.appendChild(pageInfo);
-            
+
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'rss-pagination-buttons';
-            
+
             const prevBtn = document.createElement('button');
             prevBtn.textContent = '← Previous';
             prevBtn.disabled = currentPage === 0;
@@ -359,7 +359,7 @@ export const handlesHorizontalNav = true;
                 }
             });
             buttonContainer.appendChild(prevBtn);
-            
+
             const nextBtn = document.createElement('button');
             nextBtn.textContent = 'Next →';
             nextBtn.disabled = currentPage >= totalPages - 1;
@@ -375,7 +375,7 @@ export const handlesHorizontalNav = true;
                 }
             });
             buttonContainer.appendChild(nextBtn);
-            
+
             els.pagination.appendChild(buttonContainer);
         } else {
             els.pagination.style.display = 'none';
@@ -424,8 +424,22 @@ export const handlesHorizontalNav = true;
                 toolbarBtn.classList.remove('seen');
                 toolbarBtn.dataset.doneReading = '1';
                 delete toolbarBtn.dataset.unseen;
+            } else if (article.seen && !article.readLater) {
+                // Seen but not read-later - allow marking unseen
+                toolbarBtn.textContent = 'Mark as unseen';
+                toolbarBtn.disabled = false;
+                toolbarBtn.classList.add('seen');
+                toolbarBtn.dataset.unseen = '1';
+                delete toolbarBtn.dataset.doneReading;
+            } else if (article.seen && article.readLater && viewMode === 'read-later') {
+                // In read-later view, don't duplicate the second button - disable this one
+                toolbarBtn.textContent = '✓ Done reading';
+                toolbarBtn.disabled = true;
+                toolbarBtn.classList.add('seen');
+                delete toolbarBtn.dataset.doneReading;
+                delete toolbarBtn.dataset.unseen;
             } else if (article.seen) {
-                // Seen (could be read-later or not) - allow marking unseen
+                // Seen (for other views)
                 toolbarBtn.textContent = '✓ Seen';
                 toolbarBtn.disabled = false;
                 toolbarBtn.classList.add('seen');
@@ -443,15 +457,37 @@ export const handlesHorizontalNav = true;
 
         if (readLaterBtn) {
             if (article.readLater) {
-                readLaterBtn.textContent = '🔖 Saved';
-                readLaterBtn.disabled = false;  // Enable to allow unmarking
-                readLaterBtn.classList.add('seen');
-                readLaterBtn.dataset.saved = '1';
+                // In 'read-later' view, show toggle for seen state
+                // In other views, show button to mark/unmark as read-later
+                if (viewMode === 'read-later') {
+                    // Toggle seen state
+                    if (article.seen) {
+                        readLaterBtn.textContent = 'Mark as unseen';
+                        readLaterBtn.disabled = false;
+                        readLaterBtn.classList.remove('seen');
+                        readLaterBtn.dataset.toggleSeen = '1';
+                        delete readLaterBtn.dataset.saved;
+                    } else {
+                        readLaterBtn.textContent = 'Mark as seen';
+                        readLaterBtn.disabled = false;
+                        readLaterBtn.classList.remove('seen');
+                        readLaterBtn.dataset.toggleSeen = '1';
+                        delete readLaterBtn.dataset.saved;
+                    }
+                } else {
+                    // Other views: show button to unmark read-later
+                    readLaterBtn.textContent = '🔖 Saved';
+                    readLaterBtn.disabled = false;  // Enable to allow unmarking
+                    readLaterBtn.classList.add('seen');
+                    readLaterBtn.dataset.saved = '1';
+                    delete readLaterBtn.dataset.toggleSeen;
+                }
             } else {
                 readLaterBtn.textContent = '🔖 Read later';
                 readLaterBtn.disabled = false;
                 readLaterBtn.classList.remove('seen');
                 delete readLaterBtn.dataset.saved;
+                delete readLaterBtn.dataset.toggleSeen;
             }
         }
 
@@ -524,7 +560,11 @@ export const handlesHorizontalNav = true;
 
         if (isMarkingUnseen) {
             // Mark as unseen
-            await callAction('mark-unseen', {id: article.id});
+            const result = await callAction('mark-unseen', {id: article.id});
+            if (!result) {
+                console.error('Failed to mark as unseen');
+                return;
+            }
             article.seen = false;
 
             // update toolbar button and list item
@@ -546,12 +586,21 @@ export const handlesHorizontalNav = true;
 
         // Mark as seen (original behavior)
         const isDoneReading = article.readLater;
+        let result;
         if (isDoneReading) {
-            await callAction('mark-done-reading', {id: article.id});
+            result = await callAction('mark-done-reading', {id: article.id});
+            if (!result) {
+                console.error('Failed to mark done reading');
+                return;
+            }
             article.seen = true;
             article.readLater = false;
         } else {
-            await callAction('mark-seen', {id: article.id});
+            result = await callAction('mark-seen', {id: article.id});
+            if (!result) {
+                console.error('Failed to mark as seen');
+                return;
+            }
             article.seen = true;
         }
 
@@ -595,10 +644,38 @@ export const handlesHorizontalNav = true;
         const readLaterBtn = document.getElementById('rss-read-later-toolbar');
         const toolbarBtn = document.getElementById('rss-mark-seen-toolbar');
         const isSaved = readLaterBtn && readLaterBtn.dataset.saved === '1';
+        const isToggleSeen = readLaterBtn && readLaterBtn.dataset.toggleSeen === '1';
 
-        if (isSaved) {
+        if (isToggleSeen) {
+            // In read-later view: toggle the seen state
+            let result;
+            if (article.seen) {
+                // Mark as unseen
+                result = await callAction('mark-unseen', {id: article.id});
+                if (!result) {
+                    console.error('Failed to mark as unseen');
+                    return;
+                }
+                article.seen = false;
+            } else {
+                // Mark as seen
+                result = await callAction('mark-seen', {id: article.id});
+                if (!result) {
+                    console.error('Failed to mark as seen');
+                    return;
+                }
+                article.seen = true;
+            }
+
+            showDetail(article);
+            await Promise.all([refreshBadge(), loadFeeds()]);
+        } else if (isSaved) {
             // Unmark as read-later
-            await callAction('unmark-read-later', {id: article.id});
+            const result = await callAction('unmark-read-later', {id: article.id});
+            if (!result) {
+                console.error('Failed to unmark read-later');
+                return;
+            }
             article.readLater = false;
 
             // update button
@@ -613,7 +690,11 @@ export const handlesHorizontalNav = true;
             await Promise.all([refreshBadge(), loadFeeds()]);
         } else {
             // Mark as read-later (which auto-marks as seen)
-            await callAction('mark-read-later', {id: article.id});
+            const result = await callAction('mark-read-later', {id: article.id});
+            if (!result) {
+                console.error('Failed to mark as read-later');
+                return;
+            }
             article.readLater = true;
             article.seen = true;  // Backend now auto-marks as seen
 
@@ -664,8 +745,12 @@ export const handlesHorizontalNav = true;
             return;
         }
 
-        await callAction('delete-article', {id: article.id});
-        
+        const result = await callAction('delete-article', {id: article.id});
+        if (!result) {
+            console.error('Failed to delete article');
+            return;
+        }
+
         // Remove from allArticles
         allArticles = allArticles.filter(a => a.id !== article.id);
 
@@ -872,7 +957,7 @@ export const handlesHorizontalNav = true;
             full: !!searchFullText,
             feed_url: hasFilters ? currentFeedURL : '',
         };
-        
+
         if (!hasFilters && !loadAll) {
             // Use backend pagination when no filters
             params.offset = currentPage * PAGE_SIZE;
@@ -892,7 +977,7 @@ export const handlesHorizontalNav = true;
             }
         }
     }
-    
+
     async function loadArticlePage(articleId) {
         // Load the page containing a specific article
         const hasFilters = currentFeedURL !== '' || currentTag !== null;
@@ -903,11 +988,11 @@ export const handlesHorizontalNav = true;
             feed_url: hasFilters ? currentFeedURL : '',
             'contains-id': articleId,
         };
-        
+
         if (!hasFilters) {
             params.limit = PAGE_SIZE;
         }
-        
+
         const result = await callAction('fetch-articles', params);
         if (result && result.articles) {
             allArticles = result.articles;
@@ -936,13 +1021,13 @@ export const handlesHorizontalNav = true;
 
     // Listen on document since event is dispatched to tab-content-rss parent
     document.addEventListener('navigate-to-item', (e) => {
-        const { itemId, sourceType } = e.detail || {};
+        const {itemId, sourceType} = e.detail || {};
         console.log('RSS: navigate-to-item event received', {itemId, sourceType});
         if (itemId && sourceType === 'rss') {
             // Convert string ID to number if needed
             const articleId = parseInt(itemId, 10) || itemId;
             console.log('RSS: Navigating to article', articleId);
-            
+
             // Switch to 'all' view to ensure article is visible regardless of status
             viewMode = 'all';
             currentPage = 0;
@@ -952,9 +1037,9 @@ export const handlesHorizontalNav = true;
             if (allRadio) {
                 allRadio.checked = true;
                 // Trigger change event to ensure proper handling
-                allRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                allRadio.dispatchEvent(new Event('change', {bubbles: true}));
             }
-            
+
             // Load the page containing this article
             loadArticlePage(articleId).then(() => {
                 const article = allArticles.find(a => a.id === articleId);
