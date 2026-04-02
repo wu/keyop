@@ -432,9 +432,9 @@ export const handlesHorizontalNav = true;
                 toolbarBtn.dataset.unseen = '1';
                 delete toolbarBtn.dataset.doneReading;
             } else if (article.seen && article.readLater && viewMode === 'read-later') {
-                // In read-later view, don't duplicate the second button - disable this one
+                // In read-later view, show "Done reading" to remove from read-later
                 toolbarBtn.textContent = '✓ Done reading';
-                toolbarBtn.disabled = true;
+                toolbarBtn.disabled = false;
                 toolbarBtn.classList.add('seen');
                 delete toolbarBtn.dataset.doneReading;
                 delete toolbarBtn.dataset.unseen;
