@@ -334,14 +334,10 @@ export async function init(container) {
         showNotePanel();
         updateEditMode();
 
-        // Clear filters to ensure the note is visible in the list
-        currentSearch = '';
-        currentTag = 'all';
-        currentPage = 1;
-        if (elements.search) elements.search.value = '';
-        if (elements.tagFilter) elements.tagFilter.value = '';
-
-        // Reload notes list without filters
+        // Keep the current search and tag filters active, so the user can navigate
+        // between search results without the list clearing. The user can explicitly
+        // clear the search using the search clear button.
+        // Only reload notes if needed to show the selected note in the current filter context.
         await loadNotes();
 
         // Get the note details
