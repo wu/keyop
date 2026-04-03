@@ -338,51 +338,49 @@ func (svc *Service) scheduleAlerts() {
 	lat, lon, alt := svc.getObserverDataLocked()
 	now := time.Now()
 
-	// We want to schedule alerts for dawn and dusk for today and tomorrow to be safe
-	days := []time.Time{now, now.AddDate(0, 0, 1)}
+	// Schedule alerts for today only. Tomorrow's alerts will be scheduled when
+	// today's alerts fire and trigger a reschedule, or on the next Check() call.
+	// This prevents duplicate timers if GPS updates or location changes occur near alert times.
+	events := svc.calculateSunEvents(lat, lon, alt, now)
 
-	for _, t := range days {
-		events := svc.calculateSunEvents(lat, lon, alt, t)
-
-		schedule := func(eventTime time.Time, name string, dayLength string, nightLength string) {
-			if eventTime.After(now) {
-				duration := eventTime.Sub(now)
-				logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
-				// capture variables for closure
-				et := eventTime
-				n := name
-				dl := dayLength
-				nl := nightLength
-				timer := time.AfterFunc(duration, func() {
-					// Build a typed AlertEvent payload for the alert
-					ae := core.AlertEvent{
-						Summary: n,
-						Text:    fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
-						Level:   "info",
-					}
-					if err := messenger.Send(core.Message{
-						ChannelName: svc.Cfg.Name,
-						ServiceName: svc.Cfg.Name,
-						ServiceType: svc.Cfg.Type,
-						Event:       "sun_alert",
-						Text:        fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
-						Summary:     n,
-						Data:        ae,
-					}); err != nil {
-						logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
-					}
-					// Reschedule after the alert fires to keep it going
-					svc.scheduleAlerts()
-				})
-				svc.timers = append(svc.timers, timer)
-			}
+	schedule := func(eventTime time.Time, name string, dayLength string, nightLength string) {
+		if eventTime.After(now) {
+			duration := eventTime.Sub(now)
+			logger.Debug("sun: scheduling alert", "event", name, "at", eventTime, "in", duration)
+			// capture variables for closure
+			et := eventTime
+			n := name
+			dl := dayLength
+			nl := nightLength
+			timer := time.AfterFunc(duration, func() {
+				// Build a typed AlertEvent payload for the alert
+				ae := core.AlertEvent{
+					Summary: n,
+					Text:    fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
+					Level:   "info",
+				}
+				if err := messenger.Send(core.Message{
+					ChannelName: svc.Cfg.Name,
+					ServiceName: svc.Cfg.Name,
+					ServiceType: svc.Cfg.Type,
+					Event:       "sun_alert",
+					Text:        fmt.Sprintf("Sun event: %s (day length: %s, night length: %s)", n, formatDuration(dl), formatDuration(nl)),
+					Summary:     n,
+					Data:        ae,
+				}); err != nil {
+					logger.Warn("sun: failed to send scheduled event", "err", err, "event", n, "time", et)
+				}
+				// Reschedule after the alert fires to keep it going
+				svc.scheduleAlerts()
+			})
+			svc.timers = append(svc.timers, timer)
 		}
-
-		schedule(events.Sunrise, "sunrise", events.DayLength, events.NightLength)
-		schedule(events.Sunset, "sunset", events.DayLength, events.NightLength)
-		schedule(events.CivilDawn, "dawn", events.DayLength, events.NightLength)
-		schedule(events.CivilDusk, "dusk", events.DayLength, events.NightLength)
 	}
+
+	schedule(events.Sunrise, "sunrise", events.DayLength, events.NightLength)
+	schedule(events.Sunset, "sunset", events.DayLength, events.NightLength)
+	schedule(events.CivilDawn, "dawn", events.DayLength, events.NightLength)
+	schedule(events.CivilDusk, "dusk", events.DayLength, events.NightLength)
 }
 
 func (svc *Service) getObserverData() (float64, float64, float64) {
@@ -418,9 +416,13 @@ func (svc *Service) calculateSunEvents(lat, lon, alt float64, t time.Time) Event
 	dawn, _ := astral.Dawn(observer, t, astral.DepressionCivil)
 	dusk, _ := astral.Dusk(observer, t, astral.DepressionCivil)
 
+	// DayLength is the duration of civil daylight (civil dawn to civil dusk).
+	// This is the period when the sun is less than 6° below the horizon,
+	// which is considered the time with adequate natural light for outdoor activities.
 	dayLength := dusk.Sub(dawn)
 
-	// Night length (dusk to dawn next day)
+	// Night length (dusk to dawn next day) is the period of civil night.
+	// This is measured from civil dusk today to civil dawn tomorrow.
 	nextDawn, _ := astral.Dawn(observer, t.AddDate(0, 0, 1), astral.DepressionCivil)
 	nightLength := nextDawn.Sub(dusk)
 

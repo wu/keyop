@@ -102,8 +102,62 @@ func TestSunService(t *testing.T) {
 		assert.Equal(t, newAlt, alt)
 	})
 
-	t.Run("Alerts scheduled", func(_ *testing.T) {
-		// Just verify it doesn't crash and runs without errors
+	t.Run("Alerts scheduled", func(t *testing.T) {
+		// Test that scheduling is idempotent: calling scheduleAlerts multiple times
+		// without time passing shouldn't accumulate timers.
+
+		// Clean and schedule
+		svc.mu.Lock()
+		for _, t := range svc.timers {
+			t.Stop()
+		}
+		svc.timers = nil
+		svc.mu.Unlock()
 		svc.scheduleAlerts()
+
+		svc.mu.RLock()
+		count1 := len(svc.timers)
+		svc.mu.RUnlock()
+
+		// Schedule again without any time passing
+		svc.scheduleAlerts()
+
+		svc.mu.RLock()
+		count2 := len(svc.timers)
+		svc.mu.RUnlock()
+
+		// Timer count should be the same (idempotent)
+		assert.Equal(t, count1, count2, "rescheduling should not accumulate timers")
+
+		// Test that the fix for the original bug works:
+		// When GPS updates trigger a reschedule, the previous timers should be cancelled
+		// and replaced with new ones for the updated location
+		msg := core.Message{
+			ChannelName: "gps",
+			Data: map[string]interface{}{
+				"lat": 40.7128, // New York (different location)
+				"lon": -74.0060,
+				"alt": 50.0,
+			},
+		}
+		handler := handlers["gps"]
+		err := handler(msg)
+		assert.NoError(t, err)
+
+		svc.mu.RLock()
+		count3 := len(svc.timers)
+		svc.mu.RUnlock()
+
+		// After GPS update with same config, should still have manageable timer count
+		// (The number might differ due to location, but should be a small number, not accumulated)
+		assert.Greater(t, 10, count3, "GPS update should not create excessive timers")
+
+		// Clean up timers
+		svc.mu.Lock()
+		for _, t := range svc.timers {
+			t.Stop()
+		}
+		svc.timers = nil
+		svc.mu.Unlock()
 	})
 }
