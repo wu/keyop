@@ -3,7 +3,10 @@
 }
 
 #rss-container {
-    margin: -1rem;
+    margin: 0;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
 }
 
 .rss-container {
@@ -15,9 +18,13 @@
         "top-feeds    top-articles  top-detail"
         "body-feeds   body-articles body-main";
     height: calc(100dvh - var(--rss-chrome-height));
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     background-color: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow: hidden;
 }
 
 /* Global options bar (spans all columns) */
@@ -432,6 +439,8 @@
             "opts"
             "top-articles"
             "body-articles";
+        width: 100%;
+        max-width: 100%;
     }
 
     .rss-top-bar-feeds,
@@ -443,6 +452,7 @@
 
     .rss-top-bar-articles {
         border-right: none;
+        padding: 8px 10px;
     }
 
     .rss-articles-sidebar {
@@ -464,6 +474,14 @@
     .rss-container.article-selected .rss-top-bar-articles,
     .rss-container.article-selected .rss-articles-sidebar {
         display: none;
+    }
+
+    .rss-detail {
+        padding: 16px 12px;
+    }
+
+    .rss-detail-title {
+        font-size: 18px;
     }
 }
 
