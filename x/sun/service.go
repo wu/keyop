@@ -338,9 +338,7 @@ func (svc *Service) scheduleAlerts() {
 	lat, lon, alt := svc.getObserverDataLocked()
 	now := time.Now()
 
-	// Schedule alerts for today only. Tomorrow's alerts will be scheduled when
-	// today's alerts fire and trigger a reschedule, or on the next Check() call.
-	// This prevents duplicate timers if GPS updates or location changes occur near alert times.
+	// Schedule alerts for today
 	events := svc.calculateSunEvents(lat, lon, alt, now)
 
 	schedule := func(eventTime time.Time, name string, dayLength string, nightLength string) {
@@ -381,6 +379,15 @@ func (svc *Service) scheduleAlerts() {
 	schedule(events.Sunset, "sunset", events.DayLength, events.NightLength)
 	schedule(events.CivilDawn, "dawn", events.DayLength, events.NightLength)
 	schedule(events.CivilDusk, "dusk", events.DayLength, events.NightLength)
+
+	// If no timers were scheduled (all today's events have passed), schedule tomorrow's dawn.
+	// This handles the case where scheduleAlerts() is called after dusk has already passed.
+	if len(svc.timers) == 0 {
+		tomorrow := now.AddDate(0, 0, 1)
+		tomorrowEvents := svc.calculateSunEvents(lat, lon, alt, tomorrow)
+		logger.Debug("sun: all today's events have passed, scheduling tomorrow's dawn", "tomorrow", tomorrowEvents.CivilDawn)
+		schedule(tomorrowEvents.CivilDawn, "dawn", tomorrowEvents.DayLength, tomorrowEvents.NightLength)
+	}
 }
 
 func (svc *Service) getObserverData() (float64, float64, float64) {
