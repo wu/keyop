@@ -1,0 +1,129 @@
+<div class="weatherstation-container" id="weatherstation-container">
+    <div class="ws-layout">
+        <!-- Left column: Wind and Rain -->
+        <div class="ws-left">
+            <!-- Wind Section -->
+            <div class="ws-section ws-wind">
+                <div class="ws-section-title">WIND</div>
+                <div class="ws-gauge">
+                    <canvas height="140" id="ws-wind-gauge" width="140"></canvas>
+                </div>
+                <div class="ws-wind-values">
+                    <div class="ws-wind-display">
+                        <div class="ws-label">Speed</div>
+                        <div class="ws-value">
+                            <span class="ws-speed">—</span>
+                            <span class="ws-unit">mph</span>
+                        </div>
+                    </div>
+                    <div class="ws-gust-display">
+                        <div class="ws-label">Gust</div>
+                        <div class="ws-value">
+                            <span class="ws-gust">—</span>
+                            <span class="ws-unit">mph</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rain Section -->
+            <div class="ws-section ws-rain">
+                <div class="ws-section-title">RAIN</div>
+                <div class="ws-rain-displays">
+                    <div class="ws-rain-item">
+                        <div class="ws-label">DAILY</div>
+                        <div class="ws-value">
+                            <span class="ws-rain-value">—</span>
+                            <span class="ws-unit">in</span>
+                        </div>
+                    </div>
+                    <div class="ws-rain-item">
+                        <div class="ws-label">RATE</div>
+                        <div class="ws-value">
+                            <span class="ws-rain-rate">—</span>
+                            <span class="ws-unit">in/h</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle column -->
+        <div class="ws-middle">
+            <!-- Outdoor Section -->
+            <div class="ws-section ws-outdoor">
+                <div class="ws-section-title">OUTDOOR</div>
+                <div class="ws-temp-display">
+                    <div class="ws-temp-row">
+                        <span class="ws-temp-value">—</span>
+                        <span class="ws-temp-unit">°F</span>
+                    </div>
+                    <div class="ws-humidity-row">
+                        <span class="ws-humidity-value">—</span><span class="ws-humidity-unit">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indoor Section -->
+            <div class="ws-section ws-indoor">
+                <div class="ws-section-title">INDOOR</div>
+                <div class="ws-temp-display">
+                    <div class="ws-temp-row">
+                        <span class="ws-temp-value">—</span>
+                        <span class="ws-temp-unit">°F</span>
+                    </div>
+                    <div class="ws-humidity-row">
+                        <span class="ws-humidity-value">—</span><span class="ws-humidity-unit">%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right column: top section with time/status, forecast, pressure -->
+        <div class="ws-right-top">
+            <!-- Time/Status Section -->
+            <div class="ws-section ws-status">
+                <div class="ws-indicator" title="DST">DST</div>
+                <div class="ws-time">—</div>
+            </div>
+
+            <!-- Combined Forecast/Pressure Section -->
+            <div class="ws-forecast-pressure">
+                <div class="ws-fp-section ws-fp-left">
+                    <div class="ws-fp-label">FORECAST</div>
+                    <div class="ws-fp-content">
+                        <div class="ws-forecast-icon">☁️</div>
+                    </div>
+                </div>
+                <div class="ws-fp-gauge">
+                    <canvas height="120" id="ws-pressure-gauge" width="60"></canvas>
+                </div>
+                <div class="ws-fp-section ws-fp-right">
+                    <div class="ws-fp-label">PRESSURE</div>
+                    <div class="ws-fp-content">
+                        <div class="ws-pressure-value">—</div>
+                        <div class="ws-pressure-unit">inHg</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right column: bottom section with UVI and Light -->
+        <div class="ws-right-bottom">
+            <!-- UVI Section -->
+            <div class="ws-section ws-uvi">
+                <div class="ws-section-title">UVI</div>
+                <div class="ws-uvi-value">—</div>
+                <div class="ws-uvi-level">—</div>
+            </div>
+
+            <!-- Light Section -->
+            <div class="ws-section ws-light">
+                <div class="ws-section-title">LIGHT</div>
+                <div class="ws-light-value">—</div>
+                <div class="ws-light-unit">W/m²</div>
+            </div>
+        </div>
+    </div>
+</div>
+
