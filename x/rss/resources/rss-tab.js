@@ -696,7 +696,8 @@ async function markSeen(article) {
         showDetail(article);
     }
 
-    await Promise.all([refreshBadge(), loadFeeds()]);
+    // Reload articles to update allArticles and feed counts
+    await Promise.all([refreshBadge(), loadArticles(), loadFeeds()]);
 }
 
 async function markReadLater(article) {
@@ -727,7 +728,7 @@ async function markReadLater(article) {
         }
 
         showDetail(article);
-        await Promise.all([refreshBadge(), loadFeeds()]);
+        await Promise.all([refreshBadge(), loadArticles(), loadFeeds()]);
     } else if (isSaved) {
         // Unmark as read-later
         const result = await callAction('unmark-read-later', {id: article.id});
@@ -746,7 +747,7 @@ async function markReadLater(article) {
         }
 
         showDetail(article);
-        await Promise.all([refreshBadge(), loadFeeds()]);
+        await Promise.all([refreshBadge(), loadArticles(), loadFeeds()]);
     } else {
         // Mark as read-later (which auto-marks as seen)
         const result = await callAction('mark-read-later', {id: article.id});
@@ -795,7 +796,7 @@ async function markReadLater(article) {
             showDetail(article);
         }
 
-        await Promise.all([refreshBadge(), loadFeeds()]);
+        await Promise.all([refreshBadge(), loadArticles(), loadFeeds()]);
     }
 }
 
@@ -832,7 +833,7 @@ async function deleteArticle(article) {
         showDetail(null);
     }
 
-    await Promise.all([refreshBadge(), loadFeeds(), loadTags()]);
+    await Promise.all([refreshBadge(), loadArticles(), loadFeeds(), loadTags()]);
 }
 
 async function addTagToArticle(article, tag) {
