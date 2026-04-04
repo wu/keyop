@@ -118,9 +118,10 @@ func PreprocessMarkdownLists(content string) string {
 // Example: "Check out https://github.com/dustin/go-humanize for details"
 // becomes: "Check out [https://github.com/dustin/go-humanize](https://github.com/dustin/go-humanize) for details"
 // Skips URLs that are already in markdown link format [text](url) or [url](url)
+// Skips URLs inside code blocks (backtick or indented code)
 // Strips trailing punctuation (.,;:!?) that typically ends sentences.
 func PreprocessPlainLinks(content string) string {
-	// First, protect all existing markdown links by temporarily replacing them
+	// First, protect all existing markdown links AND code blocks by temporarily replacing them
 	// This regex matches [anything](anything) including links with URLs as text
 	markdownLinkPattern := regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
 	protectedLinks := make(map[string]string)
@@ -133,7 +134,39 @@ func PreprocessPlainLinks(content string) string {
 		return key
 	})
 
-	// Now process plain URLs (those not already in markdown links)
+	// Protect inline code blocks (backticks) from URL processing
+	// Matches `any text including urls`
+	inlineCodePattern := regexp.MustCompile("`[^`]*`")
+	result = inlineCodePattern.ReplaceAllStringFunc(result, func(match string) string {
+		key := fmt.Sprintf("__PROTECTED_CODE_%d__", protectKey)
+		protectedLinks[key] = match
+		protectKey++
+		return key
+	})
+
+	// Protect multi-line code blocks from URL processing
+	// Matches ``` code ``` or ~~~ code ~~~
+	codeBlockPattern := regexp.MustCompile("(?:```|~~~)[\\s\\S]*?(?:```|~~~)")
+	result = codeBlockPattern.ReplaceAllStringFunc(result, func(match string) string {
+		key := fmt.Sprintf("__PROTECTED_CODE_BLOCK_%d__", protectKey)
+		protectedLinks[key] = match
+		protectKey++
+		return key
+	})
+
+	// Protect indented code blocks (lines starting with 4+ spaces)
+	lines := strings.Split(result, "\n")
+	for i, line := range lines {
+		if len(line) >= 4 && strings.HasPrefix(line, "    ") {
+			key := fmt.Sprintf("__PROTECTED_INDENT_CODE_%d__", protectKey)
+			protectedLinks[key] = line
+			protectKey++
+			lines[i] = key
+		}
+	}
+	result = strings.Join(lines, "\n")
+
+	// Now process plain URLs (those not already in markdown links or code blocks)
 	// Regex to match URLs starting with http:// or https://
 	// Captures the protocol and domain/path (stops at whitespace, bracket, or paren)
 	urlPattern := regexp.MustCompile(`(https?://[^\s\]\)]+)`)
@@ -144,7 +177,7 @@ func PreprocessPlainLinks(content string) string {
 		return fmt.Sprintf("[%s](%s)%s", url, url, stripped)
 	})
 
-	// Restore protected markdown links
+	// Restore protected markdown links and code blocks
 	for key, value := range protectedLinks {
 		result = strings.ReplaceAll(result, key, value)
 	}

@@ -316,6 +316,26 @@ func TestPreprocessPlainLinks(t *testing.T) {
 			input:    "See https://github.com. It's great!",
 			expected: "See [https://github.com](https://github.com). It's great!",
 		},
+		{
+			name:     "URL inside inline code block",
+			input:    "Run `curl -v http://192.168.50.4:3000/movielog` now",
+			expected: "Run `curl -v http://192.168.50.4:3000/movielog` now",
+		},
+		{
+			name:     "URL inside fenced code block",
+			input:    "```\ncurl -v http://192.168.50.4:3000/movielog\n```",
+			expected: "```\ncurl -v http://192.168.50.4:3000/movielog\n```",
+		},
+		{
+			name:     "URL inside indented code block",
+			input:    "    curl -v http://192.168.50.4:3000/movielog",
+			expected: "    curl -v http://192.168.50.4:3000/movielog",
+		},
+		{
+			name:     "URL in text and code block",
+			input:    "Visit https://example.com or run `curl http://example.com`",
+			expected: "Visit [https://example.com](https://example.com) or run `curl http://example.com`",
+		},
 	}
 
 	for _, tt := range tests {
