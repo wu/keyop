@@ -138,10 +138,6 @@ export function init(el) {
             <div class="sun-event">Loading…</div>
             <div class="sun-meta" style="flex-direction: column; gap: 12px; text-align: center;">
                 <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
-                    <div class="sun-label">Phase</div>
-                    <div class="sun-value sun-day-value">—</div>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
                     <div class="sun-label">Illumination</div>
                     <div class="sun-value sun-night-value">—</div>
                 </div>
@@ -159,7 +155,7 @@ export function init(el) {
 
     elPhase = body.querySelector('.sun-event');
     elIllum = body.querySelector('.sun-night-value');
-    elPhaseValue = body.querySelector('.sun-day-value');
+    elPhaseValue = null;
     elFullMoonRemaining = body.querySelector('.moon-full-remaining');
     elNewMoonRemaining = body.querySelector('.moon-new-remaining');
 
@@ -207,7 +203,6 @@ export function onMessage(msg) {
         // phase name
         const name = data.name || (msg.summary || msg.text || '').replace(/^Moon[:\s]*/i, '') || 'Moon';
         if (elPhase) elPhase.textContent = `${name}`;
-        if (elPhaseValue) elPhaseValue.textContent = `${name}`;
         updateImage(name);
 
         // illumination: prefer server-provided illumination if present
