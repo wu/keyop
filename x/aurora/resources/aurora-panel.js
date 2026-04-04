@@ -326,10 +326,11 @@ function updatePanel(data) {
     if (analysis.nextEvent) {
         const now = new Date();
         const diff = analysis.nextEvent.startDate - now;
-        const timeStr = formatRemaining(diff);
+        const timeStr = diff <= 0 ? 'Now' : formatRemaining(diff);
         const nextText = body.querySelector('#aurora-panel-next-text');
         if (nextText) {
-            nextText.textContent = `Next ${analysis.nextEvent.gScale} in ${timeStr}`;
+            const prefix = timeStr === 'Now' ? '' : 'in ';
+            nextText.textContent = `Next ${analysis.nextEvent.gScale} ${prefix}${timeStr}`;
         }
         if (nextDiv) nextDiv.style.display = 'block';
     } else {
@@ -341,20 +342,22 @@ function updatePanel(data) {
         analysis.highestEvent.gValue !== analysis.nextEvent.gValue) {
         const now = new Date();
         const diff = analysis.highestEvent.startDate - now;
-        const timeStr = formatRemaining(diff);
+        const timeStr = diff <= 0 ? 'Now' : formatRemaining(diff);
         const highestText = body.querySelector('#aurora-panel-highest-text');
         if (highestText) {
-            highestText.textContent = `Highest ${analysis.highestEvent.gScale} in ${timeStr}`;
+            const prefix = timeStr === 'Now' ? '' : 'in ';
+            highestText.textContent = `Highest ${analysis.highestEvent.gScale} ${prefix}${timeStr}`;
         }
         if (highestDiv) highestDiv.style.display = 'block';
     } else if (analysis.highestEvent && !analysis.nextEvent) {
         // No next event but have highest
         const now = new Date();
         const diff = analysis.highestEvent.startDate - now;
-        const timeStr = formatRemaining(diff);
+        const timeStr = diff <= 0 ? 'Now' : formatRemaining(diff);
         const highestText = body.querySelector('#aurora-panel-highest-text');
         if (highestText) {
-            highestText.textContent = `Highest ${analysis.highestEvent.gScale} in ${timeStr}`;
+            const prefix = timeStr === 'Now' ? '' : 'in ';
+            highestText.textContent = `Highest ${analysis.highestEvent.gScale} ${prefix}${timeStr}`;
         }
         if (highestDiv) highestDiv.style.display = 'block';
     } else {
