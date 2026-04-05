@@ -87,8 +87,6 @@ function markdownToHtml(text) {
 
 // Navigate to a source item by switching to its tab and passing the item ID
 function navigateToSource(sourceType, sourceID) {
-    console.log(`Navigating to ${sourceType}:${sourceID}`);
-
     // Map source types to tab IDs
     const tabMap = {
         'notes': 'notes',
@@ -107,12 +105,10 @@ function navigateToSource(sourceType, sourceID) {
     // Find and click the tab link to switch tabs
     const tabLink = document.querySelector(`.tab-link[data-tab-id="${tabId}"]`);
     if (tabLink) {
-        console.log(`Clicking tab link for ${tabId}`);
         tabLink.click();
 
         // Dispatch event to the tab's content container so it can navigate to the item
         setTimeout(() => {
-            console.log(`Dispatching navigate-to-item event for ${sourceID} to tab ${tabId}`);
             const contentDiv = document.getElementById(`tab-content-${tabId}`);
             if (contentDiv) {
                 const event = new CustomEvent('navigate-to-item', {
@@ -271,10 +267,6 @@ function renderResults(results, total) {
     const filteredCount = results.length;
     const summary = `<div class="search-results-summary">Showing ${filteredCount} of ${total} total results (${summaryParts.join(', ')})</div>`;
 
-    console.log('renderResults: got', results.length, 'results, total:', total);
-    if (results.length > 0) {
-        console.log('First result:', results[0]);
-    }
     resultsDiv.innerHTML = summary + results.map((result, index) => {
         const title = escapeHtml(result.title || '(no title)');
         const sourceType = escapeHtml(result.sourceType || '(no source)');
@@ -320,7 +312,6 @@ function renderResults(results, total) {
                 <div class="search-result-snippet">${snippetHtml}</div>
             </div>
         `;
-        console.log(`Result ${index}: title="${title}", sourceType="${sourceType}", url="${result.url || 'none'}"`);
         return html;
     }).join('') + paginationHtml;
 
@@ -470,16 +461,13 @@ async function handleReindex() {
 }
 
 async function checkIndexStatus() {
-    console.log('checkIndexStatus called');
     try {
-        console.log('Fetching index status...');
         const statusResponse = await fetch('/api/tabs/search/action/get-index-status', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({})
         });
 
-        console.log('Status response ok?', statusResponse.ok);
         if (!statusResponse.ok) {
             console.error('Failed to get index status:', statusResponse.statusText);
             const statusDiv = document.getElementById('search-stats');
@@ -491,12 +479,10 @@ async function checkIndexStatus() {
         }
 
         const statusData = await statusResponse.json();
-        console.log('Index status received:', statusData);
 
         // Populate source counts for sidebar display
         if (statusData.sourceCounts) {
             allSourceCounts = statusData.sourceCounts;
-            console.log('Loaded source counts:', allSourceCounts);
         }
 
         updateIndexStatus(statusData.docCount || 0, statusData.providersCount || 0);
@@ -511,8 +497,6 @@ async function checkIndexStatus() {
 }
 
 export async function init(container) {
-    console.log('Search tab init called');
-
     // Set up reindex button
     const reindexBtn = document.getElementById('reindex-btn');
     if (reindexBtn) {
@@ -520,9 +504,7 @@ export async function init(container) {
     }
 
     setupSearchInput();
-    console.log('About to check index status...');
     await checkIndexStatus();
-    console.log('Index status check completed');
     // Fetch available sources for filtering
     try {
         const response = await fetch('/api/tabs/search/action/get-sources', {
@@ -572,15 +554,12 @@ function renderSourceFilters(sources) {
 
 function updateSourceCounts(results) {
     // Track counts from all results for display in sidebar
-    console.log('updateSourceCounts called with', results.length, 'results');
     allSourceCounts = {};
 
     results.forEach(r => {
         const source = r.sourceType || 'unknown';
         allSourceCounts[source] = (allSourceCounts[source] || 0) + 1;
     });
-
-    console.log('allSourceCounts after update:', allSourceCounts);
 
     // Update sidebar with new counts
     const sourcesDiv = document.getElementById('search-sources');
