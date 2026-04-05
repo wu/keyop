@@ -69,6 +69,10 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		return svc.actionListMoviesByActor(params)
 	case "get-tag-counts":
 		return svc.actionGetTagCounts(params)
+	case "get-state":
+		return svc.getState()
+	case "save-state":
+		return svc.saveState(params)
 	default:
 		return nil, fmt.Errorf("movies: unknown action: %s", action)
 	}
@@ -201,4 +205,50 @@ func (svc *Service) handleUploadMovieImage(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"poster_url": localURL})
+}
+
+// getState retrieves UI state from the state store.
+func (svc *Service) getState() (any, error) {
+	// Create a temporary state store for movies data
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return map[string]any{}, nil
+	}
+	dataDir := filepath.Join(homeDir, ".keyop", "data", "movies")
+	path := filepath.Join(dataDir, "ui_state.json")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]any{}, nil
+		}
+		return nil, err
+	}
+	var state map[string]any
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+// saveState saves UI state to the state store.
+func (svc *Service) saveState(params map[string]any) (any, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dataDir := filepath.Join(homeDir, ".keyop", "data", "movies")
+	path := filepath.Join(dataDir, "ui_state.json")
+
+	data, err := json.MarshalIndent(params, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return nil, err
+	}
+	return map[string]string{"status": "ok"}, nil
 }

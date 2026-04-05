@@ -37,11 +37,34 @@
                 <input checked id="movies-collapse-collections" type="checkbox">
                 Collapse collections
             </label>
+            <button id="movies-view-toggle" title="Toggle between list and grid view">📊 Grid</button>
         </div>
         <div class="movies-list" id="movies-list"></div>
     </div>
+    <!-- movie grid -->
+    <div class="movies-grid-panel" id="movies-grid-panel">
+        <div class="movies-grid-toolbar">
+            <button id="movies-grid-back-btn" style="display:none" title="Go back">← Back</button>
+            <div class="movies-grid-header-text" id="movies-grid-header-text"></div>
+            <div class="movies-grid-size-controls">
+                <button id="movies-grid-zoom-out" title="Show more posters">−</button>
+                <span id="movies-grid-column-count">6 columns</span>
+                <button id="movies-grid-zoom-in" title="Show fewer posters">+</button>
+            </div>
+            <button id="movies-grid-toggle" title="Toggle between list and grid view">📋 List</button>
+        </div>
+        <div class="movies-grid" id="movies-grid"></div>
+        <div class="movies-grid-preview" id="movies-grid-preview">
+            <div class="movies-grid-preview-content" id="movies-grid-preview-content"></div>
+        </div>
+    </div>
     <!-- movie detail -->
     <div class="movies-detail-panel" id="movies-detail-panel">
+        <div class="movies-detail-toolbar" id="movies-detail-toolbar" style="display:none">
+            <button id="movies-detail-toolbar-back" title="Go back">← Back</button>
+            <button id="movies-detail-toolbar-edit" title="Edit movie">✎ Edit</button>
+            <button id="movies-detail-toolbar-delete" title="Delete movie">🗑 Delete</button>
+        </div>
         <div class="movies-detail" id="movies-detail"></div>
         <input accept="image/*" id="movies-poster-upload" style="display:none" type="file">
     </div>

@@ -25,6 +25,11 @@ export function canReturnToTabs() {
     let editingMovieId = null; // null = creating new
     let searchDebounce = null;
 
+    // Grid view state
+    let viewMode = 'list'; // 'list' | 'grid'
+    let gridColumns = 6; // number of columns in grid view (default 6)
+    let navigationStack = []; // [{viewMode, context}, ...] for tracking navigation history
+
     // Keyboard navigation state
     let focusedPanel = 'list'; // 'tags' | 'list'
     let focusedListIdx = -1;   // index into visible .movies-card elements
@@ -46,7 +51,26 @@ export function canReturnToTabs() {
         tagList: document.getElementById('movies-tag-list'),
         movieList: document.getElementById('movies-list'),
         detail: document.getElementById('movies-detail'),
+        detailPanel: document.getElementById('movies-detail-panel'),
+        detailToolbar: document.getElementById('movies-detail-toolbar'),
+        detailToolbarBack: document.getElementById('movies-detail-toolbar-back'),
+        detailToolbarEdit: document.getElementById('movies-detail-toolbar-edit'),
+        detailToolbarDelete: document.getElementById('movies-detail-toolbar-delete'),
         posterUpload: document.getElementById('movies-poster-upload'),
+        // Grid view elements
+        listPanel: document.getElementById('movies-list-panel'),
+        gridPanel: document.getElementById('movies-grid-panel'),
+        tagSidebar: document.getElementById('movies-tag-sidebar'),
+        viewToggleList: document.getElementById('movies-view-toggle'),
+        viewToggleGrid: document.getElementById('movies-grid-toggle'),
+        gridBackBtn: document.getElementById('movies-grid-back-btn'),
+        grid: document.getElementById('movies-grid'),
+        gridHeaderText: document.getElementById('movies-grid-header-text'),
+        gridZoomOut: document.getElementById('movies-grid-zoom-out'),
+        gridZoomIn: document.getElementById('movies-grid-zoom-in'),
+        gridColumnCount: document.getElementById('movies-grid-column-count'),
+        gridPreview: document.getElementById('movies-grid-preview'),
+        gridPreviewContent: document.getElementById('movies-grid-preview-content'),
         // Edit modal
         modalOverlay: document.getElementById('movies-modal-overlay'),
         modalTitle: document.getElementById('movies-modal-title'),
@@ -191,7 +215,13 @@ export function canReturnToTabs() {
                 if (!seenSets.has(m.set_name)) {
                     seenSets.add(m.set_name);
                     const members = movies.filter(x => x.set_name === m.set_name);
-                    items.push({type: 'collection', setName: m.set_name, movies: members});
+                    // Use oldest movie (by release year) as poster
+                    const oldest = members.reduce((a, b) => {
+                        const aYear = a.year || 9999;
+                        const bYear = b.year || 9999;
+                        return aYear < bYear ? a : b;
+                    });
+                    items.push({type: 'collection', setName: m.set_name, movies: members, poster: oldest});
                 }
             } else {
                 items.push({type: 'movie', movie: m});
@@ -224,9 +254,10 @@ export function canReturnToTabs() {
         const card = document.createElement('div');
         card.className = 'movies-card movies-card-collection';
 
-        const first = item.movies[0];
-        const thumbInner = first.poster_url
-            ? `<img src="${escHtml(first.poster_url)}" alt="" loading="lazy">`
+        // Use the oldest movie (if provided in poster) or first movie for thumbnail
+        const thumbMovie = item.poster || item.movies[0];
+        const thumbInner = thumbMovie.poster_url
+            ? `<img src="${escHtml(thumbMovie.poster_url)}" alt="" loading="lazy">`
             : '📦';
 
         // Year range
@@ -442,6 +473,292 @@ export function canReturnToTabs() {
                 el.posterUpload.click();
             });
         }
+    }
+
+    // ── Grid View ────────────────────────────────────────────────────────
+
+    function switchViewMode(newMode) {
+        viewMode = newMode;
+        if (newMode === 'grid') {
+            // Push current state to navigation stack
+            navigationStack = [{viewMode: 'grid', context: {selectedSet, selectedTag, filterActor, searchQuery}}];
+            el.container.classList.add('movies-grid-mode');
+            el.listPanel.style.display = 'none';
+            el.tagSidebar.style.display = 'none';
+            el.gridPanel.style.display = 'flex';
+            el.gridPanel.style.height = '100%';
+            el.gridPreview.style.display = 'flex';
+            el.detail.style.display = 'none';
+            renderGridView();
+        } else {
+            // Back to list view
+            navigationStack = [];
+            el.container.classList.remove('movies-grid-mode');
+            el.gridPanel.style.display = 'none';
+            el.gridPanel.style.height = '';
+            el.gridPreview.style.display = 'none';
+            el.tagSidebar.style.display = '';
+            el.listPanel.style.display = '';
+            loadMovies();
+        }
+    }
+
+    async function renderGridView() {
+        // Force year sorting when inside a collection in grid view
+        const effectiveSort = selectedSet ? 'year' : sortOrder;
+        let movies;
+
+        // Set grid columns based on current column count
+        if (el.grid) {
+            el.grid.style.gridTemplateColumns = `repeat(${gridColumns}, minmax(0, 1fr))`;
+            // Set row height accounting for aspect ratio (2:3) and gaps
+            // Container is roughly 1200px, with 12px padding on each side and 12px gaps between columns
+            const containerWidth = el.grid.offsetWidth || 1200;
+            const totalGapWidth = (gridColumns - 1) * 12 + 24; // gaps + padding
+            const availableWidth = containerWidth - totalGapWidth;
+            const columnWidth = availableWidth / gridColumns;
+            // Height = width * 1.5 for 2:3 aspect ratio, plus 2% buffer to prevent overlap
+            const rowHeight = Math.round(columnWidth * 1.5 * 1.02);
+            el.grid.style.gridAutoRows = `${rowHeight}px`;
+        }
+
+        // Load movies based on current filters
+        if (filterActor) {
+            const result = await callAction('list-movies-by-actor', {actor: filterActor, sort: effectiveSort});
+            movies = result && result.movies ? result.movies : [];
+        } else {
+            const result = await callAction('list-movies', {
+                tag: (selectedSet ? '' : selectedTag) || '',
+                search: searchQuery,
+                set_name: selectedSet || '',
+                sort: effectiveSort,
+                fulltext: fulltextSearch
+            });
+            movies = result && result.movies ? result.movies : [];
+        }
+
+        // Update header text
+        let headerText = '';
+        if (selectedSet) {
+            headerText = `📦 ${selectedSet}`;
+        } else if (selectedTag) {
+            headerText = `🏷️ ${selectedTag}`;
+        } else if (filterActor) {
+            headerText = `🎭 ${filterActor}`;
+        } else if (searchQuery) {
+            headerText = `🔍 ${searchQuery}`;
+        } else {
+            headerText = 'All Movies';
+        }
+        el.gridHeaderText.textContent = headerText;
+
+        // Update back button visibility
+        el.gridBackBtn.style.display = navigationStack.length > 1 ? '' : 'none';
+
+        // Organize movies into collections and singles
+        const items = organizeIntoGridItems(movies);
+
+        // Render grid
+        el.grid.innerHTML = '';
+        items.forEach(item => {
+            const poster = createGridPoster(item);
+            el.grid.appendChild(poster);
+        });
+
+        // Ensure preview panel is visible and clear any previous content
+        el.gridPreview.style.display = '';
+        hideGridPreview();
+    }
+
+    function organizeIntoGridItems(movies) {
+        // Don't group into collections if we're already filtering by a specific collection
+        if (selectedSet) {
+            // Sort by release year when inside a collection
+            const sorted = [...movies].sort((a, b) => {
+                const aYear = a.year || 9999;
+                const bYear = b.year || 9999;
+                return aYear - bYear;
+            });
+            return sorted.map(m => ({type: 'movie', movie: m}));
+        }
+
+        // In grid view, show collections as grouped items (only if 2+ movies in set)
+        const setCounts = {};
+        movies.forEach(m => {
+            if (m.set_name) setCounts[m.set_name] = (setCounts[m.set_name] || 0) + 1;
+        });
+
+        const items = [];
+        const seenSets = new Set();
+        movies.forEach(m => {
+            if (m.set_name && setCounts[m.set_name] >= 2) {
+                if (!seenSets.has(m.set_name)) {
+                    seenSets.add(m.set_name);
+                    const members = movies.filter(x => x.set_name === m.set_name);
+                    // Use oldest movie (by release year) as poster
+                    const oldest = members.reduce((a, b) => {
+                        const aYear = a.year || 9999;
+                        const bYear = b.year || 9999;
+                        return aYear < bYear ? a : b;
+                    });
+                    items.push({type: 'collection', setName: m.set_name, movies: members, poster: oldest});
+                }
+            } else {
+                items.push({type: 'movie', movie: m});
+            }
+        });
+
+        // Sort items by title to maintain consistent order in grid view
+        if (sortOrder === 'title') {
+            const sortKey = s => {
+                const k = s.replace(/^the\s+/i, '');
+                return k;
+            };
+            items.sort((a, b) => {
+                const keyA = sortKey(a.type === 'collection'
+                    ? a.setName.toLowerCase()
+                    : (a.movie.sort_title || a.movie.title || '').toLowerCase());
+                const keyB = sortKey(b.type === 'collection'
+                    ? b.setName.toLowerCase()
+                    : (b.movie.sort_title || b.movie.title || '').toLowerCase());
+                return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+            });
+        }
+
+        return items;
+    }
+
+    function createGridPoster(item) {
+        const card = document.createElement('div');
+        card.className = 'movies-grid-poster' + (item.type === 'collection' ? ' collection' : '');
+
+        const posterUrl = item.type === 'collection' ? item.poster.poster_url : item.movie.poster_url;
+
+        // Create poster image/placeholder
+        if (posterUrl) {
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'movies-grid-poster-image-container';
+            const img = document.createElement('img');
+            img.className = 'movies-grid-poster-image';
+            img.src = posterUrl;
+            img.alt = '';
+            imgContainer.appendChild(img);
+            card.appendChild(imgContainer);
+        } else {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'movies-grid-poster-placeholder';
+            placeholder.textContent = item.type === 'collection' ? '📦' : '🎬';
+            card.appendChild(placeholder);
+        }
+
+        card.addEventListener('mouseover', () => {
+            showGridPreview(item);
+        });
+
+        card.addEventListener('mouseout', () => {
+            hideGridPreview();
+        });
+
+        card.addEventListener('click', () => {
+            if (item.type === 'collection') {
+                // Click on collection → filter to show only that collection's movies
+                navigationStack.push({viewMode: 'grid', context: {selectedSet, selectedTag, filterActor, searchQuery}});
+                selectedSet = item.setName;
+                selectedTag = null;
+                filterActor = null;
+                renderGridView();
+            } else {
+                // Click on movie → show details
+                navigationStack.push({viewMode: 'grid', context: {selectedSet, selectedTag, filterActor, searchQuery}});
+                switchViewToMovieDetail(item.movie.id);
+            }
+        });
+
+        return card;
+    }
+
+    function showGridPreview(item) {
+        const preview = el.gridPreviewContent;
+        let text = '';
+
+        if (item.type === 'collection') {
+            const years = item.movies.map(m => m.year).filter(Boolean).map(Number);
+            const minYear = years.length > 0 ? Math.min(...years) : 'N/A';
+            const maxYear = years.length > 0 ? Math.max(...years) : 'N/A';
+            const lastWatched = item.movies
+                .filter(m => m.last_played)
+                .map(m => new Date(m.last_played).getTime())
+                .reduce((max, current) => Math.max(max, current), 0);
+            const lastWatchedText = lastWatched > 0 ? formatElapsed(new Date(lastWatched).toISOString()) : 'Never';
+            const yearRange = minYear !== maxYear ? `${minYear}–${maxYear}` : minYear;
+
+            text = `📦 ${escHtml(item.setName)} · ${item.movies.length} movie${item.movies.length !== 1 ? 's' : ''} · ${yearRange} · ${escHtml(lastWatchedText)}`;
+        } else {
+            const m = item.movie;
+            const year = m.year ? m.year : 'N/A';
+            const elapsed = m.last_played ? formatElapsed(m.last_played) : 'Never';
+
+            text = `${escHtml(m.title)} · ${year} · ${escHtml(elapsed)}`;
+        }
+
+        preview.textContent = text;
+        el.gridPreview.style.display = '';
+    }
+
+    function hideGridPreview() {
+        el.gridPreviewContent.textContent = '';
+    }
+
+    function switchViewToMovieDetail(movieId) {
+        // Show detail panel full-screen while staying in grid mode
+        selectedMovieId = movieId;
+
+        // Hide grid and sidebar, show detail panel with full-width layout
+        el.gridPanel.style.display = 'none';
+        el.tagSidebar.style.display = 'none';
+        el.detailPanel.style.display = '';
+        el.detail.style.display = '';
+
+        // Add detail view mode to change grid layout
+        el.container.classList.add('movies-grid-mode');
+        el.container.classList.add('movies-detail-view');
+
+        // Show toolbar
+        el.detailToolbar.style.display = 'flex';
+
+        // Load movie details
+        selectMovie(movieId);
+    }
+
+    function navigateBack() {
+        // If detail panel is showing, hide it and go back to grid
+        if (el.detailPanel.style.display !== 'none' && el.detail.style.display !== 'none') {
+            // Hide toolbar
+            el.detailToolbar.style.display = 'none';
+
+            el.detailPanel.style.display = 'none';
+            el.detail.style.display = 'none';
+            el.gridPanel.style.display = 'flex';
+            el.tagSidebar.style.display = 'none';  // Keep sidebar hidden in grid mode
+
+            // Remove detail view mode to restore grid layout
+            el.container.classList.remove('movies-detail-view');
+
+            selectedMovieId = null;
+            return;
+        }
+
+        // Otherwise pop from navigation stack
+        if (navigationStack.length <= 1) return;
+        navigationStack.pop();
+        const prevState = navigationStack[navigationStack.length - 1];
+        selectedSet = prevState.context.selectedSet;
+        selectedTag = prevState.context.selectedTag;
+        filterActor = prevState.context.filterActor;
+        searchQuery = prevState.context.searchQuery;
+        if (el.search) el.search.value = searchQuery;
+        if (el.searchClear) el.searchClear.style.display = searchQuery ? '' : 'none';
+        renderGridView();
     }
 
     // ── Edit modal ───────────────────────────────────────────────────────
@@ -776,7 +1093,38 @@ export function canReturnToTabs() {
         });
     }
 
-    // ── Event listeners ──────────────────────────────────────────────────
+    // Grid view controls
+    if (el.viewToggleList) {
+        el.viewToggleList.addEventListener('click', () => switchViewMode('grid'));
+    }
+
+    if (el.viewToggleGrid) {
+        el.viewToggleGrid.addEventListener('click', () => switchViewMode('list'));
+    }
+
+    if (el.gridBackBtn) {
+        el.gridBackBtn.addEventListener('click', () => navigateBack());
+    }
+
+    if (el.gridZoomOut) {
+        el.gridZoomOut.addEventListener('click', () => {
+            if (gridColumns > 1) {
+                gridColumns--;
+                el.gridColumnCount.textContent = gridColumns + ' columns';
+                saveGridState();
+                renderGridView();
+            }
+        });
+    }
+
+    if (el.gridZoomIn) {
+        el.gridZoomIn.addEventListener('click', () => {
+            gridColumns++;
+            el.gridColumnCount.textContent = gridColumns + ' columns';
+            saveGridState();
+            renderGridView();
+        });
+    }
 
     if (el.search) {
         el.search.addEventListener('input', () => {
@@ -836,6 +1184,27 @@ export function canReturnToTabs() {
     if (el.modalClose) el.modalClose.addEventListener('click', closeEditModal);
     if (el.modalCancel) el.modalCancel.addEventListener('click', closeEditModal);
     if (el.modalSave) el.modalSave.addEventListener('click', saveMovie);
+
+    // Detail toolbar buttons
+    if (el.detailToolbarBack) el.detailToolbarBack.addEventListener('click', navigateBack);
+    if (el.detailToolbarEdit) {
+        el.detailToolbarEdit.addEventListener('click', async () => {
+            if (selectedMovieId) {
+                const m = await callAction('get-movie', {id: selectedMovieId});
+                if (m && !m._error) openEditModal(m);
+            }
+        });
+    }
+    if (el.detailToolbarDelete) {
+        el.detailToolbarDelete.addEventListener('click', async () => {
+            if (selectedMovieId) {
+                const confirmed = confirm('Delete this movie?');
+                if (confirmed) {
+                    await deleteMovie();
+                }
+            }
+        });
+    }
 
     if (el.tmdbModalClose) el.tmdbModalClose.addEventListener('click', closeTMDBModal);
     if (el.tmdbSearchSubmit) el.tmdbSearchSubmit.addEventListener('click', searchTMDB);
@@ -1073,6 +1442,31 @@ export function canReturnToTabs() {
 
     // ── Init ─────────────────────────────────────────────────────────────
 
+    // Load grid columns from state
+    async function loadGridState() {
+        try {
+            const result = await callAction('get-state', {});
+            if (result && result.gridColumns) {
+                gridColumns = result.gridColumns;
+            }
+        } catch (err) {
+            console.error('Failed to load grid state:', err);
+        }
+        // Always update the UI to match gridColumns
+        if (el.gridColumnCount) {
+            el.gridColumnCount.textContent = gridColumns + ' columns';
+        }
+    }
+
+    // Save grid columns to state
+    function saveGridState() {
+        try {
+            callAction('save-state', {gridColumns: gridColumns});
+        } catch (err) {
+            console.error('Failed to save grid state:', err);
+        }
+    }
+
     // Wire up app.js integration: focus first tag on ArrowDown from tab bar,
     // and tell app.js it can return to tabs when focus was cleared at the top.
     _focusItems = () => {
@@ -1081,5 +1475,5 @@ export function canReturnToTabs() {
     };
     _canReturnToTabs = () => true;
 
-    loadMovies();
+    loadGridState().then(() => loadMovies());
 })();
