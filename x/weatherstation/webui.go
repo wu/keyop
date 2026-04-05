@@ -61,7 +61,7 @@ func (svc *Service) WebUIPanels() []webui.PanelInfo {
 }
 
 // HandleWebUIAction handles actions from the WebUI.
-func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any, error) {
+func (svc *Service) HandleWebUIAction(action string, _ map[string]any) (any, error) {
 	switch action {
 	case "get-current":
 		return svc.getCurrentWeather()

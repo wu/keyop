@@ -524,6 +524,7 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		sourceCounts := make(map[string]uint64)
 		if docCount > 0 {
 			// Query all documents with match-all query to get source type distribution
+			// #nosec G115 - docCount is a uint64 that's guaranteed to fit in int (max 2B documents)
 			results, _, err := queryIndex(svc.index, "", nil, nil, 0, int(docCount))
 			if err == nil {
 				for _, r := range results {
@@ -654,11 +655,4 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action)
 	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

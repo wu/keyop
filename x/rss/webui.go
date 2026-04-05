@@ -48,7 +48,7 @@ func (svc *Service) HandleWebUIAction(action string, params map[string]any) (any
 		// Send error to error channel if configured
 		if errorChan, ok := svc.Cfg.Pubs["errors"]; ok {
 			messenger := svc.Deps.MustGetMessenger()
-			messenger.Send(core.Message{
+			_ = messenger.Send(core.Message{
 				ChannelName: errorChan.Name,
 				ServiceName: svc.Cfg.Name,
 				Event:       action,
@@ -140,7 +140,7 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 	if cid, ok := params["contains-id"].(float64); ok {
 		containsID = int64(cid)
 	} else if cidStr, ok := params["contains-id"].(string); ok {
-		fmt.Sscanf(cidStr, "%d", &containsID)
+		_, _ = fmt.Sscanf(cidStr, "%d", &containsID)
 	}
 
 	where := []string{"1=1"}
@@ -178,6 +178,7 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 	// If contains-id is set, find the article's position and calculate the offset
 	if containsID > 0 {
 		// Count how many articles come before this one
+		// #nosec G201 - whereClause is built from constant SQL fragments (safe, no injection)
 		countBeforeQuery := fmt.Sprintf(`SELECT COUNT(*) FROM rss_articles 
 			WHERE %s AND published >= (SELECT published FROM rss_articles WHERE id = ?)`, whereClause)
 		var countBefore int
@@ -192,13 +193,14 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 	}
 
 	// Get total count
+	// #nosec G201 - whereClause is built from constant SQL fragments (safe, no injection)
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM rss_articles WHERE %s", whereClause)
 	var total int
 	if err := db.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		total = 0
 	}
 
-	// #nosec G201 - where is built from constant SQL fragments (safe, no injection)
+	// #nosec G201 - whereClause is built from constant SQL fragments (safe, no injection)
 	// Try to select with tags column; fall back to without if column doesn't exist
 	queryWithTags := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0), COALESCE(tags,'')
 		 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT ? OFFSET ?`, whereClause)
@@ -207,6 +209,7 @@ func (svc *Service) fetchArticles(params map[string]any) (any, error) {
 	if err != nil {
 		// If query fails, it might be because tags column doesn't exist
 		// Try without tags column
+		// #nosec G201 - whereClause is built from constant SQL fragments (safe, no injection)
 		queryWithoutTags := fmt.Sprintf(`SELECT id, timestamp, feed_url, feed_title, guid, title, description, link, published, COALESCE(seen,0), COALESCE(read_later,0)
 			 FROM rss_articles WHERE %s ORDER BY published DESC LIMIT ? OFFSET ?`, whereClause)
 		rows, err = db.Query(queryWithoutTags, append(args, limit, offset)...)

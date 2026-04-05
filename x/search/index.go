@@ -86,7 +86,7 @@ func openOrCreateIndexWithRecovery(path string) (bleve.Index, error) {
 		if err == nil && len(searchResults.Hits) > 0 {
 			// Check if the first hit has fields
 			hit := searchResults.Hits[0]
-			if hit.Fields != nil && len(hit.Fields) > 0 {
+			if len(hit.Fields) > 0 {
 				// Check specifically for title field
 				if _, hasTitle := hit.Fields["title"]; hasTitle {
 					// Index looks good, fields are being stored

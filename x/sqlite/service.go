@@ -119,7 +119,7 @@ func (svc *Service) Initialize() error {
 					// Check if this is a "duplicate column" error (for ALTER TABLE migrations)
 					errMsg := err.Error()
 					if strings.Contains(errMsg, "duplicate column") || strings.Contains(errMsg, "already exists") {
-						logger.Debug("SQLite: migration already applied", "payloadType", payloadType, "stmt", stmt[:min(50, len(stmt))])
+						logger.Debug("SQLite: migration already applied", "payloadType", payloadType, "stmt", stmt[:minInt(50, len(stmt))])
 					} else {
 						svc.mu.RUnlock()
 						return fmt.Errorf("failed to initialize schema for %s: %w", payloadType, err)
@@ -242,7 +242,7 @@ func (svc *Service) AcceptsPayloadType(payloadType string) bool {
 	return true
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
