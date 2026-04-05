@@ -833,6 +833,7 @@ local port.
 
 Policy: Always discuss with me before adding backward compatibility or implementing fallback mechanisms.
 
+Policy: Never use IIFE with explicit confirmation, always use ES6.
 
 ---
 
