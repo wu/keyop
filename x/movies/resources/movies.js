@@ -24,6 +24,10 @@ export function canReturnToTabs() {
     let groupCollections = true; // collapse multi-movie sets into one card
     let editingMovieId = null; // null = creating new
     let searchDebounce = null;
+    let flaggedMovieIds = new Set(); // temporary in-memory set of flagged movie IDs
+    let flaggedViewMode = null; // 'flagged' | null - tracks which render mode is active
+    let loadRequestId = 0; // incremented on each load request, used to prevent race conditions
+    let currentRenderRequestId = 0; // tracks which request actually rendered
 
     // Grid view state
     let viewMode = 'list'; // 'list' | 'grid'
@@ -46,7 +50,9 @@ export function canReturnToTabs() {
         tmdbSearchBtn: document.getElementById('movies-tmdb-search-btn'),
         newBtn: document.getElementById('movies-new-btn'),
         editBtn: document.getElementById('movies-edit-btn'),
+        flagBtn: document.getElementById('movies-flag-btn'),
         deleteBtn: document.getElementById('movies-delete-btn'),
+        flaggedBtn: document.getElementById('movies-flagged-btn'),
         nfoInput: document.getElementById('movies-nfo-input'),
         tagList: document.getElementById('movies-tag-list'),
         movieList: document.getElementById('movies-list'),
@@ -54,6 +60,7 @@ export function canReturnToTabs() {
         detailPanel: document.getElementById('movies-detail-panel'),
         detailToolbar: document.getElementById('movies-detail-toolbar'),
         detailToolbarBack: document.getElementById('movies-detail-toolbar-back'),
+        detailToolbarFlag: document.getElementById('movies-detail-toolbar-flag'),
         detailToolbarEdit: document.getElementById('movies-detail-toolbar-edit'),
         detailToolbarDelete: document.getElementById('movies-detail-toolbar-delete'),
         posterUpload: document.getElementById('movies-poster-upload'),
@@ -124,10 +131,16 @@ export function canReturnToTabs() {
     // ── Load & render ────────────────────────────────────────────────────
 
     async function loadMovies() {
+        loadRequestId++;
+        const myRequestId = loadRequestId;
         const effectiveSort = sortOrder;
         if (filterActor) {
             const result = await callAction('list-movies-by-actor', {actor: filterActor, sort: effectiveSort});
-            if (result && result.movies) renderMovieList(result.movies, `🎭 ${filterActor}`);
+            // Only render if this request is still the latest and we're not in flagged mode
+            if (myRequestId === loadRequestId && flaggedViewMode !== 'flagged' && result && result.movies) {
+                currentRenderRequestId = myRequestId;
+                renderMovieList(result.movies, `🎭 ${filterActor}`);
+            }
             return;
         }
         const [moviesResult, tagResult] = await Promise.all([
@@ -140,8 +153,10 @@ export function canReturnToTabs() {
             }),
             callAction('get-tag-counts', {search: searchQuery, fulltext: fulltextSearch}),
         ]);
-        if (moviesResult && moviesResult.movies) {
+        // Only render if this request is still the latest and we're not in flagged mode
+        if (myRequestId === loadRequestId && flaggedViewMode !== 'flagged' && moviesResult && moviesResult.movies) {
             const header = selectedSet ? `📦 ${selectedSet}` : null;
+            currentRenderRequestId = myRequestId;
             renderMovieList(moviesResult.movies, header);
         }
         if (tagResult && tagResult.counts) {
@@ -149,17 +164,64 @@ export function canReturnToTabs() {
         }
     }
 
+    async function loadFlaggedMovies() {
+        loadRequestId++;
+        const myRequestId = loadRequestId;
+        const result = await callAction('list-movies', {sort: sortOrder});
+        // Only render if this request is still the latest and we're still in flagged mode
+        if (myRequestId === loadRequestId && flaggedViewMode === 'flagged' && result && result.movies) {
+            const flagged = result.movies.filter(m => flaggedMovieIds.has(m.id));
+            // Always pass headerText when viewing flagged to ensure consistency
+            currentRenderRequestId = myRequestId;
+            renderMovieList(flagged, `🚩 Flagged (${flaggedMovieIds.size})`);
+        }
+    }
+
     function renderMovieList(movies, headerText) {
         el.movieList.innerHTML = '';
-        if (headerText) {
+        // Show header for collection/actor filter, search, or when headerText is provided
+        const shouldShowHeader = headerText || selectedSet || filterActor;
+        if (shouldShowHeader) {
             const h = document.createElement('div');
             h.className = 'movies-list-header';
-            h.innerHTML = `${escHtml(headerText)} <button class="movies-list-header-clear" title="Clear filter">✕</button>`;
-            h.querySelector('.movies-list-header-clear').addEventListener('click', () => exitFilteredView());
+            const displayText = headerText || (selectedSet ? `📦 ${selectedSet}` : (filterActor ? `🎭 ${filterActor}` : ''));
+
+            let buttonText = '✕';
+            let buttonTitle = 'Clear filter';
+            // When headerText starts with 🚩, we're viewing flagged - show "Clear all" button
+            const isFlaggedView = headerText && headerText.startsWith('🚩');
+            if (isFlaggedView) {
+                buttonText = 'Clear all';
+                buttonTitle = 'Clear all flags and exit flagged view';
+            }
+
+            h.innerHTML = `${escHtml(displayText)} <button class="movies-list-header-clear" title="${escHtml(buttonTitle)}">${escHtml(buttonText)}</button>`;
+            h.querySelector('.movies-list-header-clear').addEventListener('click', () => {
+                if (isFlaggedView) {
+                    // Clear all flags and exit flagged view
+                    flaggedMovieIds.clear();
+                    flaggedViewMode = null;
+                    updateFlaggedButtonDisplay();
+                    loadMovies();
+                } else if (selectedSet || filterActor) {
+                    // Clear collection/actor filter but preserve search
+                    selectedSet = null;
+                    filterActor = null;
+                    sortOrder = 'title';
+                    updateSortButtons();
+                    loadMovies();
+                } else {
+                    // No collection/actor filter, so clear search instead
+                    exitFilteredView();
+                }
+            });
             el.movieList.appendChild(h);
         }
         if (!movies || movies.length === 0) {
-            el.movieList.innerHTML += '<div class="movies-empty">No movies found.</div>';
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'movies-empty';
+            emptyDiv.textContent = 'No movies found.';
+            el.movieList.appendChild(emptyDiv);
             focusedListIdx = -1;
             focusedListMovieId = null;
             return;
@@ -363,15 +425,32 @@ export function canReturnToTabs() {
         });
         el.editBtn.style.display = '';
         el.deleteBtn.style.display = '';
+        el.flagBtn.style.display = '';
+
+        // Update flag button text
+        el.flagBtn.textContent = flaggedMovieIds.has(id) ? '🚩 Flagged' : '🚩 Flag';
+
+        // Update flag button display in detail toolbar (grid view)
+        if (el.detailToolbarFlag) {
+            el.detailToolbarFlag.textContent = flaggedMovieIds.has(id) ? '🚩 Flagged' : '🚩 Flag';
+        }
+
+        // Only remove grid-mode if we're in list view (not already in grid mode)
+        if (!el.container.classList.contains('movies-grid-mode')) {
+            el.container.classList.add('movie-selected');
+        }
 
         const m = await callAction('get-movie', {id});
         if (m && !m._error) {
             renderMovieDetail(m);
-            el.container && el.container.classList.add('movie-selected');
         }
     }
 
     function renderMovieDetail(m) {
+        // Ensure detail panel is visible
+        el.detailPanel.style.display = '';
+        el.detail.style.display = '';
+        
         const poster = m.poster_url
             ? `<img class="movies-detail-poster" src="${escHtml(m.poster_url)}" alt="">`
             : `<div class="movies-detail-poster-placeholder">🎬</div>`;
@@ -483,20 +562,27 @@ export function canReturnToTabs() {
             // Push current state to navigation stack
             navigationStack = [{viewMode: 'grid', context: {selectedSet, selectedTag, filterActor, searchQuery}}];
             el.container.classList.add('movies-grid-mode');
+            el.container.classList.remove('movies-detail-view');
             el.listPanel.style.display = 'none';
             el.tagSidebar.style.display = 'none';
             el.gridPanel.style.display = 'flex';
             el.gridPanel.style.height = '100%';
             el.gridPreview.style.display = 'flex';
             el.detail.style.display = 'none';
+            el.detailToolbar.style.display = 'none';
             renderGridView();
         } else {
             // Back to list view
             navigationStack = [];
+            flaggedViewMode = null;  // Reset flagged view when switching to list
             el.container.classList.remove('movies-grid-mode');
+            el.container.classList.remove('movies-detail-view');
             el.gridPanel.style.display = 'none';
             el.gridPanel.style.height = '';
             el.gridPreview.style.display = 'none';
+            el.detailPanel.style.display = 'none';
+            el.detail.style.display = 'none';
+            el.detailToolbar.style.display = 'none';
             el.tagSidebar.style.display = '';
             el.listPanel.style.display = '';
             loadMovies();
@@ -726,11 +812,19 @@ export function canReturnToTabs() {
         // Show toolbar
         el.detailToolbar.style.display = 'flex';
 
+        // Hide grid back button since we're in detail view
+        if (el.gridBackBtn) {
+            el.gridBackBtn.style.display = 'none';
+        }
+
+        // Reset navigationStack so back button doesn't show when we return
+        navigationStack = [];
+
         // Load movie details
         selectMovie(movieId);
     }
 
-    function navigateBack() {
+    async function navigateBack() {
         // If detail panel is showing, hide it and go back to grid
         if (el.detailPanel.style.display !== 'none' && el.detail.style.display !== 'none') {
             // Hide toolbar
@@ -738,13 +832,28 @@ export function canReturnToTabs() {
 
             el.detailPanel.style.display = 'none';
             el.detail.style.display = 'none';
-            el.gridPanel.style.display = 'flex';
-            el.tagSidebar.style.display = 'none';  // Keep sidebar hidden in grid mode
+            // Remove inline styles and let CSS control the display
+            el.gridPanel.style.display = '';
+            el.tagSidebar.style.display = '';
 
+            // When exiting detail view, clear navigationStack (we're back at main grid, no sub-navigation)
+            navigationStack = [];
+
+            // Explicitly hide the grid back button when returning from detail view
+            if (el.gridBackBtn) {
+                el.gridBackBtn.style.display = 'none';
+            }
+
+            // Ensure movies-grid-mode class is still on container
+            if (!el.container.classList.contains('movies-grid-mode')) {
+                el.container.classList.add('movies-grid-mode');
+            }
             // Remove detail view mode to restore grid layout
             el.container.classList.remove('movies-detail-view');
 
             selectedMovieId = null;
+            // Re-render the grid to restore proper layout
+            await renderGridView();
             return;
         }
 
@@ -1168,6 +1277,43 @@ export function canReturnToTabs() {
         el.deleteBtn.addEventListener('click', () => deleteMovie());
     }
 
+    if (el.flagBtn) {
+        el.flagBtn.addEventListener('click', () => {
+            if (selectedMovieId) {
+                if (flaggedMovieIds.has(selectedMovieId)) {
+                    flaggedMovieIds.delete(selectedMovieId);
+                    el.flagBtn.textContent = '🚩 Flag';
+                } else {
+                    flaggedMovieIds.add(selectedMovieId);
+                    el.flagBtn.textContent = '🚩 Flagged';
+                }
+                updateFlaggedButtonDisplay();
+            }
+        });
+    }
+
+    if (el.flaggedBtn) {
+        el.flaggedBtn.addEventListener('click', () => {
+            if (flaggedViewMode === 'flagged') {
+                // Clear the flagged view
+                flaggedViewMode = null;
+                selectedSet = null;
+                filterActor = null;
+                searchQuery = '';
+                el.search.value = '';
+                loadMovies();
+            } else {
+                // Show flagged movies
+                flaggedViewMode = 'flagged';
+                selectedSet = null;
+                filterActor = null;
+                searchQuery = '';
+                el.search.value = '';
+                loadFlaggedMovies();
+            }
+        });
+    }
+
     if (el.nfoInput) {
         el.nfoInput.addEventListener('change', async (e) => {
             if (e.target.files && e.target.files.length > 0) {
@@ -1202,6 +1348,20 @@ export function canReturnToTabs() {
                 if (confirmed) {
                     await deleteMovie();
                 }
+            }
+        });
+    }
+    if (el.detailToolbarFlag) {
+        el.detailToolbarFlag.addEventListener('click', () => {
+            if (selectedMovieId) {
+                if (flaggedMovieIds.has(selectedMovieId)) {
+                    flaggedMovieIds.delete(selectedMovieId);
+                    el.detailToolbarFlag.textContent = '🚩 Flag';
+                } else {
+                    flaggedMovieIds.add(selectedMovieId);
+                    el.detailToolbarFlag.textContent = '🚩 Flagged';
+                }
+                updateFlaggedButtonDisplay();
             }
         });
     }
@@ -1307,6 +1467,12 @@ export function canReturnToTabs() {
     function isModalOpen() {
         return (el.modalOverlay && el.modalOverlay.style.display !== 'none') ||
             (el.tmdbModalOverlay && el.tmdbModalOverlay.style.display !== 'none');
+    }
+
+    function updateFlaggedButtonDisplay() {
+        if (el.flaggedBtn) {
+            el.flaggedBtn.textContent = `🚩 Flagged (${flaggedMovieIds.size})`;
+        }
     }
 
     document.addEventListener('keydown', async (e) => {
@@ -1475,5 +1641,8 @@ export function canReturnToTabs() {
     };
     _canReturnToTabs = () => true;
 
-    loadGridState().then(() => loadMovies());
+    loadGridState().then(() => {
+        updateFlaggedButtonDisplay();
+        loadMovies();
+    });
 })();

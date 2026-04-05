@@ -217,6 +217,7 @@ func (svc *Service) getState() (any, error) {
 	dataDir := filepath.Join(homeDir, ".keyop", "data", "movies")
 	path := filepath.Join(dataDir, "ui_state.json")
 
+	// #nosec G304 - path is constructed from fixed home directory and literal filename
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

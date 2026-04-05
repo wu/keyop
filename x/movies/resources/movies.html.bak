@@ -17,6 +17,7 @@
         <button id="movies-edit-btn" style="display:none">Edit</button>
         <button id="movies-flag-btn" style="display:none">🚩 Flag</button>
         <button id="movies-delete-btn" style="display:none">Delete</button>
+        <button id="movies-flagged-btn" title="View flagged movies">🚩 Flagged (0)</button>
         <label class="movies-import-label">
             📥 Import NFO
             <input accept=".nfo" id="movies-nfo-input" multiple style="display:none" type="file">
@@ -38,9 +39,7 @@
                 <input checked id="movies-collapse-collections" type="checkbox">
                 Collapse collections
             </label>
-            <button class="movies-sort-btn" id="movies-view-toggle" title="Toggle between list and grid view">📊 Grid
-            </button>
-            <button class="movies-sort-btn" id="movies-flagged-btn" title="View flagged movies">🚩 Flagged (0)</button>
+            <button id="movies-view-toggle" title="Toggle between list and grid view">📊 Grid</button>
         </div>
         <div class="movies-list" id="movies-list"></div>
     </div>
