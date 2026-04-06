@@ -1,3 +1,51 @@
+## [0.10.0](https://github.com/wu/keyop/compare/0.9.0...0.10.0) (2026-04-06)
+
+### Features
+
+* add "mark as unseen" and "unmark read-later" functionality to RSS service ([1c36054](https://github.com/wu/keyop/commit/1c36054fba440ebe6c411e27ef29476d13cbeaa8))
+* add clear buttons for tag and note searches, and enhance test coverage ([a13fdac](https://github.com/wu/keyop/commit/a13fdacde2b3985d861725045243f8466fecc39c))
+* add drag-and-drop support for tab reordering with persistence ([c381c77](https://github.com/wu/keyop/commit/c381c7767d6f1d82f704eef237e574790bfa371f))
+* add flagged movies management and enhanced detail navigation ([3563b0d](https://github.com/wu/keyop/commit/3563b0dae4820f0068a38329b479098565caa9c3))
+* add grid view for Movies tab with enhanced navigation and state persistence ([f3b6bf5](https://github.com/wu/keyop/commit/f3b6bf5088a713fb79756f211d455fdb1e5fdf80))
+* add Movie Library tab with NFO parsing and TMDB integration ([4f9166e](https://github.com/wu/keyop/commit/4f9166e3863a1b85d88c07efdadad8d3111991fc))
+* add movie watch tracking with events, schema updates, and integration ([ffea2dd](https://github.com/wu/keyop/commit/ffea2ddb8d7c70920ba4bc4182de7d87f8299c13))
+* add note linking and copy link functionality to notes ([7144b2e](https://github.com/wu/keyop/commit/7144b2ec31051b79cde466a89b9e83f7a4dffd54))
+* add robust test coverage and cache-busting for movies service ([cb4fa45](https://github.com/wu/keyop/commit/cb4fa4525b7a4eeaf1d01bb3d82771e673645f3c))
+* add RSS feed support with service, UI, and configuration updates ([1a34530](https://github.com/wu/keyop/commit/1a345308ad8d6ddcad4738fa31924c5821e33cfd))
+* add sortable columns to status table in status monitoring ([31b3e41](https://github.com/wu/keyop/commit/31b3e41a4d20bbb9ef70cabe29e21d94b2f54c0f))
+* add support for stopping in-progress tasks and updating elapsed time ([1e15572](https://github.com/wu/keyop/commit/1e155725698549806626e1174b58cb0ddb27e3ef))
+* add Weatherstation Web UI with interactive dashboard and API integration ([f19a8e3](https://github.com/wu/keyop/commit/f19a8e3525924957f8bba0841b2b6b974105a72b))
+* enhance article navigation and unseen view behavior in RSS tab ([73d0f84](https://github.com/wu/keyop/commit/73d0f847c96e8779a099aa69702bc04852671450))
+* enhance Movies tab UI with button styling, toolbar updates, and navigation improvements ([b792f26](https://github.com/wu/keyop/commit/b792f26fc2d56028b2128f63b3607bcefc14c916))
+* enhance switchgpio service with improved logging, error handling, and pin state management ([a220253](https://github.com/wu/keyop/commit/a2202536cc09f9227a6e405ec08376704bc15afa))
+* improve RSS article actions, filters, and pagination logic ([62a2c78](https://github.com/wu/keyop/commit/62a2c7815ce67d56fab54253e06b00d9d72b02e5))
+* integrate keyop-messenger with dual-messenger support and initial cpuMonitor migration ([42d6e77](https://github.com/wu/keyop/commit/42d6e772dfb227a9e803fd0b6fca6c4c7117fbc0))
+* integrate notes and links with search indexing功能 ([0cdea8d](https://github.com/wu/keyop/commit/0cdea8de560f5ba7adfbc6c068622732ddead7c7))
+* introduce saved links service with UI, favicon caching, and bulk import ([bd02b18](https://github.com/wu/keyop/commit/bd02b187f75a13b96e16ea7312dad14846833b77))
+
+### Bug Fixes
+
+* adjust time formatting to handle "Now" for immediate events ([f5ca473](https://github.com/wu/keyop/commit/f5ca4738ae8809805f73946a69314038e65b0da8))
+* ensure `loadArticles` is called alongside other feed updates in RSS tab ([05f36df](https://github.com/wu/keyop/commit/05f36df775a6df2ae3c99fa95310f1d6fa92a06a))
+* ensure UTC-based date creation in queue tests to avoid local time collisions ([27bba41](https://github.com/wu/keyop/commit/27bba41ca88c0f97c50aa9af30ffb5104b556b4a))
+* handle edge case for sun alert scheduling after all events pass ([7145612](https://github.com/wu/keyop/commit/714561250fbe608e1dc25c9d94d4bc255ccbbc21))
+* preserve current filters when showing note details ([2a00fc1](https://github.com/wu/keyop/commit/2a00fc1dbef69ce538b01c98410e5b11b5509a38))
+* prevent duplicate sun alert scheduling on reschedule triggers ([5b39238](https://github.com/wu/keyop/commit/5b392381ac51dc010a8982e483b30f3209329db6))
+* remove unused phase-related UI elements in Moon panel ([172c556](https://github.com/wu/keyop/commit/172c55655fadd5c7e2da09343e192c555f43c2a0))
+* rename image ([0f5c4c2](https://github.com/wu/keyop/commit/0f5c4c23636959782048999fe6e517af3518a1b8))
+* resolve bug in "read-later" behavior in RSS tab ([7a34289](https://github.com/wu/keyop/commit/7a3428933d9a81369c5ad5fa2e1bd125f7363fad))
+* skip URL formatting inside code blocks in PreprocessPlainLinks ([0b9936e](https://github.com/wu/keyop/commit/0b9936e1ed1dcddf703f9b73039407a2649f7e26))
+
+### Refactoring
+
+* add extensive unit tests and resolve some lint errors ([f2b94e3](https://github.com/wu/keyop/commit/f2b94e39d6755e5c1fab5ea36ff6a3d096088d96))
+* improve error handling and code safety across services ([4f4001d](https://github.com/wu/keyop/commit/4f4001d57498269ba1b94222ff72b56e8535ff0d))
+* improve note query construction with safer conditions and better modularity ([c8a6e1d](https://github.com/wu/keyop/commit/c8a6e1d35955d59209f331d8cc384fa2aca90c92))
+* remove debug logging from search-tab.js ([595b481](https://github.com/wu/keyop/commit/595b481656ee9993a547870d68e13d6c04bd4500))
+* reorganize and modularize RSS tab initialization and state management ([fae72b7](https://github.com/wu/keyop/commit/fae72b7cb786d85cb62217dd9a00748f06970461))
+* resolve some lint issues ([215ce92](https://github.com/wu/keyop/commit/215ce9254beafee6924a67906c6a2067ae4c6942))
+* resolve some lint nad test issues ([385f3a8](https://github.com/wu/keyop/commit/385f3a89929d9cbd6c0663421616e0ce2b9fcb91))
+
 ## [0.9.0](https://github.com/wu/keyop/compare/0.8.0...0.9.0) (2026-03-25)
 
 ### Features
