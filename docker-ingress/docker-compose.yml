@@ -3,7 +3,7 @@ services:
   keyop:
     container_name: keyop
     hostname: troubalert
-    image: ghcr.io/main/keyop:latest
+    image: ghcr.io/wu/keyop:latest
     restart: unless-stopped
     user: "${UID}:${GID}"
     networks:
