@@ -90,7 +90,7 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 			continue
 		}
 
-		if file.Name() == "plugins.yaml" {
+		if file.Name() == "plugins.yaml" || file.Name() == "messenger.yaml" {
 			continue
 		}
 

@@ -35,6 +35,26 @@ This utility is a work in progress.
 				return err
 			}
 
+			// 4b. Initialise the new keyop-messenger if messenger.yaml is present.
+			newMsgr, bridge, err := initNewMessenger(deps)
+			if err != nil {
+				logger.Error("new messenger init", "error", err)
+				return err
+			}
+			if newMsgr != nil {
+				deps.SetNewMessenger(newMsgr)
+				ctx := deps.MustGetContext()
+				go func() {
+					<-ctx.Done()
+					if closeErr := newMsgr.Close(); closeErr != nil {
+						logger.Error("new messenger close error", "error", closeErr)
+					}
+				}()
+				if bridge != nil {
+					bridge.Start(ctx)
+				}
+			}
+
 			// 5. Start services/subscribers
 			return run(deps, svcs)
 		},

@@ -68,7 +68,6 @@ func (svc *Service) Initialize() error {
 // Check performs the service's periodic work: collect data, evaluate state, and publish messages/metrics.
 func (svc *Service) Check() error {
 	logger := svc.Deps.MustGetLogger()
-	messenger := svc.Deps.MustGetMessenger()
 
 	var cpuUsage float64
 	var cpuErr error
@@ -87,7 +86,25 @@ func (svc *Service) Check() error {
 		return cpuErr
 	}
 
-	err := messenger.Send(core.Message{
+	// Use the new messenger when available (Phase 2+ migration).
+	// Publishes core.MetricEvent directly to the metrics channel; the MessengerBridge
+	// mirrors it to the old messenger so downstream subscribers are unaffected.
+	if newMsgr := svc.Deps.GetNewMessenger(); newMsgr != nil {
+		err := newMsgr.Publish(
+			svc.Deps.MustGetContext(),
+			"metrics",
+			"core.metric.v1",
+			&core.MetricEvent{Name: svc.cpuMetricName, Value: cpuUsage},
+		)
+		if err != nil {
+			logger.Error("failed to publish cpu metric via new messenger", "error", err)
+			return err
+		}
+		return nil
+	}
+
+	// Fallback: old messenger path (used when messenger.yaml is not present).
+	err := svc.Deps.MustGetMessenger().Send(core.Message{
 		ChannelName: svc.Cfg.Name,
 		ServiceName: svc.Cfg.Name,
 		ServiceType: svc.Cfg.Type,

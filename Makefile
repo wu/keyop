@@ -169,7 +169,7 @@ docs:
 # Docker convenience targets
 .PHONY: docker-build docker-push docker-run
 
-DOCKER_IMAGE ?= ghcr.io/$(shell git config --get user.name || echo $(GIT_BRANCH))/keyop
+DOCKER_IMAGE ?= ghcr.io/wu/keyop
 DOCKER_TAG ?= latest
 
 docker-build:

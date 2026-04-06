@@ -3,15 +3,18 @@ package core
 
 import (
 	"context"
+
+	km "github.com/wu/keyop-messenger"
 )
 
 type Dependencies struct {
-	logger    Logger
-	os        OsProviderApi
-	messenger MessengerApi
-	state     StateStore
-	ctx       context.Context
-	cancel    context.CancelFunc
+	logger       Logger
+	os           OsProviderApi
+	messenger    MessengerApi
+	newMessenger *km.Messenger
+	state        StateStore
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 func (d *Dependencies) SetStateStore(state StateStore) {
@@ -85,16 +88,31 @@ func (d *Dependencies) MustGetMessenger() MessengerApi {
 	return d.messenger
 }
 
+// SetNewMessenger stores the keyop-messenger instance for services that have been
+// migrated to the new API. Services that have not yet been migrated continue to
+// use MustGetMessenger() and are unaffected.
+func (d *Dependencies) SetNewMessenger(m *km.Messenger) {
+	d.newMessenger = m
+}
+
+// GetNewMessenger returns the keyop-messenger instance, or nil if the new
+// messenger has not been configured (no messenger.yaml present for this host).
+// Services must check for nil before using the new API.
+func (d *Dependencies) GetNewMessenger() *km.Messenger {
+	return d.newMessenger
+}
+
 // Clone returns a shallow copy of Dependencies. This is useful when you want to override
 // a single field (e.g. the messenger) for a specific service without affecting the global deps.
 func (d *Dependencies) Clone() Dependencies {
 	return Dependencies{
-		logger:    d.logger,
-		os:        d.os,
-		messenger: d.messenger,
-		state:     d.state,
-		ctx:       d.ctx,
-		cancel:    d.cancel,
+		logger:       d.logger,
+		os:           d.os,
+		messenger:    d.messenger,
+		newMessenger: d.newMessenger,
+		state:        d.state,
+		ctx:          d.ctx,
+		cancel:       d.cancel,
 	}
 }
 
