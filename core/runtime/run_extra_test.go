@@ -87,7 +87,7 @@ func TestRun_ValidatesConfigBeforeInitializing(t *testing.T) {
 	// Create channel to signal when validation happens
 	validationDone := make(chan bool, 1)
 	go func() {
-		run(deps, serviceConfigs)
+		_ = run(deps, serviceConfigs)
 		validationDone <- true
 	}()
 

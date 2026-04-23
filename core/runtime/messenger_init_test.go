@@ -97,6 +97,6 @@ storage:
 	} else {
 		// If it succeeds, verify messenger was created
 		assert.NotNil(t, msgr)
-		defer msgr.Close()
+		defer func() { _ = msgr.Close() }()
 	}
 }

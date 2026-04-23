@@ -24,7 +24,8 @@ func makeDeps(t *testing.T) (core.Dependencies, *testutil.FakeMessenger) {
 	messenger := testutil.NewFakeMessenger()
 	messenger.InstanceNameValue = "test-host"
 	deps.SetMessenger(messenger)
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	deps.SetContext(ctx)
 	return deps, messenger
 }

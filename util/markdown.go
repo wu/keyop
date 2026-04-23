@@ -124,7 +124,7 @@ func RenderMarkdown(content string) (string, error) {
 			var tocHTML strings.Builder
 			tocHTML.WriteString("<h2 id=\"table-of-contents\">Contents <a class=\"anchor\" href=\"#table-of-contents\"></a></h2>\n<ul>\n")
 
-			var prevLevel int = 2 // Start at h2 level
+			prevLevel := 2 // Start at h2 level
 			for i, match := range matches {
 				headingTag := match[1] // h2, h3, h4, etc.
 				headingID := match[2]
@@ -156,7 +156,7 @@ func RenderMarkdown(content string) (string, error) {
 					tocHTML.WriteString("</li>\n")
 				}
 
-				tocHTML.WriteString(fmt.Sprintf("<li><a href=\"#%s\">%s</a>", headingID, headingText))
+				fmt.Fprintf(&tocHTML, "<li><a href=\"#%s\">%s</a>", headingID, headingText)
 				prevLevel = currentLevel
 			}
 
