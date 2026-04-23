@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/wu/keyop/compare/v1.0.0...v1.0.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* resolve issues with two failing tests ([a766aaf](https://github.com/wu/keyop/commit/a766aaf230ea2d77d563354bb319cee0a87e6fbf))
+
 # 1.0.0 (2026-04-23)
 
 
