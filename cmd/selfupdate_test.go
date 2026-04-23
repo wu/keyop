@@ -1,0 +1,92 @@
+package cmd
+
+import (
+	"bytes"
+	"compress/gzip"
+	"github.com/wu/keyop/core/testutil"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestInstallUpdate(t *testing.T) {
+	// Setup
+	tmpDir, err := os.MkdirTemp("", "keyop-test-*")
+	assert.NoError(t, err)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to remove temp dir %s: %v", tmpDir, err)
+		}
+	}()
+
+	exePath := filepath.Join(tmpDir, "keyop")
+	err = os.WriteFile(exePath, []byte("original binary"), 0600)
+	assert.NoError(t, err)
+
+	newContent := "new binary content"
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	_, err = gw.Write([]byte(newContent))
+	assert.NoError(t, err)
+	err = gw.Close()
+	assert.NoError(t, err)
+
+	gzReader, err := gzip.NewReader(&buf)
+	assert.NoError(t, err)
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			t.Logf("failed to close gzip reader: %v", err)
+		}
+	}()
+
+	logger := &testutil.FakeLogger{}
+
+	// Execute
+	err = installUpdate(logger, gzReader, exePath)
+
+	// Assert
+	assert.NoError(t, err)
+
+	// Verify content
+	content, err := os.ReadFile(exePath) //nolint:gosec // test-only read of temp file
+	assert.NoError(t, err)
+	assert.Equal(t, newContent, string(content))
+
+	// Verify permissions (on unix)
+	info, err := os.Stat(exePath)
+	assert.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+}
+
+func TestProgressReader(t *testing.T) {
+	data := []byte("hello world")
+	buf := bytes.NewReader(data)
+	total := int64(len(data))
+
+	var progressCalls []int64
+	pr := &progressReader{
+		Reader: buf,
+		Total:  total,
+		OnProgress: func(current int64, _ int64) {
+			progressCalls = append(progressCalls, current)
+		},
+	}
+
+	out := make([]byte, 5)
+	n, err := pr.Read(out)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, []int64{5}, progressCalls)
+
+	n, err = pr.Read(out)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, []int64{5, 10}, progressCalls)
+
+	n, err = pr.Read(out)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.Equal(t, []int64{5, 10, 11}, progressCalls)
+}

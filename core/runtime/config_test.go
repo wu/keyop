@@ -1,0 +1,274 @@
+package runtime
+
+import (
+	"github.com/wu/keyop/core"
+	"github.com/wu/keyop/core/adapter"
+	"github.com/wu/keyop/core/testutil"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func Test_run_missing_config_returns_error(t *testing.T) {
+	// directory does not exist
+	dir := filepath.Join(t.TempDir(), "non-existent")
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	// load should fail before running
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	_, err := loadServiceConfigs(deps)
+	assert.Error(t, err, "expected error when config directory is missing")
+	assert.Contains(t, err.Error(), "config directory does not exist")
+}
+
+func Test_loadServices_success(t *testing.T) {
+	// setup: temp dir with a valid config.yaml containing a single svc
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg1 := "freq: 1s\nservice: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "10-heartbeat.yaml"), []byte(cfg1), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cfg2 := "freq: 2s\nservice: temp\n"
+	if err := os.WriteFile(filepath.Join(dir, "20-temp.yaml"), []byte(cfg2), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 2) {
+		// first check assertions
+		assert.Equal(t, "10-heartbeat", svcs[0].Name)
+		assert.Equal(t, "heartbeat", svcs[0].Type)
+		assert.Equal(t, 1*time.Second, svcs[0].Freq)
+		// second check assertions
+		assert.Equal(t, "20-temp", svcs[1].Name)
+		assert.Equal(t, "temp", svcs[1].Type)
+		assert.Equal(t, 2*time.Second, svcs[1].Freq)
+	}
+}
+
+func Test_loadServices_multiple_files_order(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg2 := "service: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "20-service.yaml"), []byte(cfg2), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg1 := "service: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "10-service.yaml"), []byte(cfg1), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 2) {
+		assert.Equal(t, "10-service", svcs[0].Name)
+		assert.Equal(t, "20-service", svcs[1].Name)
+	}
+}
+
+func Test_loadServices_bad_duration(t *testing.T) {
+	// setup: temp dir with an invalid duration string
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "freq: not-a-duration\nservice: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	_, err := loadServiceConfigs(deps)
+	assert.Error(t, err, "expected error for invalid duration in config")
+}
+
+func Test_loadServices_pubs_loaded(t *testing.T) {
+	// setup config with pubs structure similar to sample
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "freq: 1s\n" +
+		"service: heartbeat\n" +
+		"pubs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    description: Publish Heartbeat Events every 1 second\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "heartbeat", svcs[0].Pubs["events"].Name)
+		assert.Equal(t, "Publish Heartbeat Events every 1 second", svcs[0].Pubs["events"].Description)
+	}
+}
+
+func Test_loadServices_subs_loaded(t *testing.T) {
+	// setup config with subs structure similar to sample
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "service: heartbeat\n" +
+		"subs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    description: Read Heartbeat Events\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "heartbeat", svcs[0].Subs["events"].Name)
+		assert.Equal(t, "Read Heartbeat Events", svcs[0].Subs["events"].Description)
+	}
+}
+
+func Test_loadServices_maxAge_loaded(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "service: heartbeat\n" +
+		"subs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    max_age: 1h\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "heartbeat", svcs[0].Subs["events"].Name)
+		assert.Equal(t, 1*time.Hour, svcs[0].Subs["events"].MaxAge)
+	}
+}
+
+func Test_loadServices_no_name(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "freq: 1s\nservice: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "my-service.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "my-service", svcs[0].Name)
+	}
+}
+
+func Test_loadServiceConfigs_no_services_configured(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	// No files in directory
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.Error(t, err, "expected error when no services are configured")
+	assert.Empty(t, svcs, "expected no services returned")
+	if err != nil {
+		assert.Contains(t, err.Error(), "no services configured")
+	}
+}
+
+func Test_loadServiceConfigs_template_hostname(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "service: heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(testutil.FakeOsProvider{Host: "myhost.example.com"})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, "config", svcs[0].Name)
+	}
+}
+
+func Test_loadServiceConfigs_template_userhome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "service: heartbeat\nconfig:\n  path: {{.HomeDir}}/test\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(testutil.FakeOsProvider{Host: "myhost.example.com"})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+
+	userHome, _ := os.UserHomeDir()
+
+	if assert.Len(t, svcs, 1) {
+		assert.Equal(t, userHome+"/test", svcs[0].Config["path"])
+	}
+}
