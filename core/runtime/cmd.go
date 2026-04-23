@@ -26,14 +26,16 @@ This utility is a work in progress.
 				logger.Error("new messenger init", "error", err)
 				return err
 			}
-			deps.SetMessenger(msgr)
-			ctx := deps.MustGetContext()
-			go func() {
-				<-ctx.Done()
-				if closeErr := msgr.Close(); closeErr != nil {
-					logger.Error("new messenger close error", "error", closeErr)
-				}
-			}()
+			if msgr != nil {
+				deps.SetMessenger(msgr)
+				ctx := deps.MustGetContext()
+				go func() {
+					<-ctx.Done()
+					if closeErr := msgr.Close(); closeErr != nil {
+						logger.Error("new messenger close error", "error", closeErr)
+					}
+				}()
+			}
 
 			// 2. Load plugins (and register their payload types)
 			// This must happen after registry is created (in InitializeDependencies)

@@ -55,7 +55,7 @@ func TestDependencies_Messenger_SetAndGet(t *testing.T) {
 
 func TestDependencies_Messenger_MustGetPanicsWhenUnset(t *testing.T) {
 	var d core.Dependencies
-	assert.PanicsWithValue(t, "new messenger not available; service requires messenger.yaml configuration", func() {
+	assert.PanicsWithValue(t, "ERROR: messenger is not initialized", func() {
 		_ = d.MustGetMessenger()
 	})
 }
