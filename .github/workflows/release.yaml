@@ -4,7 +4,10 @@ name: Release
 # Trigger: every push to main.
 #
 # Job flow:
-#   semantic-release  →  (on new tag/release published)  →  build-release
+#   test  →  semantic-release  →  (on new tag/release published)  →  build-release
+#
+#  • test             runs go build and go test; semantic-release is blocked until
+#                     this passes so a broken commit can never produce a release.
 #
 #  • semantic-release  analyses Conventional Commits, bumps the version,
 #    creates a git tag, publishes a GitHub Release, and commits CHANGELOG.md.
@@ -31,9 +34,31 @@ permissions:
 jobs:
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 1 – semantic-release
+  # Job 1 – build and test
+  # ────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...
+
+      - name: Test
+        run: go test ./...
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2 – semantic-release
   # ────────────────────────────────────────────────────────────────────────────
   semantic-release:
+    needs: [test]
     name: Semantic Release
     runs-on: ubuntu-latest
 
@@ -86,7 +111,7 @@ jobs:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     # Run when triggered by a release event OR when semantic-release published a release
     # during a push-run (needs.semantic-release.outputs.released is set to 'true').
-    needs: [semantic-release]
+    needs: [test, semantic-release]
     if: github.event_name == 'release' || needs.semantic-release.outputs.released == 'true'
     runs-on: ${{ matrix.runner }}
 
