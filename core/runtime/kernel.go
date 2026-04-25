@@ -3,10 +3,11 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"github.com/wu/keyop/core"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/wu/keyop/core"
 )
 
 // Task describes a scheduled runnable unit for the kernel; it contains the service name, interval, context and the Run function executed by the kernel.
@@ -85,7 +86,7 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 									Hostname:  newMsgr.InstanceName(),
 									Level:     "error",
 									Summary:   task.Name,
-									Text:      fmt.Sprintf("Task %s failed: %v", task.Name, err),
+									Text:      fmt.Sprintf("Service '%s' failed: %v", task.Name, err),
 								}
 								if err := newMsgr.Publish(ctx, "errors", "core.error.v1", errorEvent); err != nil {
 									logger.Error("task: failed to send error message", "service", task.Name, "error", err)
