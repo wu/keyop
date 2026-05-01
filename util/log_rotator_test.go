@@ -15,7 +15,7 @@ func TestRotatingFileWriter_Creation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFileWriter failed: %v", err)
 	}
-	defer rfw.Close()
+	defer func() { _ = rfw.Close() }()
 
 	if rfw.logDir != logDir {
 		t.Errorf("logDir mismatch: got %s, want %s", rfw.logDir, logDir)
@@ -35,7 +35,7 @@ func TestRotatingFileWriter_Write(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFileWriter failed: %v", err)
 	}
-	defer rfw.Close()
+	defer func() { _ = rfw.Close() }()
 
 	testData := []byte("test log message\n")
 	n, err := rfw.Write(testData)
@@ -82,7 +82,7 @@ func TestRotatingFileWriter_MultipleWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFileWriter failed: %v", err)
 	}
-	defer rfw.Close()
+	defer func() { _ = rfw.Close() }()
 
 	messages := []string{
 		"first message\n",
