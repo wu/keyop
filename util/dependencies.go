@@ -46,29 +46,21 @@ func InitializeDependencies(console bool) core.Dependencies {
 	}
 
 	var logger *slog.Logger
-	var logFile *os.File
+	var logWriter *RotatingFileWriter
 	if console {
 		logger = slog.New(slogcolor.NewHandler(os.Stdout, slogOptions))
 	} else {
 		logDir := filepath.Join(home, ".keyop", "logs")
-		if err := os.MkdirAll(logDir, 0750); err != nil {
-			// Fallback to stderr if we can't create the log directory
+		rfw, err := NewRotatingFileWriter(logDir)
+		if err != nil {
+			// Fallback to stderr if we can't create rotating file writer
 			logger = slog.New(slogcolor.NewHandler(os.Stderr, slogOptions))
-			logger.Error("Failed to create log directory", "path", logDir, "error", err)
+			logger.Error("Failed to create rotating log file writer", "error", err)
 		} else {
-			logFileName := "keyop." + time.Now().Format("20060102") + ".log"
-			logFilePath := filepath.Join(logDir, logFileName)
-			f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) //nolint:gosec
-			if err != nil {
-				// Fallback to stderr if we can't open the log file
-				logger = slog.New(slogcolor.NewHandler(os.Stderr, slogOptions))
-				logger.Error("Failed to open log file", "path", logFilePath, "error", err)
-			} else {
-				logger = slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{
-					Level: slogOptions.Level,
-				}))
-				logFile = f
-			}
+			logger = slog.New(slog.NewTextHandler(rfw, &slog.HandlerOptions{
+				Level: slogOptions.Level,
+			}))
+			logWriter = rfw
 		}
 	}
 	deps.SetLogger(logger)
@@ -79,11 +71,11 @@ func InitializeDependencies(console bool) core.Dependencies {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	deps.SetContext(ctx)
-	// Wrap cancel to flush and close the log file on shutdown.
+	// Wrap cancel to close the log writer on shutdown.
 	deps.SetCancel(func() {
 		cancel()
-		if logFile != nil {
-			if err := logFile.Close(); err != nil {
+		if logWriter != nil {
+			if err := logWriter.Close(); err != nil {
 				// The log file is closing, so write directly to stderr.
 				fmt.Fprintf(os.Stderr, "ERROR: failed to close log file: %v\n", err)
 			}
