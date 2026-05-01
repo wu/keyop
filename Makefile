@@ -1,7 +1,7 @@
 BINARY := keyop
 BUILD_DIR := output
 
-.PHONY: build test lint lint-fix fmt clean
+.PHONY: build test lint lint-fix fmt clean release
 
 build:
 	go build -o $(BUILD_DIR)/$(BINARY) .
@@ -21,3 +21,6 @@ fmt:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+release: test lint
+	@echo "Release checks passed: tests and lint successful"
