@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/wu/keyop/compare/v1.1.0...v1.2.0) (2026-05-01)
+
+
+### Bug Fixes
+
+* improve error message formatting in task failure reporting ([72e1cbb](https://github.com/wu/keyop/commit/72e1cbb237e05a2dc94f17887688dcec4e9504c3))
+
+
+### Features
+
+* add release target to Makefile for pre-release checks ([a54b201](https://github.com/wu/keyop/commit/a54b201dd446c54e06bebc252c252076bd739fec))
+* implement RotatingFileWriter for daily log rotation ([5deb403](https://github.com/wu/keyop/commit/5deb403c2c396e7a5af7fab5e962ce7417aefaed))
+
 # [1.1.0](https://github.com/wu/keyop/compare/v1.0.1...v1.1.0) (2026-04-25)
 
 
