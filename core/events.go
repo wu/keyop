@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"reflect"
 	"time"
 )
@@ -80,14 +81,31 @@ func (e ErrorEvent) PayloadType() string { return "core.error.v1" }
 // It carries current status information for a named component or service.
 // Name identifies the component, Status is the current state, Details provides
 // additional information, and Level indicates the severity (e.g., "ok", "warning", "critical").
+// SourcePayloadType and SourcePayload optionally embed the originating event for consumers
+// that need access to the raw source data (e.g., metric value for threshold-derived statuses).
 type StatusEvent struct {
-	Name     string `json:"name"`               // Unique identifier for this status
-	Hostname string `json:"hostname,omitempty"` // Hostname where status originated
-	Status   string `json:"status"`             // Current status value ("ok", "warning", "critical")
-	Details  string `json:"details"`            // Additional status information
+	Name              string          `json:"name"`                        // Unique identifier for this status
+	Hostname          string          `json:"hostname,omitempty"`          // Hostname where status originated
+	Status            string          `json:"status"`                      // Current status value ("ok", "warning", "critical")
+	Details           string          `json:"details"`                     // Additional status information
+	SourcePayloadType string          `json:"sourcePayloadType,omitempty"` // PayloadType() of the originating event
+	SourcePayload     json.RawMessage `json:"sourcePayload,omitempty"`     // JSON-encoded originating event
 }
 
 func (s StatusEvent) PayloadType() string { return "core.status.v1" }
+
+// ExtractSourcePayload decodes the embedded source event from a StatusEvent into T.
+// Returns (nil, false) if no source payload is present or decoding fails.
+func ExtractSourcePayload[T any](e *StatusEvent) (*T, bool) {
+	if e == nil || len(e.SourcePayload) == 0 || e.SourcePayloadType == "" {
+		return nil, false
+	}
+	var v T
+	if err := json.Unmarshal(e.SourcePayload, &v); err != nil {
+		return nil, false
+	}
+	return &v, true
+}
 
 // TempEvent represents a temperature reading event that services can emit.
 // It carries temperature readings in both Celsius and Fahrenheit, plus metadata about the sensor.
