@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -107,4 +109,34 @@ type IndexProvider interface {
 // core/runtime uses this to register index providers without importing services/search.
 type SearchCoordinator interface {
 	RegisterIndexProvider(p IndexProvider)
+}
+
+// -------------------------
+// MCP coordination types
+// -------------------------
+
+// MCPToolInputSchema describes the input parameters for an MCP tool (JSON Schema).
+type MCPToolInputSchema struct {
+	Type       string                 `json:"type"`
+	Properties map[string]interface{} `json:"properties"`
+	Required   []string               `json:"required,omitempty"`
+}
+
+// MCPTool describes a single tool exposed to the LLM via the Model Context Protocol.
+type MCPTool struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	InputSchema MCPToolInputSchema `json:"inputSchema"`
+}
+
+// MCPToolProvider is implemented by services that expose tools to the LLM.
+type MCPToolProvider interface {
+	MCPTools() []MCPTool
+	HandleMCPToolCall(ctx context.Context, toolName string, args json.RawMessage) (string, error)
+}
+
+// MCPCoordinator is implemented by the llm service.
+// core/runtime uses this to register tool providers without importing services/llm.
+type MCPCoordinator interface {
+	RegisterMCPToolProvider(p MCPToolProvider)
 }

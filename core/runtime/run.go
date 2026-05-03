@@ -125,6 +125,15 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
+		// Check if service implements core.MCPToolProvider
+		if toolProv, ok := service.(core.MCPToolProvider); ok {
+			for _, other := range services {
+				if mcpCoord, ok := other.Service.(core.MCPCoordinator); ok {
+					mcpCoord.RegisterMCPToolProvider(toolProv)
+				}
+			}
+		}
+
 		services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
 
 		// If this is the sqlite coordinator, backfill previously created services
@@ -173,6 +182,15 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 				}
 				if panelProv, ok := other.Service.(core.PanelProvider); ok {
 					webuiCoord.RegisterPanelProvider(other.Config.Type, panelProv)
+				}
+			}
+		}
+
+		// If this is the MCP coordinator, backfill previously created services
+		if mcpCoord, ok := service.(core.MCPCoordinator); ok {
+			for _, other := range services[:len(services)-1] {
+				if toolProv, ok := other.Service.(core.MCPToolProvider); ok {
+					mcpCoord.RegisterMCPToolProvider(toolProv)
 				}
 			}
 		}
