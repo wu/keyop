@@ -1,3 +1,13 @@
+# [1.3.0](https://github.com/wu/keyop/compare/v1.2.0...v1.3.0) (2026-05-03)
+
+
+### Features
+
+* add copilot instructions and policies for repository management ([0f61b3c](https://github.com/wu/keyop/commit/0f61b3c871fa273c4ab457798b4d2a3768b32c43))
+* add MCP provider interface ([b1bf34b](https://github.com/wu/keyop/commit/b1bf34bb7032ea6ef10849043a6e1c5e01a4913b))
+* embed source temp event in metric event ([01b4cb6](https://github.com/wu/keyop/commit/01b4cb6a48d72bdd445726ae17eed516dfa07b55))
+* status event embeds source event in payload ([fa621d9](https://github.com/wu/keyop/commit/fa621d96e8e664d5faa3de1cecbe06d054741352))
+
 # [1.2.0](https://github.com/wu/keyop/compare/v1.1.0...v1.2.0) (2026-05-01)
 
 
