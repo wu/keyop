@@ -33,14 +33,31 @@ type DeviceStatusEvent struct {
 func (d DeviceStatusEvent) PayloadType() string { return "core.device.status.v1" }
 
 // MetricEvent represents a common event for metric data.
+// SourcePayloadType and SourcePayload optionally embed the originating sensor event
+// (e.g., TempEvent) so consumers can distinguish metric types without relying on naming conventions.
 type MetricEvent struct {
-	Hostname string  `json:"hostname,omitempty"`
-	Name     string  `json:"name"`
-	Value    float64 `json:"value"`
-	Unit     string  `json:"unit,omitempty"`
+	Hostname          string          `json:"hostname,omitempty"`
+	Name              string          `json:"name"`
+	Value             float64         `json:"value"`
+	Unit              string          `json:"unit,omitempty"`
+	SourcePayloadType string          `json:"sourcePayloadType,omitempty"`
+	SourcePayload     json.RawMessage `json:"sourcePayload,omitempty"`
 }
 
 func (m MetricEvent) PayloadType() string { return "core.metric.v1" }
+
+// ExtractMetricSourcePayload decodes the embedded source event from a MetricEvent into T.
+// Returns (nil, false) if no source payload is present or decoding fails.
+func ExtractMetricSourcePayload[T any](e *MetricEvent) (*T, bool) {
+	if e == nil || len(e.SourcePayload) == 0 || e.SourcePayloadType == "" {
+		return nil, false
+	}
+	var v T
+	if err := json.Unmarshal(e.SourcePayload, &v); err != nil {
+		return nil, false
+	}
+	return &v, true
+}
 
 // AlertEvent represents a common alert payload used by multiple services.
 //
