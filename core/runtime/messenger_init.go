@@ -88,6 +88,7 @@ func registerCorePayloadTypes(m *km.Messenger, _ core.Logger) error {
 		{"core.metric.v1", &core.MetricEvent{}},
 		{"core.alert.v1", &core.AlertEvent{}},
 		{"core.status.v1", &core.StatusEvent{}},
+		{"core.service.state.v1", &core.ServiceStateEvent{}},
 		{"core.error.v1", &core.ErrorEvent{}},
 		{"core.temp.v1", &core.TempEvent{}},
 		{"core.device.status.v1", &core.DeviceStatusEvent{}},

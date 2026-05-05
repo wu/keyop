@@ -124,6 +124,67 @@ func ExtractSourcePayload[T any](e *StatusEvent) (*T, bool) {
 	return &v, true
 }
 
+// ServiceStateEvent represents the aggregated state of a service or component as tracked by statusmon.
+// It includes the current status, problem tracking details, and acknowledgment state.
+// This event is emitted whenever a new StatusEvent arrives for a service, allowing other
+// services to track problem duration and acknowledgment state.
+// The originating StatusEvent is embedded for consumers that need access to the raw source data.
+type ServiceStateEvent struct {
+	Name            string          `json:"name"`                      // Service/component name
+	Hostname        string          `json:"hostname,omitempty"`        // Hostname where service originates
+	Status          string          `json:"status"`                    // Current status ("ok", "warning", "critical")
+	Details         string          `json:"details,omitempty"`         // Additional details
+	ProblemSince    time.Time       `json:"problemSince,omitempty"`    // When the current problem state started (zero if ok)
+	AlertSent       bool            `json:"alertSent,omitempty"`       // Whether an alert was already sent for this problem
+	LastAlertTime   time.Time       `json:"lastAlertTime,omitempty"`   // Time of last alert
+	AlertCount      int             `json:"alertCount,omitempty"`      // Number of alerts sent
+	Acknowledged    bool            `json:"acknowledged,omitempty"`    // Whether this problem has been acknowledged
+	LastSeen        time.Time       `json:"lastSeen,omitempty"`        // When we last saw an update for this service
+	StatusEventType string          `json:"statusEventType,omitempty"` // PayloadType() of the originating StatusEvent
+	StatusEvent     json.RawMessage `json:"statusEvent,omitempty"`     // JSON-encoded originating StatusEvent
+}
+
+func (s ServiceStateEvent) PayloadType() string { return "core.service.state.v1" }
+
+// MarshalJSON ensures that zero-value times are omitted from the JSON output.
+func (s ServiceStateEvent) MarshalJSON() ([]byte, error) {
+	type Alias ServiceStateEvent
+	aux := struct {
+		ProblemSince  *time.Time `json:"problemSince,omitempty"`
+		LastAlertTime *time.Time `json:"lastAlertTime,omitempty"`
+		LastSeen      *time.Time `json:"lastSeen,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(&s),
+	}
+
+	// Only include times if they're not zero values
+	if !s.ProblemSince.IsZero() {
+		aux.ProblemSince = &s.ProblemSince
+	}
+	if !s.LastAlertTime.IsZero() {
+		aux.LastAlertTime = &s.LastAlertTime
+	}
+	if !s.LastSeen.IsZero() {
+		aux.LastSeen = &s.LastSeen
+	}
+
+	return json.Marshal(aux)
+}
+
+// ExtractStatusEvent decodes the embedded status event from a ServiceStateEvent.
+// Returns (nil, false) if no status event is present or decoding fails.
+func ExtractStatusEvent(e *ServiceStateEvent) (*StatusEvent, bool) {
+	if e == nil || len(e.StatusEvent) == 0 {
+		return nil, false
+	}
+	var se StatusEvent
+	if err := json.Unmarshal(e.StatusEvent, &se); err != nil {
+		return nil, false
+	}
+	return &se, true
+}
+
 // TempEvent represents a temperature reading event that services can emit.
 // It carries temperature readings in both Celsius and Fahrenheit, plus metadata about the sensor.
 // TempEvent is only sent for successful readings; errors are reported as ErrorEvent.
