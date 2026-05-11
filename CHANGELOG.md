@@ -1,3 +1,11 @@
+# [1.4.0](https://github.com/wu/keyop/compare/v1.3.0...v1.4.0) (2026-05-11)
+
+
+### Features
+
+* add git operations utility functions for repository management ([ed64a91](https://github.com/wu/keyop/commit/ed64a9133a39f08485aa53c1fefbea1b9f25c2cb))
+* statusmon now publishes state event if enabled ([7f7d240](https://github.com/wu/keyop/commit/7f7d2403151b1bbb4d71159ddab007ab8088e220))
+
 # [1.3.0](https://github.com/wu/keyop/compare/v1.2.0...v1.3.0) (2026-05-03)
 
 
