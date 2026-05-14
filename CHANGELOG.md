@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/wu/keyop/compare/v1.4.0...v1.5.0) (2026-05-14)
+
+
+### Features
+
+* git identity configuration for journal autocommit ([f2164d7](https://github.com/wu/keyop/commit/f2164d7c935e876a6bb5dfd61e185c629b1d1d5f))
+
 # [1.4.0](https://github.com/wu/keyop/compare/v1.3.0...v1.4.0) (2026-05-11)
 
 
