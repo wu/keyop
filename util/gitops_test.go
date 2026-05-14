@@ -168,3 +168,57 @@ func TestGitCommitAll_CommitFails(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, commitErr)
 }
+
+// ── SetGitIdentity ───────────────────────────────────────────────────────────
+
+func TestSetGitIdentity_Success(t *testing.T) {
+	var cmds [][]string
+	fos := &testutil.FakeOsProvider{
+		CommandFunc: func(name string, args ...string) core.CommandApi {
+			cmds = append(cmds, append([]string{name}, args...))
+			return &testutil.FakeCommand{}
+		},
+	}
+	err := SetGitIdentity(fos, "/repo", "keyop", "keyop@localhost")
+	require.NoError(t, err)
+	require.Len(t, cmds, 2)
+	assert.Equal(t, []string{"git", "-C", "/repo", "config", "user.name", "keyop"}, cmds[0])
+	assert.Equal(t, []string{"git", "-C", "/repo", "config", "user.email", "keyop@localhost"}, cmds[1])
+}
+
+func TestSetGitIdentity_NameFails(t *testing.T) {
+	nameErr := errors.New("exit status 1")
+	fos := &testutil.FakeOsProvider{
+		CommandFunc: func(name string, args ...string) core.CommandApi {
+			return &testutil.FakeCommand{
+				CombinedOutputFunc: func() ([]byte, error) {
+					return []byte("fatal: not a git repository"), nameErr
+				},
+			}
+		},
+	}
+	err := SetGitIdentity(fos, "/repo", "keyop", "keyop@localhost")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, nameErr)
+}
+
+func TestSetGitIdentity_EmailFails(t *testing.T) {
+	emailErr := errors.New("exit status 1")
+	callCount := 0
+	fos := &testutil.FakeOsProvider{
+		CommandFunc: func(name string, args ...string) core.CommandApi {
+			callCount++
+			if callCount == 2 {
+				return &testutil.FakeCommand{
+					CombinedOutputFunc: func() ([]byte, error) {
+						return []byte("fatal: not a git repository"), emailErr
+					},
+				}
+			}
+			return &testutil.FakeCommand{}
+		},
+	}
+	err := SetGitIdentity(fos, "/repo", "keyop", "keyop@localhost")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, emailErr)
+}

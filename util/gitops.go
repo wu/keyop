@@ -28,6 +28,19 @@ func EnsureGitRepo(os core.OsProviderApi, dir string) error {
 	return nil
 }
 
+// SetGitIdentity sets user.name and user.email in the local repo config at dir.
+// Call this after EnsureGitRepo to guarantee commits succeed in environments
+// where no global git identity is configured (e.g. containers).
+func SetGitIdentity(os core.OsProviderApi, dir, name, email string) error {
+	if out, err := os.Command("git", "-C", dir, "config", "user.name", name).CombinedOutput(); err != nil {
+		return fmt.Errorf("git config user.name in %q: %w (output: %s)", dir, err, out)
+	}
+	if out, err := os.Command("git", "-C", dir, "config", "user.email", email).CombinedOutput(); err != nil {
+		return fmt.Errorf("git config user.email in %q: %w (output: %s)", dir, err, out)
+	}
+	return nil
+}
+
 // GitCommitAll stages all changes in dir with "git add -A" and commits with
 // message. Returns nil if there is nothing to commit.
 func GitCommitAll(os core.OsProviderApi, dir, message string) error {
