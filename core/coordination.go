@@ -14,6 +14,7 @@ import (
 // InsertContext provides metadata about a message being inserted into SQLite.
 type InsertContext struct {
 	Payload     interface{}
+	MessageID   string // UUID from the originating message
 	Timestamp   string // ISO 8601 string
 	Hostname    string
 	ServiceName string
