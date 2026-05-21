@@ -294,9 +294,14 @@ func PreprocessPlainLinks(content string) string {
 	return result
 }
 
-// PreprocessWikiLinks converts wiki-style links [[page title]] to markdown links with data attributes.
-// This allows for internal note linking with automatic note lookup by title.
-// Example: [[My Note]] becomes [My Note](#wiki-link "My Note")
+// PreprocessWikiLinks converts wiki-style links to markdown links.
+// Supports two formats:
+//  1. Internal reference format: [[source:id]] -> [source:id](#/source/id)
+//     Example: [[contacts:550e8400-e29b-41d4-a716-446655440000]] (UUID)
+//     Example: [[contacts:12]] (numeric ID)
+//  2. Wiki-link format: [[page title]] -> [page title](#wiki-link "page title")
+//     Example: [[My Note]] -> [My Note](#wiki-link "My Note")
+//
 // Properly handles multi-byte UTF-8 characters like emoji.
 // Note: [[toc]] is replaced with a placeholder before this function is called.
 func PreprocessWikiLinks(content string) string {
@@ -306,6 +311,19 @@ func PreprocessWikiLinks(content string) string {
 	result := pattern.ReplaceAllStringFunc(content, func(match string) string {
 		// Extract text between [[ and ]]
 		linkText := match[2 : len(match)-2]
+
+		// Check if it's a source:id format (e.g., contacts:12 or contacts:550e8400-e29b-41d4-a716-446655440000)
+		// Matches: source:id where source is alphanumeric with hyphens/underscores, id is anything except whitespace/brackets
+		sourcePattern := regexp.MustCompile(`^([a-z][a-z0-9_-]*):([^\s\]]+)$`)
+		if sourcePattern.MatchString(linkText) {
+			parts := sourcePattern.FindStringSubmatch(linkText)
+			source := parts[1]
+			id := parts[2]
+			// Convert to hash-based URL format for markdown (prevents browser treating it as external link)
+			return `[` + linkText + `](#/` + source + `/` + id + `)`
+		}
+
+		// Otherwise, treat it as a wiki-link (note title lookup)
 		return `[` + linkText + `](#wiki-link "` + linkText + `")`
 	})
 	return result

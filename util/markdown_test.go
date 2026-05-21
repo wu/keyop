@@ -505,6 +505,89 @@ func TestPreprocessWikiLinksWithEmoji(t *testing.T) {
 	}
 }
 
+func TestPreprocessWikiLinksWithSourceId(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple numeric ID",
+			input:    "See [[contacts:12]] for info",
+			expected: `See [contacts:12](#/contacts/12) for info`,
+		},
+		{
+			name:     "UUID-style ID",
+			input:    "Reference [[contacts:550e8400-e29b-41d4-a716-446655440000]]",
+			expected: `Reference [contacts:550e8400-e29b-41d4-a716-446655440000](#/contacts/550e8400-e29b-41d4-a716-446655440000)`,
+		},
+		{
+			name:     "source with hyphens",
+			input:    "Check [[my-service:42]]",
+			expected: `Check [my-service:42](#/my-service/42)`,
+		},
+		{
+			name:     "source with underscores",
+			input:    "View [[user_profile:123]]",
+			expected: `View [user_profile:123](#/user_profile/123)`,
+		},
+		{
+			name:     "source with mixed case in ID",
+			input:    "Reference [[api:abc123DEF]]",
+			expected: `Reference [api:abc123DEF](#/api/abc123DEF)`,
+		},
+		{
+			name:     "multiple source:id links",
+			input:    "See [[contacts:1]] and [[notes:99]]",
+			expected: `See [contacts:1](#/contacts/1) and [notes:99](#/notes/99)`,
+		},
+		{
+			name:     "mixed source:id and wiki-links",
+			input:    "Check [[service:123]] and [[My Note]]",
+			expected: `Check [service:123](#/service/123) and [My Note](#wiki-link "My Note")`,
+		},
+		{
+			name:     "source:id with alphanumeric ID",
+			input:    "Get [[endpoint:v2_prod_1a]]",
+			expected: `Get [endpoint:v2_prod_1a](#/endpoint/v2_prod_1a)`,
+		},
+		{
+			name:     "invalid: source:id with spaces in source",
+			input:    "Bad [[bad source:123]]",
+			expected: `Bad [bad source:123](#wiki-link "bad source:123")`,
+		},
+		{
+			name:     "invalid: uppercase source prefix",
+			input:    "Invalid [[Contacts:50]]",
+			expected: `Invalid [Contacts:50](#wiki-link "Contacts:50")`,
+		},
+		{
+			name:     "source:id with colons in ID part",
+			input:    "Version [[source:id:extra]]",
+			expected: `Version [source:id:extra](#/source/id:extra)`,
+		},
+		{
+			name:     "source:id in sentence context",
+			input:    "To find the contact, use [[contacts:550e8400-e29b-41d4-a716-446655440000]] and then check status.",
+			expected: `To find the contact, use [contacts:550e8400-e29b-41d4-a716-446655440000](#/contacts/550e8400-e29b-41d4-a716-446655440000) and then check status.`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PreprocessWikiLinks(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRenderMarkdownWithSourceIdLinks(t *testing.T) {
+	html, err := RenderMarkdown("See [[contacts:123]] for more info")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "#/contacts/123")
+	assert.Contains(t, html, "contacts:123")
+}
+
 func TestRenderMarkdownWithEmoji(t *testing.T) {
 	tests := []struct {
 		name     string
