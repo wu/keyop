@@ -27,6 +27,14 @@ type SchemaProvider interface {
 	SQLiteInsert(ctx *InsertContext) (query string, args []any)
 }
 
+// SQLiteMigrator is an optional interface for services that need to run
+// imperative data migrations after their schema DDL has been applied.
+// The SQLite service calls SQLiteMigrate immediately after executing a
+// provider's SQLiteSchema(), while the DB is guaranteed to be open.
+type SQLiteMigrator interface {
+	SQLiteMigrate(db *sql.DB, logger Logger) error
+}
+
 // SQLiteConsumer is implemented by services that need a SQLite DB handle.
 type SQLiteConsumer interface {
 	SetSQLiteDB(db **sql.DB)
