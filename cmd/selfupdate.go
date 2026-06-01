@@ -3,14 +3,16 @@ package cmd
 import (
 	"compress/gzip"
 	"fmt"
-	"github.com/wu/keyop/core"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/wu/keyop/core"
 )
 
 // NewSelfUpdateCmd builds a self-update command that downloads and installs updates.
@@ -32,7 +34,7 @@ func runSelfUpdate(deps core.Dependencies) error {
 func runSelfUpdateWithURL(deps core.Dependencies, baseURL string) error {
 	logger := deps.MustGetLogger()
 
-	url := fmt.Sprintf("%s/keyop-%s-%s.gz", baseURL, runtime.GOOS, runtime.GOARCH)
+	url := fmt.Sprintf("%s/keyop-%s-%s.gz", baseURL, runtime.GOOS, selfUpdateArch())
 	logger.Info("Downloading update", "url", url)
 
 	resp, err := http.Get(url) //nolint:gosec // URL is internal and not user-controlled
@@ -123,6 +125,26 @@ func installUpdate(logger core.Logger, gzReader io.Reader, exePath string) error
 
 	logger.Info("Update successful")
 	return nil
+}
+
+// selfUpdateArch returns the arch component for the download URL.
+// On ARM it reads uname -m to distinguish arm6 from arm7.
+func selfUpdateArch() string {
+	if runtime.GOARCH != "arm" {
+		return runtime.GOARCH
+	}
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return runtime.GOARCH
+	}
+	switch strings.TrimSpace(string(out)) {
+	case "armv6l":
+		return "arm6"
+	case "armv7l":
+		return "arm7"
+	default:
+		return runtime.GOARCH
+	}
 }
 
 type progressReader struct {
