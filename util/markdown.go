@@ -64,6 +64,9 @@ func RenderMarkdown(content string) (string, error) {
 	content = PreprocessPlainLinks(content)
 	// Convert wiki-style links to markdown links
 	content = PreprocessWikiLinks(content)
+	// Protect math expressions from goldmark and record them for post-processing.
+	var mathMap map[string]mathEntry
+	content, mathMap = preprocessMath(content)
 
 	// Build extensions list
 	// Note: We don't use goldmark's TOC extender because we generate the TOC manually
@@ -71,6 +74,8 @@ func RenderMarkdown(content string) (string, error) {
 	// at the beginning, which complicates removal.
 	extensions := []goldmark.Extender{
 		extension.Table,
+		extension.TaskList,
+		extension.Strikethrough,
 		&anchor.Extender{},
 		highlighting.NewHighlighting(
 			highlighting.WithCustomStyle(customMonokaiStyle),
@@ -96,6 +101,9 @@ func RenderMarkdown(content string) (string, error) {
 	}
 
 	html := buf.String()
+
+	// Restore math expressions as rendered HTML.
+	html = restoreMath(html, mathMap)
 
 	// Remove the paragraph symbol (¶) from anchor links while keeping the link functionality
 	html = strings.ReplaceAll(html, ">¶</a>", "></a>")
@@ -174,7 +182,44 @@ func RenderMarkdown(content string) (string, error) {
 		}
 	}
 
+	html = postProcessGitHubAlerts(html)
+
 	return html, nil
+}
+
+var githubAlertPattern = regexp.MustCompile(`(?s)<blockquote>\n<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\n?(.*?)</blockquote>`)
+
+var githubAlertTitles = map[string]string{
+	"NOTE":      "Note",
+	"TIP":       "Tip",
+	"IMPORTANT": "Important",
+	"WARNING":   "Warning",
+	"CAUTION":   "Caution",
+}
+
+// postProcessGitHubAlerts converts GitHub-style alert blockquotes to styled divs.
+// Handles: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
+func postProcessGitHubAlerts(html string) string {
+	return githubAlertPattern.ReplaceAllStringFunc(html, func(match string) string {
+		m := githubAlertPattern.FindStringSubmatch(match)
+		if len(m) < 3 {
+			return match
+		}
+		alertType := m[1]
+		rest := m[2] // content after "[!TYPE]" up to (not including) </blockquote>
+		cssClass := strings.ToLower(alertType)
+		title := githubAlertTitles[alertType]
+
+		var body string
+		if strings.HasPrefix(rest, "</p>") {
+			// Type was alone on its line; rest starts with </p> followed by more paragraphs
+			body = rest[4:]
+		} else {
+			body = "<p>" + rest
+		}
+
+		return fmt.Sprintf(`<div class="markdown-alert markdown-alert-%s"><p class="markdown-alert-title">%s</p>%s</div>`, cssClass, title, body)
+	})
 }
 
 // PreprocessMarkdownLists ensures blank lines between list items create separate lists.
@@ -184,9 +229,36 @@ func PreprocessMarkdownLists(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 	var inList bool
+	inCodeBlock := false
+	codeBlockFence := ""
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
+
+		// Track fenced code block boundaries so we never insert gap divs inside them.
+		if !inCodeBlock {
+			if strings.HasPrefix(trimmed, "```") {
+				inCodeBlock = true
+				codeBlockFence = "```"
+				inList = false
+				result = append(result, line)
+				continue
+			} else if strings.HasPrefix(trimmed, "~~~") {
+				inCodeBlock = true
+				codeBlockFence = "~~~"
+				inList = false
+				result = append(result, line)
+				continue
+			}
+		} else {
+			if trimmed == codeBlockFence {
+				inCodeBlock = false
+				codeBlockFence = ""
+			}
+			result = append(result, line)
+			continue
+		}
+
 		isListItem := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
 		isBlank := trimmed == ""
 
@@ -249,8 +321,7 @@ func PreprocessPlainLinks(content string) string {
 	})
 
 	// Protect multi-line code blocks from URL processing
-	// Matches ``` code ``` or ~~~ code ~~~
-	codeBlockPattern := regexp.MustCompile("(?:```|~~~)[\\s\\S]*?(?:```|~~~)")
+	codeBlockPattern := regexp.MustCompile("(?m)^```[^\\n]*\\n[\\s\\S]*?^```\\s*$|^~~~[^\\n]*\\n[\\s\\S]*?^~~~\\s*$")
 	result = codeBlockPattern.ReplaceAllStringFunc(result, func(match string) string {
 		key := fmt.Sprintf("__PROTECTED_CODE_BLOCK_%d__", protectKey)
 		protectedLinks[key] = match

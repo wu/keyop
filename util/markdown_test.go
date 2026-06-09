@@ -2,6 +2,7 @@
 package util
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1258,4 +1259,435 @@ Final content.`
 	assert.Contains(t, html, "Some content here", "Should have content for section 1")
 	assert.Contains(t, html, "More content", "Should have content for section 2")
 	assert.Contains(t, html, "Final content", "Should have content for section 3")
+}
+
+func TestRenderMarkdownNoKMCODEInOutput(t *testing.T) {
+	// A bash block containing embedded triple backticks (e.g. a script that generates
+	// markdown) used to confuse the old fence regex, leaving KMCODExxx...xxxKMCODE
+	// placeholders visible in the rendered output.
+	input := "## Setup\n\n" +
+		"```bash\n" +
+		"cat > README.md << 'EOF'\n" +
+		"```go\n" +
+		"fmt.Println(\"hello\")\n" +
+		"```\n" +
+		"EOF\n" +
+		"```\n\n" +
+		"Done.\n"
+
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.NotContains(t, html, "KMCODE")
+	assert.NotContains(t, html, "KMATH")
+	assert.Contains(t, html, "Done.")
+}
+
+func TestRenderMarkdownManyCodeBlocksNoKMCODE(t *testing.T) {
+	// Regression test: long documents with many bash blocks (high pCounter values)
+	// should never leak KMCODE placeholders into the output.
+	var sb strings.Builder
+	for i := 0; i < 20; i++ {
+		sb.WriteString(fmt.Sprintf("## Section %d\n\n", i+1))
+		sb.WriteString("```bash\n")
+		sb.WriteString(fmt.Sprintf("echo 'hello %d'\nls -la\n", i+1))
+		sb.WriteString("```\n\n")
+		sb.WriteString(fmt.Sprintf("Run `command-%d` to proceed.\n\n", i+1))
+	}
+	html, err := RenderMarkdown(sb.String())
+	assert.NoError(t, err)
+	assert.NotContains(t, html, "KMCODE")
+	assert.NotContains(t, html, "KMATH")
+}
+
+func TestRenderMarkdownStrikethrough(t *testing.T) {
+	html, err := RenderMarkdown("This is ~~deleted~~ text.")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<del>deleted</del>")
+}
+
+func TestRenderMarkdownGitHubAlerts(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		wantClass   string
+		wantTitle   string
+		wantContent string
+	}{
+		{
+			name:        "note alert",
+			input:       "> [!NOTE]\n> This is a note.",
+			wantClass:   "markdown-alert-note",
+			wantTitle:   "Note",
+			wantContent: "This is a note.",
+		},
+		{
+			name:        "warning alert",
+			input:       "> [!WARNING]\n> Be careful here.",
+			wantClass:   "markdown-alert-warning",
+			wantTitle:   "Warning",
+			wantContent: "Be careful here.",
+		},
+		{
+			name:        "tip alert",
+			input:       "> [!TIP]\n> Here's a helpful tip.",
+			wantClass:   "markdown-alert-tip",
+			wantTitle:   "Tip",
+			wantContent: "Here's a helpful tip.",
+		},
+		{
+			name:        "important alert",
+			input:       "> [!IMPORTANT]\n> This matters.",
+			wantClass:   "markdown-alert-important",
+			wantTitle:   "Important",
+			wantContent: "This matters.",
+		},
+		{
+			name:        "caution alert",
+			input:       "> [!CAUTION]\n> Danger zone.",
+			wantClass:   "markdown-alert-caution",
+			wantTitle:   "Caution",
+			wantContent: "Danger zone.",
+		},
+		{
+			name:        "alert with bold content",
+			input:       "> [!NOTE]\n> This has **bold** text.",
+			wantClass:   "markdown-alert-note",
+			wantTitle:   "Note",
+			wantContent: "<strong>bold</strong>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			html, err := RenderMarkdown(tt.input)
+			assert.NoError(t, err)
+			assert.Contains(t, html, `class="markdown-alert `+tt.wantClass+`"`)
+			assert.Contains(t, html, `class="markdown-alert-title"`)
+			assert.Contains(t, html, tt.wantTitle)
+			assert.Contains(t, html, tt.wantContent)
+			assert.NotContains(t, html, "<blockquote>")
+		})
+	}
+}
+
+func TestRenderMarkdownGitHubAlertMultiParagraph(t *testing.T) {
+	input := "> [!NOTE]\n>\n> Second paragraph here."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "markdown-alert-note")
+	assert.Contains(t, html, "Second paragraph here.")
+	assert.NotContains(t, html, "<blockquote>")
+}
+
+// ── Basic markdown elements ───────────────────────────────────────────────────
+
+func TestRenderMarkdownTaskList(t *testing.T) {
+	html, err := RenderMarkdown("- [ ] unchecked\n- [x] checked\n- [X] also checked\n- plain item")
+	assert.NoError(t, err)
+	// goldmark TaskList renders checkboxes as disabled inputs
+	assert.Contains(t, html, `type="checkbox"`)
+	assert.Contains(t, html, `disabled`)
+	assert.Contains(t, html, `checked`)
+	assert.Contains(t, html, "unchecked")
+	assert.Contains(t, html, "plain item")
+}
+
+func TestRenderMarkdownOrderedList(t *testing.T) {
+	html, err := RenderMarkdown("1. first\n2. second\n3. third")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<ol>")
+	assert.Contains(t, html, "<li>first</li>")
+	assert.Contains(t, html, "<li>second</li>")
+	assert.Contains(t, html, "<li>third</li>")
+}
+
+func TestRenderMarkdownInlineCode(t *testing.T) {
+	html, err := RenderMarkdown("Run `git status` to check.")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<code>git status</code>")
+}
+
+func TestRenderMarkdownBlockquote(t *testing.T) {
+	html, err := RenderMarkdown("> This is a quote.\n> It continues here.")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<blockquote>")
+	assert.Contains(t, html, "This is a quote.")
+	assert.Contains(t, html, "It continues here.")
+}
+
+func TestRenderMarkdownHorizontalRule(t *testing.T) {
+	for _, input := range []string{"---\n", "***\n", "___\n"} {
+		html, err := RenderMarkdown("before\n\n" + input + "\nafter")
+		assert.NoError(t, err)
+		assert.Contains(t, html, "<hr", "horizontal rule not found for input: "+input)
+	}
+}
+
+func TestRenderMarkdownHardLineBreak(t *testing.T) {
+	// Two trailing spaces force a hard line break in CommonMark
+	html, err := RenderMarkdown("line one  \nline two")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<br")
+	assert.Contains(t, html, "line one")
+	assert.Contains(t, html, "line two")
+}
+
+func TestRenderMarkdownRawHTMLPassthrough(t *testing.T) {
+	// WithUnsafe() is set, so raw HTML should pass through unchanged.
+	html, err := RenderMarkdown(`<div class="custom">hello</div>`)
+	assert.NoError(t, err)
+	assert.Contains(t, html, `<div class="custom">hello</div>`)
+}
+
+// ── Tilde code blocks ─────────────────────────────────────────────────────────
+
+func TestRenderMarkdownTildeCodeBlock(t *testing.T) {
+	html, err := RenderMarkdown("~~~bash\necho hello\n~~~")
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<pre")
+	// "echo" may be syntax-highlighted into a span; check words individually
+	assert.Contains(t, html, "echo")
+	assert.Contains(t, html, "hello")
+	assert.NotContains(t, html, "KMCODE")
+}
+
+func TestRenderMarkdownTildeCodeBlockURLNotLinkified(t *testing.T) {
+	html, err := RenderMarkdown("~~~\nhttps://example.com\n~~~")
+	assert.NoError(t, err)
+	// URL inside a tilde code block must not become an anchor tag
+	assert.NotContains(t, html, "<a href")
+	assert.Contains(t, html, "https://example.com")
+}
+
+func TestRenderMarkdownTildeCodeBlockMathNotProcessed(t *testing.T) {
+	html, err := RenderMarkdown("~~~\n$x + y$\n~~~")
+	assert.NoError(t, err)
+	assert.NotContains(t, html, "math-inline")
+	assert.Contains(t, html, "$x + y$")
+}
+
+// ── PreprocessMarkdownLists code block awareness ──────────────────────────────
+
+func TestPreprocessMarkdownListsSkipsFencedCodeBlock(t *testing.T) {
+	// List items inside a fenced code block must not trigger gap-div insertion.
+	input := "```bash\n- opt1\n\n- opt2\n```"
+	result := PreprocessMarkdownLists(input)
+	assert.Equal(t, input, result, "code block content should be left unchanged")
+	assert.NotContains(t, result, "list-group-gap")
+}
+
+func TestPreprocessMarkdownListsSkipsTildeCodeBlock(t *testing.T) {
+	input := "~~~bash\n- opt1\n\n- opt2\n~~~"
+	result := PreprocessMarkdownLists(input)
+	assert.Equal(t, input, result)
+	assert.NotContains(t, result, "list-group-gap")
+}
+
+func TestPreprocessMarkdownListsCodeBlockThenList(t *testing.T) {
+	// Lists AFTER a code block should still be processed normally.
+	input := "```\n- a\n\n- b\n```\n\n- x\n\n- y"
+	result := PreprocessMarkdownLists(input)
+	assert.NotContains(t, result, "list-group-gap\n\n- b", "gap should not appear inside code block")
+	// The x/y list outside the block should have a gap
+	assert.Contains(t, result, "list-group-gap")
+	lines := strings.Split(result, "\n")
+	// Code block content must be unchanged
+	assert.Equal(t, "- a", lines[1])
+	assert.Equal(t, "", lines[2])
+	assert.Equal(t, "- b", lines[3])
+}
+
+func TestRenderMarkdownCodeBlockWithListItemsUnchanged(t *testing.T) {
+	// End-to-end: a code block containing list-like content must render
+	// without gap-div text appearing in the code block output.
+	input := "```bash\n# install flags:\n- --verbose\n\n- --debug\n```"
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.NotContains(t, html, "list-group-gap")
+	assert.Contains(t, html, "--verbose")
+	assert.Contains(t, html, "--debug")
+}
+
+// ── GitHub alert edge cases ───────────────────────────────────────────────────
+
+func TestRenderMarkdownMultipleAlerts(t *testing.T) {
+	input := "> [!NOTE]\n> First alert.\n\n> [!WARNING]\n> Second alert."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "markdown-alert-note")
+	assert.Contains(t, html, "markdown-alert-warning")
+	assert.Contains(t, html, "First alert.")
+	assert.Contains(t, html, "Second alert.")
+}
+
+func TestRenderMarkdownAlertWithInlineCode(t *testing.T) {
+	input := "> [!NOTE]\n> Run `make build` first."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "markdown-alert-note")
+	assert.Contains(t, html, "<code>make build</code>")
+}
+
+func TestRenderMarkdownAlertWithLink(t *testing.T) {
+	input := "> [!TIP]\n> See [the docs](https://example.com) for details."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "markdown-alert-tip")
+	assert.Contains(t, html, `href="https://example.com"`)
+}
+
+func TestRenderMarkdownAlertAtEndOfDocument(t *testing.T) {
+	// Alert as the last element, no trailing newline
+	input := "Some text.\n\n> [!CAUTION]\n> Be careful."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "markdown-alert-caution")
+	assert.Contains(t, html, "Be careful.")
+}
+
+func TestRenderMarkdownRegularBlockquoteNotConvertedToAlert(t *testing.T) {
+	// A plain blockquote must not be mistaken for an alert.
+	input := "> This is just a regular quote."
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<blockquote>")
+	assert.NotContains(t, html, "markdown-alert")
+}
+
+func TestRenderMarkdownAlertLowercaseNotConverted(t *testing.T) {
+	// Lowercase [!note] is not a valid GitHub alert — must stay as blockquote.
+	input := "> [!note]\n> lowercase type"
+	html, err := RenderMarkdown(input)
+	assert.NoError(t, err)
+	assert.Contains(t, html, "<blockquote>")
+	assert.NotContains(t, html, "markdown-alert")
+}
+
+// ── Math rendering ────────────────────────────────────────────────────────────
+
+func TestRenderMarkdown_MathInline(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+		absent   []string
+	}{
+		{
+			name:     "arrow command",
+			input:    "$\\rightarrow$",
+			contains: []string{`class="math-inline"`, "→"},
+			absent:   []string{"$\\rightarrow$"},
+		},
+		{
+			name:     "arithmetic expression",
+			input:    "$1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 = ?$",
+			contains: []string{`class="math-inline"`, "1 + 1", "= ?"},
+			absent:   []string{"$1 + 1"},
+		},
+		{
+			name:     "expression starting with operator",
+			input:    "$+ 1$",
+			contains: []string{`class="math-inline"`, "+ 1"},
+			absent:   []string{"$+ 1$"},
+		},
+		{
+			name:     "sequence with dots command",
+			input:    "$0, 1, 1, 2, 3, 5, 8, 13 \\dots$",
+			contains: []string{`class="math-inline"`, "…"},
+			absent:   []string{"$0, 1"},
+		},
+		{
+			name:     "single variable",
+			input:    "Let $x$ be a variable",
+			contains: []string{`class="math-inline"`, ">x<"},
+		},
+		{
+			name:     "superscript",
+			input:    "$x^{2}$",
+			contains: []string{"<sup>2</sup>"},
+		},
+		{
+			name:     "subscript",
+			input:    "$a_{i}$",
+			contains: []string{"<sub>i</sub>"},
+		},
+		{
+			name:     "greek letter",
+			input:    "$\\alpha$",
+			contains: []string{"α"},
+		},
+		{
+			name:     "fraction",
+			input:    "$\\frac{a}{b}$",
+			contains: []string{"<sup>a</sup>", "<sub>b</sub>"},
+		},
+		{
+			name:     "mathbb R",
+			input:    "$\\mathbb{R}$",
+			contains: []string{"ℝ"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			html, err := RenderMarkdown(tt.input)
+			assert.NoError(t, err)
+			for _, want := range tt.contains {
+				assert.Contains(t, html, want)
+			}
+			for _, unwanted := range tt.absent {
+				assert.NotContains(t, html, unwanted)
+			}
+		})
+	}
+}
+
+func TestRenderMarkdown_MathDisplay(t *testing.T) {
+	html, err := RenderMarkdown("$$E = mc^2$$")
+	assert.NoError(t, err)
+	assert.Contains(t, html, `class="math-display"`)
+	assert.Contains(t, html, "E = mc")
+	assert.NotContains(t, html, "$$")
+}
+
+func TestRenderMarkdown_MathNotInCode(t *testing.T) {
+	// $...$ inside a fenced code block must not be processed.
+	html, err := RenderMarkdown("```\n$\\rightarrow$\n```")
+	assert.NoError(t, err)
+	assert.NotContains(t, html, `class="math-inline"`)
+	assert.Contains(t, html, `\rightarrow`)
+}
+
+func TestRenderMarkdown_MathNotInInlineCode(t *testing.T) {
+	// $...$ inside backtick code must not be processed.
+	html, err := RenderMarkdown("Use `$x$` in code")
+	assert.NoError(t, err)
+	assert.NotContains(t, html, `class="math-inline"`)
+}
+
+func TestRenderMathExpression(t *testing.T) {
+	tests := []struct {
+		latex    string
+		display  bool
+		contains []string
+	}{
+		{"\\rightarrow", false, []string{"→", `class="math-inline"`}},
+		{"\\dots", false, []string{"…"}},
+		{"\\alpha + \\beta", false, []string{"α", "β"}},
+		{"x^{2}", false, []string{"<sup>2</sup>"}},
+		{"a_{n}", false, []string{"<sub>n</sub>"}},
+		{"\\frac{1}{2}", false, []string{"<sup>1</sup>", "<sub>2</sub>"}},
+		{"\\mathbb{R}", false, []string{"ℝ"}},
+		{"E = mc^2", true, []string{`class="math-display"`, "E = mc"}},
+		{"a < b", false, []string{"&lt;"}}, // HTML-escaped
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.latex, func(t *testing.T) {
+			result := renderMathExpression(tt.latex, tt.display)
+			for _, want := range tt.contains {
+				assert.Contains(t, result, want)
+			}
+		})
+	}
 }
