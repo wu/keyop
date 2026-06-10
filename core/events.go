@@ -66,13 +66,15 @@ func ExtractMetricSourcePayload[T any](e *MetricEvent) (*T, bool) {
 // document for more details.  The "level" field is optional but can be used to indicate
 // the severity of the alert (e.g., "info", "warning", "critical").
 // Timestamp indicates when the alert event was created, and Hostname indicates
-// the instance name from the messaging library.
+// the instance name from the messaging library. Link is an optional URL that can be
+// used to navigate to related content (e.g., the article in an RSS alert).
 type AlertEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 	Hostname  string    `json:"hostname,omitempty"`
 	Summary   string    `json:"summary"`
 	Text      string    `json:"text"`
 	Level     string    `json:"level,omitempty"` // e.g., "info", "warning", "critical"
+	Link      string    `json:"link,omitempty"`
 }
 
 func (a AlertEvent) PayloadType() string { return "core.alert.v1" }
