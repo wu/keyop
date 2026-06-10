@@ -17,6 +17,7 @@ type Service interface {
 type StateStoreApi interface {
 	Save(key string, value interface{}) error
 	Load(key string, value interface{}) error
+	Delete(key string) error
 }
 
 // ServiceConfig holds configuration for a service, including channels and arbitrary config.

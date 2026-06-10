@@ -126,4 +126,44 @@ func TestFileStateStore(t *testing.T) {
 		err = store.Load(key, &val)
 		assert.Error(t, err)
 	})
+
+	t.Run("Delete existing file", func(t *testing.T) {
+		key := "to_delete"
+		val := "test_data"
+
+		// Save the file first
+		err := store.Save(key, val)
+		require.NoError(t, err)
+
+		// Verify it exists
+		path := filepath.Join(tmpDir, "state_"+key+".json")
+		_, err = os.Stat(path)
+		assert.NoError(t, err)
+
+		// Delete it
+		err = store.Delete(key)
+		assert.NoError(t, err)
+
+		// Verify it no longer exists
+		_, err = os.Stat(path)
+		assert.True(t, os.IsNotExist(err))
+	})
+
+	t.Run("Delete non-existent file", func(t *testing.T) {
+		key := "does_not_exist_for_delete"
+		err := store.Delete(key)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Delete error - permission denied", func(t *testing.T) {
+		mockOs := testutil.FakeOsProvider{
+			RemoveFunc: func(_ string) error {
+				return os.ErrPermission
+			},
+		}
+		s := NewFileStateStore("/tmp", mockOs)
+		err := s.Delete("test")
+		assert.Error(t, err)
+		assert.Equal(t, os.ErrPermission, err)
+	})
 }

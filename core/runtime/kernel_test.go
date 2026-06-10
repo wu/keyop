@@ -158,6 +158,13 @@ func (m *mockStateStore) Load(key string, value interface{}) error {
 	return nil
 }
 
+func (m *mockStateStore) Delete(key string) error {
+	if m.data != nil {
+		delete(m.data, key)
+	}
+	return nil
+}
+
 func TestStartKernelStateCache(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		deps := getDefaultTestDeps()

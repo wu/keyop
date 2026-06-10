@@ -1287,11 +1287,11 @@ func TestRenderMarkdownManyCodeBlocksNoKMCODE(t *testing.T) {
 	// should never leak KMCODE placeholders into the output.
 	var sb strings.Builder
 	for i := 0; i < 20; i++ {
-		sb.WriteString(fmt.Sprintf("## Section %d\n\n", i+1))
+		fmt.Fprintf(&sb, "## Section %d\n\n", i+1)
 		sb.WriteString("```bash\n")
-		sb.WriteString(fmt.Sprintf("echo 'hello %d'\nls -la\n", i+1))
+		fmt.Fprintf(&sb, "echo 'hello %d'\nls -la\n", i+1)
 		sb.WriteString("```\n\n")
-		sb.WriteString(fmt.Sprintf("Run `command-%d` to proceed.\n\n", i+1))
+		fmt.Fprintf(&sb, "Run `command-%d` to proceed.\n\n", i+1)
 	}
 	html, err := RenderMarkdown(sb.String())
 	assert.NoError(t, err)

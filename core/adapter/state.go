@@ -77,5 +77,15 @@ func (s *FileStateStore) Load(key string, value interface{}) error {
 	return decoder.Decode(value)
 }
 
+// Delete removes the state file identified by key. Returns nil if the file does not exist.
+func (s *FileStateStore) Delete(key string) error {
+	path := s.getFilePath(key)
+	err := s.os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 // Compile-time check that FileStateStore satisfies core.StateStoreApi.
 var _ core.StateStoreApi = (*FileStateStore)(nil)

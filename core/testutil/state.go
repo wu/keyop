@@ -7,6 +7,7 @@ type NoOpStateStore struct{}
 
 func (s *NoOpStateStore) Save(_ string, _ interface{}) error { return nil }
 func (s *NoOpStateStore) Load(_ string, _ interface{}) error { return nil }
+func (s *NoOpStateStore) Delete(_ string) error              { return nil }
 
 // Compile-time check that *NoOpStateStore satisfies core.StateStoreApi.
 var _ core.StateStoreApi = (*NoOpStateStore)(nil)
