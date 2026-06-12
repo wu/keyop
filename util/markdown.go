@@ -310,8 +310,20 @@ func PreprocessPlainLinks(content string) string {
 		return key
 	})
 
-	// Protect inline code blocks (backticks) from URL processing
-	// Matches `any text including urls`
+	// Protect multi-line fenced code blocks FIRST (before inline code)
+	// This must happen before inline code protection to prevent inline code regex from
+	// breaking apart triple backticks (matching `` ` ` ` ` separately instead of ` ``` `)
+	// Allow optional leading whitespace (for indented code blocks in lists, etc.)
+	codeBlockPattern := regexp.MustCompile("(?m)^[ \\t]*```[^\\n]*\\n[\\s\\S]*?^[ \\t]*```\\s*$|^[ \\t]*~~~[^\\n]*\\n[\\s\\S]*?^[ \\t]*~~~\\s*$")
+	result = codeBlockPattern.ReplaceAllStringFunc(result, func(match string) string {
+		key := fmt.Sprintf("__PROTECTED_CODE_BLOCK_%d__", protectKey)
+		protectedLinks[key] = match
+		protectKey++
+		return key
+	})
+
+	// Protect inline code blocks (backticks) SECOND
+	// Matches `any text including urls` but won't match backticks inside protected code blocks
 	inlineCodePattern := regexp.MustCompile("`[^`]*`")
 	result = inlineCodePattern.ReplaceAllStringFunc(result, func(match string) string {
 		key := fmt.Sprintf("__PROTECTED_CODE_%d__", protectKey)
@@ -320,23 +332,17 @@ func PreprocessPlainLinks(content string) string {
 		return key
 	})
 
-	// Protect multi-line code blocks from URL processing
-	codeBlockPattern := regexp.MustCompile("(?m)^```[^\\n]*\\n[\\s\\S]*?^```\\s*$|^~~~[^\\n]*\\n[\\s\\S]*?^~~~\\s*$")
-	result = codeBlockPattern.ReplaceAllStringFunc(result, func(match string) string {
-		key := fmt.Sprintf("__PROTECTED_CODE_BLOCK_%d__", protectKey)
-		protectedLinks[key] = match
-		protectKey++
-		return key
-	})
-
-	// Protect indented code blocks (lines starting with 4+ spaces)
+	// Protect indented code blocks LAST (lines starting with 4+ spaces)
+	// Skip lines that are list items or already protected as code blocks
 	// BUT: Don't protect lines that are list items (indented - or *)
 	lines := strings.Split(result, "\n")
 	for i, line := range lines {
 		if len(line) >= 4 && strings.HasPrefix(line, "    ") {
 			trimmed := strings.TrimSpace(line)
+			// Skip list items, and skip already-protected code block placeholders
 			isListItem := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
-			if !isListItem {
+			isProtected := strings.Contains(line, "__PROTECTED_CODE")
+			if !isListItem && !isProtected {
 				key := fmt.Sprintf("__PROTECTED_INDENT_CODE_%d__", protectKey)
 				protectedLinks[key] = line
 				protectKey++

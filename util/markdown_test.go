@@ -1691,3 +1691,121 @@ func TestRenderMathExpression(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderMarkdown_IndentedFencedCodeInList(t *testing.T) {
+	// Regression test for issue where indented fenced code blocks in lists
+	// were not properly protected, causing PROTECTED_CODE placeholders to appear in output.
+	// This occurs in lists where the code block is indented (e.g., nested list items).
+	markdown := "1.  **Initialize Modules:** Make sure you have a `go.mod` file.\n" +
+		"    ```bash\n" +
+		"    go mod tidy\n" +
+		"    ```\n" +
+		"2.  **Next Step:** Run the build.\n" +
+		"    ```bash\n" +
+		"    go build\n" +
+		"    ```\n"
+
+	html, err := RenderMarkdown(markdown)
+	assert.NoError(t, err)
+
+	// Should not contain any placeholder tokens
+	assert.NotContains(t, html, "PROTECTED_CODE", "Placeholder tokens should not appear in rendered HTML")
+	assert.NotContains(t, html, "__PROTECTED", "Protected placeholders should not leak through")
+	assert.NotContains(t, html, "KMCODExxx", "Math code placeholders should not appear")
+	assert.NotContains(t, html, "KMATHxxx", "Math placeholders should not appear")
+
+	// Should contain the actual code content (may be in syntax-highlighted HTML with spans)
+	assert.Contains(t, html, "mod tidy", "Code content 'mod tidy' should be in output")
+	assert.Contains(t, html, "build", "Code content 'build' should be in output")
+
+	// Should contain proper list and code block structure
+	assert.Contains(t, html, "<li>", "Should have list items")
+	assert.Contains(t, html, "<pre", "Should have code blocks (may include style attribute)")
+	assert.Contains(t, html, "<code>", "Should have code elements")
+}
+
+func TestRenderMarkdown_MixedInlineAndFencedCode(t *testing.T) {
+	// Regression test for issue where inline code backticks would interfere with fenced code blocks
+	// The inline code regex `[^`]*` could match parts of triple backticks if not protected in correct order.
+	markdown := "**The Update Cycle:**\n" +
+		"1.  **Update the specific dependency:**\n" +
+		"    ```bash\n" +
+		"    go get github.com/package/name@v1.2.3\n" +
+		"    ```\n" +
+		"2.  **Clean up the module file:**\n" +
+		"    ```bash\n" +
+		"    go mod tidy\n" +
+		"    ```\n" +
+		"3.  **Refresh the vendor directory:**\n" +
+		"    ```bash\n" +
+		"    go mod vendor\n" +
+		"    ```\n" +
+		"4.  **Commit the changes:** You must commit both the updated `go.mod`, `go.sum`, and the updated `vendor/` directory.\n"
+
+	html, err := RenderMarkdown(markdown)
+	assert.NoError(t, err)
+
+	// Should not contain any placeholder tokens in any form
+	assert.NotContains(t, html, "PROTECTED_CODE", "PROTECTED_CODE placeholders should not appear")
+	assert.NotContains(t, html, "__PROTECTED_CODE", "Underscore-wrapped placeholders should not appear")
+	assert.NotContains(t, html, "KMCODExxx", "Math code protection placeholders should not appear")
+
+	// Verify code blocks are present (may be split across syntax highlighting spans)
+	assert.Contains(t, html, "get github.com/package/name", "First code block content should be present")
+	assert.Contains(t, html, "tidy", "Second code block content should be present")
+	assert.Contains(t, html, "vendor", "Third code block content should be present")
+
+	// Verify inline code is present (as individual <code> elements)
+	assert.Contains(t, html, "<code>go.mod</code>", "go.mod inline code should be present")
+	assert.Contains(t, html, "<code>go.sum</code>", "go.sum inline code should be present")
+	assert.Contains(t, html, "vendor/", "vendor/ inline code should be present")
+
+	// Verify list structure
+	assert.Contains(t, html, "<li>", "Should have list items")
+	assert.Contains(t, html, "<ol>", "Should have ordered list")
+
+	// Verify code blocks are in <pre> tags, not inline
+	assert.Contains(t, html, "<pre", "Code blocks should be in <pre> elements")
+}
+
+func TestRenderMarkdown_UpdateCycleExactScenario(t *testing.T) {
+	// Exact scenario from GitHub issue: Update cycle with multiple indented code blocks
+	// This was the exact failing case reported by the user
+	markdown := "**The Update Cycle:**\n" +
+		"1.  **Update the specific dependency:**\n" +
+		"    ```bash\n" +
+		"    go get github.com/package/name@v1.2.3\n" +
+		"    ```\n" +
+		"2.  **Clean up the module file:**\n" +
+		"    ```bash\n" +
+		"    go mod tidy\n" +
+		"    ```\n" +
+		"3.  **Refresh the vendor directory:**\n" +
+		"    ```bash\n" +
+		"    go mod vendor\n" +
+		"    ```\n" +
+		"4.  **Commit the changes:** You must commit both the updated `go.mod`, `go.sum`, and the updated `vendor/` directory."
+
+	html, err := RenderMarkdown(markdown)
+	assert.NoError(t, err)
+
+	// Main assertion: NO placeholders in output
+	assert.NotContains(t, html, "PROTECTED_CODE_", "Issue: PROTECTED_CODE placeholders leaked into output")
+	assert.NotContains(t, html, "__PROTECTED", "Issue: __PROTECTED placeholders leaked into output")
+
+	// Verify all three code blocks are rendered properly
+	assert.Contains(t, html, "<pre", "Should have at least one code block in <pre>")
+
+	// Count pre tags to ensure all 3 code blocks are present
+	preCount := strings.Count(html, "<pre")
+	assert.GreaterOrEqual(t, preCount, 3, "Should have at least 3 code blocks (one for each step)")
+
+	// Verify all code content is present
+	assert.Contains(t, html, "github.com/package/name@v1.2.3")
+	assert.Contains(t, html, "mod tidy")
+	assert.Contains(t, html, "mod vendor")
+
+	// Verify the inline code references are also present
+	assert.Contains(t, html, "go.mod")
+	assert.Contains(t, html, "go.sum")
+}

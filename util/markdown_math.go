@@ -16,7 +16,7 @@ type mathEntry struct {
 var (
 	mathDisplayRe    = regexp.MustCompile(`(?s)\$\$([\s\S]+?)\$\$`)
 	mathInlineRe     = regexp.MustCompile(`\$(\S(?:[^$\n]*?\S)?|\S)\$`)
-	mathCodeBlockRe  = regexp.MustCompile("(?m)^```[^\\n]*\\n[\\s\\S]*?^```\\s*$|^~~~[^\\n]*\\n[\\s\\S]*?^~~~\\s*$")
+	mathCodeBlockRe  = regexp.MustCompile("(?m)^[ \\t]*```[^\\n]*\\n[\\s\\S]*?^[ \\t]*```\\s*$|^[ \\t]*~~~[^\\n]*\\n[\\s\\S]*?^[ \\t]*~~~\\s*$")
 	mathCodeInlineRe = regexp.MustCompile("`[^`]+`")
 	mathFracRe       = regexp.MustCompile(`\\frac\{([^}]*)\}\{([^}]*)\}`)
 	mathTextCmdRe    = regexp.MustCompile(`\\(?:text|mathrm|mathit|mathbf|mathsf|mathtt|operatorname)\{([^}]*)\}`)
