@@ -75,6 +75,7 @@ var customKeywords = map[string][]customKeywordList{
 			"nginx",
 			"nmcli",
 			"npm",
+			"npx",
 			"ollama",
 			"open",
 			"openssl",
