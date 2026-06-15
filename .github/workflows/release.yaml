@@ -38,6 +38,9 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   test:
     name: Build & Test
+    # Skip on non-GitHub forges (e.g. Forgejo mirrors this file via
+    # .github/workflows/ compatibility). semantic-release is GitHub-specific.
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
 
     steps:
@@ -60,6 +63,7 @@ jobs:
   semantic-release:
     needs: [test]
     name: Semantic Release
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
 
     outputs:
@@ -112,7 +116,7 @@ jobs:
     # Run when triggered by a release event OR when semantic-release published a release
     # during a push-run (needs.semantic-release.outputs.released is set to 'true').
     needs: [test, semantic-release]
-    if: github.event_name == 'release' || needs.semantic-release.outputs.released == 'true'
+    if: github.server_url == 'https://github.com' && (github.event_name == 'release' || needs.semantic-release.outputs.released == 'true')
     runs-on: ${{ matrix.runner }}
 
     strategy:
