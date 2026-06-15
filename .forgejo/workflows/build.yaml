@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    # Skip the automated chore(release) commit pushed back by semantic-release.
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: docker
+    container:
+      image: golang:1.26
+    steps:
+      - name: Install Node.js (required by JS-based actions)
+        run: apt-get update && apt-get install -y --no-install-recommends nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+  test:
+    name: Test
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: docker
+    container:
+      image: golang:1.26
+    needs: build
+    steps:
+      - name: Install Node.js (required by JS-based actions)
+        run: apt-get update && apt-get install -y --no-install-recommends nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Test
+        run: go test -race ./...
