@@ -7,6 +7,8 @@ import (
 	"github.com/wu/keyop/core/testutil"
 	"log/slog"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -132,10 +134,13 @@ func TestStartKernelErrorChannel(t *testing.T) {
 }
 
 type mockStateStore struct {
+	mu   sync.Mutex
 	data map[string]interface{}
 }
 
 func (m *mockStateStore) Save(key string, value interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.data == nil {
 		m.data = make(map[string]interface{})
 	}
@@ -144,6 +149,8 @@ func (m *mockStateStore) Save(key string, value interface{}) error {
 }
 
 func (m *mockStateStore) Load(key string, value interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.data == nil {
 		return nil
 	}
@@ -159,6 +166,8 @@ func (m *mockStateStore) Load(key string, value interface{}) error {
 }
 
 func (m *mockStateStore) Delete(key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.data != nil {
 		delete(m.data, key)
 	}
@@ -179,15 +188,15 @@ func TestStartKernelStateCache(t *testing.T) {
 		lastRun := time.Now().Add(-30 * time.Second)
 		assert.NoError(t, stateStore.Save("last_check_test-service", lastRun))
 
-		runCount := 0
+		var runCount atomic.Int64
 		interval := 60 * time.Second
 
 		tasks := []Task{{
 			Name:     "test-service",
 			Interval: interval,
 			Run: func() error {
-				runCount++
-				if runCount >= 1 {
+				runCount.Add(1)
+				if runCount.Load() >= 1 {
 					cancel()
 				}
 				return nil
@@ -206,10 +215,10 @@ func TestStartKernelStateCache(t *testing.T) {
 		// It should NOT run immediately.
 		// Since last run was 30s ago and interval is 60s, it should run in about 30s (+ jitter).
 		time.Sleep(10 * time.Second)
-		assert.Equal(t, 0, runCount, "Task should not have run yet")
+		assert.Equal(t, int64(0), runCount.Load(), "Task should not have run yet")
 
 		time.Sleep(25 * time.Second) // Total 35s, should have run by now (30s + small jitter)
-		assert.Equal(t, 1, runCount, "Task should have run by now")
+		assert.Equal(t, int64(1), runCount.Load(), "Task should have run by now")
 
 		// Check if state was updated
 		var updatedRun time.Time
