@@ -60,6 +60,7 @@ var customKeywords = map[string][]customKeywordList{
 			"jq",
 			"json_pp",
 			"keyop",
+			"keyop-messenger",
 			"ln",
 			"loginctl",
 			"ls",
