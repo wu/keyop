@@ -87,6 +87,7 @@ func LoadPlugins(deps core.Dependencies) error {
 }
 
 func loadPlugin(info PluginInfo, deps core.Dependencies) error {
+	logger := deps.MustGetLogger()
 	p, err := plugin.Open(info.Path)
 	if err != nil {
 		return fmt.Errorf("could not open plugin: %w", err)
@@ -115,26 +116,26 @@ func loadPlugin(info PluginInfo, deps core.Dependencies) error {
 	if newMsgr != nil {
 		// Call RegisterPayloadTypes if available
 		if regFn, ok := dummySvc.(core.RegisterPayloadTypesProvider); ok {
-			if err := regFn.RegisterPayloadTypes(newMsgr, deps.MustGetLogger()); err != nil {
-				deps.MustGetLogger().Error("Plugin failed to register payload types", "plugin", info.Name, "error", err)
+			if err := regFn.RegisterPayloadTypes(newMsgr, logger); err != nil {
+				logger.Error("Plugin failed to register payload types", "plugin", info.Name, "error", err)
 				if !core.IsDuplicatePayloadRegistration(err) {
 					return fmt.Errorf("payload type registration failed for plugin %s: %w", info.Name, err)
 				}
 			} else {
-				deps.MustGetLogger().Info("Plugin registered payload types", "plugin", info.Name)
+				logger.Info("Plugin registered payload types", "plugin", info.Name)
 			}
 		} else {
-			deps.MustGetLogger().Debug("Plugin does not implement RegisterPayloadTypes", "plugin", info.Name)
+			logger.Debug("Plugin does not implement RegisterPayloadTypes", "plugin", info.Name)
 		}
 	} else {
-		deps.MustGetLogger().Warn("new messenger not available; cannot register plugin payloads", "plugin", info.Name)
+		logger.Warn("new messenger not available; cannot register plugin payloads", "plugin", info.Name)
 	}
 
 	// Wrap newServiceFunc to return interface{} instead of core.Service
 	core.RegisterService(info.Name, func(deps core.Dependencies, cfg core.ServiceConfig, ctx context.Context) interface{} {
 		return newServiceFunc(deps, cfg, ctx)
 	})
-	deps.MustGetLogger().Info("Registered plugin service", "name", info.Name)
+	logger.Info("Registered plugin service", "name", info.Name)
 
 	return nil
 }
