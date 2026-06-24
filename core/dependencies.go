@@ -11,7 +11,7 @@ import (
 type MessengerApi interface {
 	Publish(ctx context.Context, channel string, payloadType string, payload interface{}) error
 	RegisterPayloadType(typeStr string, prototype interface{}) error
-	Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc) error
+	Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc, opts ...km.SubscribeOption) error
 	InstanceName() string
 	Close() error
 }

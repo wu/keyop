@@ -51,7 +51,9 @@ func (f *FakeMessenger) RegisterPayloadType(typeStr string, prototype interface{
 }
 
 // Subscribe captures the handler for the channel so tests can access it.
-func (f *FakeMessenger) Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc) error {
+// SubscribeOptions (e.g. WithMaxAge) are accepted to match the interface but
+// are not interpreted by the fake.
+func (f *FakeMessenger) Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc, _ ...km.SubscribeOption) error {
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	f.Handlers[channel] = handler
