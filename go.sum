@@ -63,8 +63,8 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/wu/keyop-messenger v1.17.0 h1:ZiEuPrR7rCK24LkSYd0lSkXifBOdmy+rukb5Ig0GTvA=
-github.com/wu/keyop-messenger v1.17.0/go.mod h1:HWHmGddnogVwg8CRImGF3MxYkelBcS37YqhyiivLQbA=
+github.com/wu/keyop-messenger v1.18.0 h1:/vBcG8x+7Ym9Gj0b0tPzCf/V2hKHGRML3D41nfCgSuI=
+github.com/wu/keyop-messenger v1.18.0/go.mod h1:HWHmGddnogVwg8CRImGF3MxYkelBcS37YqhyiivLQbA=
 github.com/yuin/goldmark v1.4.15/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/yuin/goldmark v1.7.16 h1:n+CJdUxaFMiDUNnWC3dMWCIQJSkxH4uz3ZwQBkAlVNE=
 github.com/yuin/goldmark v1.7.16/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
