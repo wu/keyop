@@ -31,11 +31,27 @@ type ServiceConfig struct {
 }
 
 // ChannelInfo describes a channel's metadata used by services.
+//
+// The delivery-tuning fields (MaxAge, MaxRetries, RetryBackoffBase,
+// RetryBackoffMax) apply to subscriptions: when a service subscribes to a
+// channel configured in its Subs, the runtime translates them into
+// keyop-messenger SubscribeOptions via SubscribeOptions and applies them
+// automatically. They are ignored for Pubs.
 type ChannelInfo struct {
 	Name        string
 	Remote      string // optional: channel name to use on the remote server; defaults to Name
 	Description string
-	MaxAge      time.Duration
+	// MaxAge enables startup freshness filtering (km.WithMaxAge): on first start
+	// the subscriber skips buffered messages older than this. 0 disables.
+	MaxAge time.Duration
+	// MaxRetries overrides the messenger's subscribers.max_retries for this
+	// subscription (km.WithMaxRetries). nil leaves the instance default in place.
+	MaxRetries *int
+	// RetryBackoffBase and RetryBackoffMax override the retry backoff schedule for
+	// this subscription (km.WithRetryBackoff): the first retry waits Base, doubling
+	// each attempt, capped at Max. Both 0 leaves the instance defaults in place.
+	RetryBackoffBase time.Duration
+	RetryBackoffMax  time.Duration
 }
 
 // AsType returns the error as a specific type, or false if it is not that type.

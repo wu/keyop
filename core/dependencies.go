@@ -8,11 +8,18 @@ import (
 )
 
 // MessengerApi is the interface for the new keyop-messenger library.
+//
+// It is intended to be the complete contract services depend on: anything a
+// service needs from the messenger belongs here, so that wrappers (see
+// NewConfigMessenger) can decorate the messenger without hiding capability and
+// services never need to type-assert back to a concrete type.
 type MessengerApi interface {
 	Publish(ctx context.Context, channel string, payloadType string, payload interface{}) error
 	RegisterPayloadType(typeStr string, prototype interface{}) error
 	Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc, opts ...km.SubscribeOption) error
 	InstanceName() string
+	Stats() km.Stats
+	DiagnosticStats(channel string, subscriberID string) km.DiagnosticStats
 	Close() error
 }
 
@@ -95,5 +102,12 @@ func (d *Dependencies) MustGetMessenger() MessengerApi {
 	if d.messenger == nil {
 		panic("ERROR: messenger is not initialized")
 	}
+	return d.messenger
+}
+
+// GetMessenger returns the messenger if set, otherwise nil. Unlike
+// MustGetMessenger it does not panic, so callers (e.g. the runtime when
+// optionally wrapping the messenger) can branch on availability.
+func (d *Dependencies) GetMessenger() MessengerApi {
 	return d.messenger
 }

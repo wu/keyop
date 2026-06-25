@@ -65,6 +65,14 @@ func (f *FakeMessenger) InstanceName() string {
 	return f.InstanceNameValue
 }
 
+// Stats returns an empty snapshot; the fake collects no metrics.
+func (f *FakeMessenger) Stats() km.Stats { return km.Stats{} }
+
+// DiagnosticStats returns a zero value; the fake collects no per-subscriber metrics.
+func (f *FakeMessenger) DiagnosticStats(channel string, subscriberID string) km.DiagnosticStats {
+	return km.DiagnosticStats{}
+}
+
 // Close is a no-op for testing.
 func (f *FakeMessenger) Close() error {
 	return nil

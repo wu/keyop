@@ -25,10 +25,21 @@ type serviceConfigYaml struct {
 }
 
 type eventChannelYaml struct {
-	Name        string `yaml:"name"`
-	Remote      string `yaml:"remote"`
-	Description string `yaml:"description"`
-	MaxAge      string `yaml:"max_age"`
+	Name             string `yaml:"name"`
+	Remote           string `yaml:"remote"`
+	Description      string `yaml:"description"`
+	MaxAge           string `yaml:"max_age"`
+	MaxRetries       *int   `yaml:"max_retries"`
+	RetryBackoffBase string `yaml:"retry_backoff_base"`
+	RetryBackoffMax  string `yaml:"retry_backoff_max"`
+}
+
+// parseOptionalDuration parses a duration string, returning 0 for an empty value.
+func parseOptionalDuration(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(s)
 }
 
 func configDirPath() string {
@@ -132,13 +143,9 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 		pubs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Pubs {
-			var maxAge time.Duration
-			if value.MaxAge != "" {
-				var err error
-				maxAge, err = time.ParseDuration(value.MaxAge)
-				if err != nil {
-					return nil, fmt.Errorf("error parsing max_age for pub %s: %w", key, err)
-				}
+			maxAge, err := parseOptionalDuration(value.MaxAge)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing max_age for pub %s: %w", key, err)
 			}
 			pubs[key] = core.ChannelInfo{
 				Name:        value.Name,
@@ -150,19 +157,26 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 
 		subs := make(map[string]core.ChannelInfo)
 		for key, value := range serviceConfigSource.Subs {
-			var maxAge time.Duration
-			if value.MaxAge != "" {
-				var err error
-				maxAge, err = time.ParseDuration(value.MaxAge)
-				if err != nil {
-					return nil, fmt.Errorf("error parsing max_age for sub %s: %w", key, err)
-				}
+			maxAge, err := parseOptionalDuration(value.MaxAge)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing max_age for sub %s: %w", key, err)
+			}
+			retryBase, err := parseOptionalDuration(value.RetryBackoffBase)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing retry_backoff_base for sub %s: %w", key, err)
+			}
+			retryMax, err := parseOptionalDuration(value.RetryBackoffMax)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing retry_backoff_max for sub %s: %w", key, err)
 			}
 			subs[key] = core.ChannelInfo{
-				Name:        value.Name,
-				Remote:      value.Remote,
-				Description: value.Description,
-				MaxAge:      maxAge,
+				Name:             value.Name,
+				Remote:           value.Remote,
+				Description:      value.Description,
+				MaxAge:           maxAge,
+				MaxRetries:       value.MaxRetries,
+				RetryBackoffBase: retryBase,
+				RetryBackoffMax:  retryMax,
 			}
 		}
 

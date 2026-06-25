@@ -189,6 +189,41 @@ func Test_loadServices_maxAge_loaded(t *testing.T) {
 	}
 }
 
+func Test_loadServices_retryOptions_loaded(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	cfg := "service: heartbeat\n" +
+		"subs:\n" +
+		"  events:\n" +
+		"    name: heartbeat\n" +
+		"    max_retries: 11\n" +
+		"    retry_backoff_base: 200ms\n" +
+		"    retry_backoff_max: 30s\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := core.Dependencies{}
+	deps.SetLogger(logger)
+	deps.SetOsProvider(adapter.OsProvider{})
+
+	svcs, err := loadServiceConfigs(deps)
+	assert.NoError(t, err)
+	if assert.Len(t, svcs, 1) {
+		ci := svcs[0].Subs["events"]
+		if assert.NotNil(t, ci.MaxRetries) {
+			assert.Equal(t, 11, *ci.MaxRetries)
+		}
+		assert.Equal(t, 200*time.Millisecond, ci.RetryBackoffBase)
+		assert.Equal(t, 30*time.Second, ci.RetryBackoffMax)
+		// Mapping yields two options: WithMaxRetries plus a single WithRetryBackoff
+		// (base and max collapse into one option).
+		assert.Len(t, ci.SubscribeOptions(), 2)
+	}
+}
+
 func Test_loadServices_no_name(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KEYOP_CONF_DIR", dir)
