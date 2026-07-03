@@ -61,7 +61,7 @@ func initMessenger(deps core.Dependencies) (*km.Messenger, error) {
 		return nil, fmt.Errorf("invalid messenger.yaml: %w", err)
 	}
 
-	m, err := km.New(cfg)
+	m, err := km.New(cfg, km.WithLogger(logger))
 	if err != nil {
 		return nil, fmt.Errorf("create new messenger: %w", err)
 	}
