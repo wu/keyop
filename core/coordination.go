@@ -35,6 +35,14 @@ type SQLiteMigrator interface {
 	SQLiteMigrate(db *sql.DB, logger Logger) error
 }
 
+// SQLiteLogProvider is an optional interface for SchemaProviders. When
+// implemented, the sqlite service calls SQLiteLogFields and appends the
+// returned slog key-value pairs to each insert's structured log entry.
+// ctx and args are the same values passed to SQLiteInsert.
+type SQLiteLogProvider interface {
+	SQLiteLogFields(ctx *InsertContext, args []any) []any
+}
+
 // SQLiteConsumer is implemented by services that need a SQLite DB handle.
 type SQLiteConsumer interface {
 	SetSQLiteDB(db **sql.DB)
