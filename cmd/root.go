@@ -24,6 +24,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.PersistentFlags().BoolP("stdout", "o", false, "display the logs in colorized output to stdout")
 
 	rootCmd.AddCommand(runtime.NewCmd(deps))
+	rootCmd.AddCommand(runtime.NewValidateCmd(deps))
 	rootCmd.AddCommand(systemctl.NewCmd(deps))
 	rootCmd.AddCommand(NewSelfUpdateCmd(deps))
 	rootCmd.AddCommand(NewVersionCmd())

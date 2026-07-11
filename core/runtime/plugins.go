@@ -112,7 +112,9 @@ func loadPlugin(info PluginInfo, deps core.Dependencies) error {
 	// we should ideally have a one-time registration.
 	// Let's try to invoke NewService with a dummy config to see if it implements RegisterPayloadTypesProvider.
 	dummySvc := newServiceFunc(deps, core.ServiceConfig{Name: "discovery-" + info.Name}, context.Background())
-	newMsgr := deps.MustGetMessenger()
+	// GetMessenger, not MustGetMessenger: validate-config loads plugins without
+	// a messenger, and the nil branch below is the intended handling.
+	newMsgr := deps.GetMessenger()
 	if newMsgr != nil {
 		// Call RegisterPayloadTypes if available
 		if regFn, ok := dummySvc.(core.RegisterPayloadTypesProvider); ok {
