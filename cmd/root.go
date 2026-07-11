@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/wu/keyop/cmd/launchd"
 	"github.com/wu/keyop/cmd/systemctl"
 	"github.com/wu/keyop/core"
 	"github.com/wu/keyop/core/runtime"
@@ -26,6 +27,7 @@ func NewRootCmd(deps core.Dependencies) *cobra.Command {
 	rootCmd.AddCommand(runtime.NewCmd(deps))
 	rootCmd.AddCommand(runtime.NewValidateCmd(deps))
 	rootCmd.AddCommand(systemctl.NewCmd(deps))
+	rootCmd.AddCommand(launchd.NewCmd(deps))
 	rootCmd.AddCommand(NewSelfUpdateCmd(deps))
 	rootCmd.AddCommand(NewVersionCmd())
 
