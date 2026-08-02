@@ -27,6 +27,25 @@ type SchemaProvider interface {
 	SQLiteInsert(ctx *InsertContext) (query string, args []any)
 }
 
+// SQLiteStatement is a single statement to execute for an incoming message.
+type SQLiteStatement struct {
+	Query string
+	Args  []any
+}
+
+// SQLiteMultiInserter is an optional interface for SchemaProviders that need to run more than
+// one statement per message, in a defined order and atomically. The sqlite service executes the
+// returned statements inside a single transaction, in slice order, and rolls back if any fails.
+//
+// When a provider implements this, SQLiteInsert is not called for incoming messages. Providers
+// must still implement it to satisfy SchemaProvider; returning ("", nil) is fine.
+//
+// The ordering guarantee matters for providers that maintain a "current value" table alongside a
+// change log: the log insert must observe the current-value row before the upsert overwrites it.
+type SQLiteMultiInserter interface {
+	SQLiteInserts(ctx *InsertContext) []SQLiteStatement
+}
+
 // SQLiteMigrator is an optional interface for services that need to run
 // imperative data migrations after their schema DDL has been applied.
 // The SQLite service calls SQLiteMigrate immediately after executing a
