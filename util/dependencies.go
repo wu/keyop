@@ -45,12 +45,13 @@ func InitializeDependencies(console bool) core.Dependencies {
 		slogOptions.Level = slog.LevelDebug
 	}
 
+	logDir := filepath.Join(home, ".keyop", "logs")
+
 	var logger *slog.Logger
 	var logWriter *RotatingFileWriter
 	if console {
 		logger = slog.New(slogcolor.NewHandler(os.Stdout, slogOptions))
 	} else {
-		logDir := filepath.Join(home, ".keyop", "logs")
 		rfw, err := NewRotatingFileWriter(logDir)
 		if err != nil {
 			// Fallback to stderr if we can't create rotating file writer
@@ -69,11 +70,24 @@ func InitializeDependencies(console bool) core.Dependencies {
 		logger.Warn("Failed to get user home directory, using current directory as fallback", "error", homeErr)
 	}
 
+	// SQLite query timings go to their own file even in console mode, so they
+	// never interleave with the application log.
+	queryLogWriter, err := InitSQLiteQueryLog(logDir)
+	if err != nil {
+		logger.Error("Failed to create SQLite query timing log", "error", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	deps.SetContext(ctx)
 	// Wrap cancel to close the log writer on shutdown.
 	deps.SetCancel(func() {
 		cancel()
+		if queryLogWriter != nil {
+			core.SetSQLiteQueryTimer(nil)
+			if err := queryLogWriter.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: failed to close SQLite query timing log: %v\n", err)
+			}
+		}
 		if logWriter != nil {
 			if err := logWriter.Close(); err != nil {
 				// The log file is closing, so write directly to stderr.

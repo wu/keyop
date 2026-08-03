@@ -11,19 +11,29 @@ import (
 // RotatingFileWriter writes logs to a file and rotates daily at midnight.
 type RotatingFileWriter struct {
 	logDir   string
+	prefix   string
 	file     *os.File
 	lastDate string
 	mu       sync.Mutex
 }
 
-// NewRotatingFileWriter creates a new rotating file writer for the given log directory.
+// NewRotatingFileWriter creates a new rotating file writer for the given log
+// directory, writing to keyop.YYYYMMDD.log.
 func NewRotatingFileWriter(logDir string) (*RotatingFileWriter, error) {
+	return NewRotatingFileWriterWithPrefix(logDir, "keyop")
+}
+
+// NewRotatingFileWriterWithPrefix creates a rotating file writer that names its
+// files prefix.YYYYMMDD.log, so a caller can keep a distinct stream of log
+// lines in its own file within the shared log directory.
+func NewRotatingFileWriterWithPrefix(logDir, prefix string) (*RotatingFileWriter, error) {
 	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	rfw := &RotatingFileWriter{
 		logDir:   logDir,
+		prefix:   prefix,
 		lastDate: time.Now().Format("20060102"),
 	}
 
@@ -35,7 +45,7 @@ func NewRotatingFileWriter(logDir string) (*RotatingFileWriter, error) {
 }
 
 func (rfw *RotatingFileWriter) openFile() error {
-	logFileName := "keyop." + rfw.lastDate + ".log"
+	logFileName := rfw.prefix + "." + rfw.lastDate + ".log"
 	logFilePath := filepath.Join(rfw.logDir, logFileName)
 	f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) //nolint:gosec
 	if err != nil {

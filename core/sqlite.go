@@ -1,10 +1,18 @@
 package core
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 )
+
+// SQLiteDriverName is the database/sql driver name OpenSQLite connects with.
+// It defaults to the name modernc.org/sqlite registers itself under. An
+// application that registers a different or wrapped driver — for example the
+// timing wrapper from InstrumentDriver — sets this during startup, before any
+// service opens a database.
+var SQLiteDriverName = "sqlite"
 
 // ExpandHome replaces a leading ~ in path with the user's home directory.
 // The path is returned unchanged if it does not start with ~ or the home
@@ -29,4 +37,12 @@ func ExpandHome(path string) string {
 // mattn-style parameters (_journal_mode, _timeout, ...) are silently ignored.
 func SQLiteDSN(dbPath string) string {
 	return fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)", ExpandHome(dbPath))
+}
+
+// OpenSQLite opens dbPath with SQLiteDriverName and the standard DSN. Services
+// should use it instead of calling sql.Open directly so that a single startup
+// decision — plain driver or instrumented — applies to every database in the
+// process. As with sql.Open, no connection is made until first use.
+func OpenSQLite(dbPath string) (*sql.DB, error) {
+	return sql.Open(SQLiteDriverName, SQLiteDSN(dbPath))
 }
