@@ -279,9 +279,15 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 	var tasks []Task
 	logger.Info("Initializing services")
 	for _, serviceWrapper := range services {
-		if err := serviceWrapper.Service.Initialize(); err != nil {
-			logger.Error("service initialization failed", "error", err)
-			return fmt.Errorf("service initialization failed: %w", err)
+		// Label Initialize so that background goroutines a service starts here
+		// inherit the pprof service label for their whole lifetime.
+		var initErr error
+		withServiceLabel(ctx, serviceWrapper.Config.Name, func(context.Context) {
+			initErr = serviceWrapper.Service.Initialize()
+		})
+		if initErr != nil {
+			logger.Error("service initialization failed", "error", initErr)
+			return fmt.Errorf("service initialization failed: %w", initErr)
 		}
 		logger.Info("OK: Initialized service", "name", serviceWrapper.Config.Name)
 

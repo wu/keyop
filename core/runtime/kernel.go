@@ -72,7 +72,10 @@ func StartKernel(deps core.Dependencies, tasks []Task) error {
 				go func() {
 					defer close(done)
 					logger.Debug("Starting task run", "service", task.Name)
-					err := task.Run()
+					var err error
+					withServiceLabel(task.Ctx, task.Name, func(context.Context) {
+						err = task.Run()
+					})
 					if err == nil {
 						logger.Debug("Task run completed", "service", task.Name)
 					} else {

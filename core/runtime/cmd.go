@@ -20,6 +20,10 @@ This utility is a work in progress.
 		RunE: func(_ *cobra.Command, _ []string) error {
 			logger := deps.MustGetLogger()
 
+			// 0. Start the pprof listener if KEYOP_PPROF_ADDR is set. Started
+			// first so that profiles cover service initialization.
+			startPprofServer(deps)
+
 			// 1. Initialise the new keyop-messenger
 			msgr, err := initMessenger(deps)
 			if err != nil {
