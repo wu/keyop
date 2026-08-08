@@ -124,7 +124,58 @@ plugins:
 	logger := &testutil.FakeLogger{}
 	deps.SetLogger(logger)
 
-	// Should log error and continue (skip plugin)
+	// An enabled plugin with no .so must be fatal: skipping it would start keyop
+	// with the plugin's services silently absent.
 	err = LoadPlugins(deps)
-	assert.NoError(t, err) // LoadPlugins doesn't fail on missing plugins, just logs
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing_plugin")
+	assert.Contains(t, err.Error(), "/nonexistent/path/plugin.so")
+}
+
+func TestLoadPluginsAllowMissing_MissingPluginSkipped(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	pluginsYAML := `
+plugins:
+  - name: missing_plugin
+    path: /nonexistent/path/plugin.so
+    enabled: true
+`
+	pluginsPath := filepath.Join(dir, "plugins.yaml")
+	err := os.WriteFile(pluginsPath, []byte(pluginsYAML), 0o600)
+	require.NoError(t, err)
+
+	deps := core.Dependencies{}
+	logger := &testutil.FakeLogger{}
+	deps.SetLogger(logger)
+
+	// validate-config --ignore-unknown validates other hosts' config dirs on a
+	// machine without their .so files, so there the plugin is skipped.
+	err = LoadPluginsAllowMissing(deps)
+	assert.NoError(t, err)
+}
+
+func TestLoadPluginsAllowMissing_DisabledMissingPluginSkipped(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KEYOP_CONF_DIR", dir)
+
+	// A disabled plugin is never loaded, so a missing file is not an error even
+	// under the strict path.
+	pluginsYAML := `
+plugins:
+  - name: disabled_plugin
+    path: /nonexistent/path/plugin.so
+    enabled: false
+`
+	pluginsPath := filepath.Join(dir, "plugins.yaml")
+	err := os.WriteFile(pluginsPath, []byte(pluginsYAML), 0o600)
+	require.NoError(t, err)
+
+	deps := core.Dependencies{}
+	logger := &testutil.FakeLogger{}
+	deps.SetLogger(logger)
+
+	err = LoadPlugins(deps)
+	assert.NoError(t, err)
 }

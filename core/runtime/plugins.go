@@ -34,8 +34,25 @@ func pluginConfigPath() string {
 	return filepath.Join(home, ".keyop", "conf", "plugins.yaml")
 }
 
-// LoadPlugins reads the plugins configuration, loads enabled plugins, and registers their services and payload types.
+// LoadPlugins reads the plugins configuration, loads enabled plugins, and registers
+// their services and payload types.
+//
+// An enabled plugin whose .so is missing is a fatal error. Skipping it would start
+// keyop successfully with the plugin's services silently absent — on a display host
+// that presents as working software showing nothing, which is worse than not starting.
 func LoadPlugins(deps core.Dependencies) error {
+	return loadPluginsFrom(deps, false)
+}
+
+// LoadPluginsAllowMissing behaves like LoadPlugins but downgrades a missing plugin
+// file to a warning. It exists for `validate-config --ignore-unknown`, which validates
+// other hosts' config directories on a machine that does not have their .so files.
+// Every other caller wants LoadPlugins.
+func LoadPluginsAllowMissing(deps core.Dependencies) error {
+	return loadPluginsFrom(deps, true)
+}
+
+func loadPluginsFrom(deps core.Dependencies, allowMissing bool) error {
 	logger := deps.MustGetLogger()
 	configPath := pluginConfigPath()
 
@@ -63,15 +80,20 @@ func LoadPlugins(deps core.Dependencies) error {
 		logger.Info("Loading plugin", "name", p.Name, "path", p.Path)
 		if _, statErr := os.Stat(p.Path); statErr != nil {
 			if os.IsNotExist(statErr) {
-				// Improved error message: list the directory where the plugin was expected and include hints
+				// List the directory where the plugin was expected, to distinguish a
+				// wrong path from an absent build.
 				pluginDir := filepath.Dir(p.Path)
 				files := []os.DirEntry{}
 				if dirEntries, readErr := os.ReadDir(pluginDir); readErr == nil {
 					files = dirEntries
 				}
-				logger.Error("Plugin file not found, skipping", "name", p.Name, "path", p.Path, "dir_listing", files)
+				if allowMissing {
+					logger.Warn("Plugin file not found, skipping", "name", p.Name, "path", p.Path, "dir_listing", files)
+					continue
+				}
+				logger.Error("Plugin file not found", "name", p.Name, "path", p.Path, "dir_listing", files)
 				logger.Error("Hint: ensure the plugin .so exists at the absolute path above (container paths: /root/.keyop or /.keyop)")
-				continue
+				return fmt.Errorf("plugin %q is enabled but its file is missing: %s", p.Name, p.Path)
 			}
 			return fmt.Errorf("error stating plugin file %s: %w", p.Path, statErr)
 		}

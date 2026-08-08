@@ -41,9 +41,15 @@ With no argument the normal config directory is used (KEYOP_CONF_DIR or
 				}
 			}
 
-			// Plugins register additional service types. Missing plugins.yaml
-			// or missing .so files are skipped, matching `run` behavior.
-			if err := LoadPlugins(deps); err != nil {
+			// Plugins register additional service types. A missing plugins.yaml is
+			// always fine. A missing .so is fatal, matching `run` — except under
+			// --ignore-unknown, which is how other hosts' config dirs get validated
+			// on a machine that has neither their service types nor their .so files.
+			loadPluginsFn := LoadPlugins
+			if ignoreUnknown {
+				loadPluginsFn = LoadPluginsAllowMissing
+			}
+			if err := loadPluginsFn(deps); err != nil {
 				logger.Error("plugin load", "error", err)
 				return err
 			}
