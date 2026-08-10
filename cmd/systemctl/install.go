@@ -6,6 +6,7 @@ import (
 	"github.com/wu/keyop/core"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -14,25 +15,35 @@ import (
 func NewInstallCmd(deps core.Dependencies) *cobra.Command {
 	var user string
 	var group string
+	var home string
 
 	installCmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install as a systemd service",
 		Long:  `Generate systemd configuration and enable the service.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return installSystemd(deps, user, group)
+			return installSystemd(deps, user, group, home)
 		},
 	}
 
 	installCmd.Flags().StringVarP(&user, "user", "u", "root", "User to run the service as")
 	installCmd.Flags().StringVarP(&group, "group", "g", "root", "Group to run the service as")
+	installCmd.Flags().StringVar(&home, "home", "",
+		"Absolute home directory for the service, setting HOME and WorkingDirectory. "+
+			"Needed when the run-as user differs from the user owning ~/.keyop — e.g. a "+
+			"service running as root whose data lives in /home/someone/.keyop. "+
+			"Empty (the default) leaves systemd to derive HOME from the run-as user.")
 
 	return installCmd
 }
 
-func installSystemd(deps core.Dependencies, user, group string) error {
+func installSystemd(deps core.Dependencies, user, group, home string) error {
 	logger := deps.MustGetLogger()
 	osProvider := deps.MustGetOsProvider()
+
+	if home != "" && !filepath.IsAbs(home) {
+		return fmt.Errorf("--home must be an absolute path, got %q", home)
+	}
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -43,19 +54,35 @@ func installSystemd(deps core.Dependencies, user, group string) error {
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
+	serviceLines := []string{
+		fmt.Sprintf("ExecStart=%s run", exe),
+		"Restart=always",
+		fmt.Sprintf("User=%s", user),
+		fmt.Sprintf("Group=%s", group),
+	}
+	// systemd derives HOME from the run-as user's passwd entry, and keyop resolves
+	// its conf dir, plugins.yaml, messenger data dir, and sqlite paths from
+	// os.UserHomeDir() — that is, from $HOME. When the two users differ, leaving
+	// this unset does not fail: keyop quietly reads and writes the wrong tree
+	// (e.g. /root/.keyop) while absolute paths in the config still point at the
+	// intended one. Setting it explicitly reproduces what `sudo -E` does today.
+	if home != "" {
+		serviceLines = append(serviceLines,
+			fmt.Sprintf("Environment=HOME=%s", home),
+			fmt.Sprintf("WorkingDirectory=%s", home),
+		)
+	}
+
 	serviceConfig := fmt.Sprintf(`[Unit]
 Description=Keyop Event-Driven Intelligence Toolkit
 After=network.target
 
 [Service]
-ExecStart=%s run
-Restart=always
-User=%s
-Group=%s
+%s
 
 [Install]
 WantedBy=multi-user.target
-`, exe, user, group)
+`, strings.Join(serviceLines, "\n"))
 
 	servicePath := "/etc/systemd/system/keyop.service"
 

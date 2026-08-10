@@ -42,7 +42,7 @@ func TestInstallSystemd(t *testing.T) {
 		return &testutil.FakeCommand{}
 	}
 
-	err := installSystemd(deps, "root", "root")
+	err := installSystemd(deps, "root", "root", "")
 	if err != nil {
 		t.Fatalf("installSystemd failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestInstallSystemdCustomUserGroup(t *testing.T) {
 		return &testutil.FakeCommand{}
 	}
 
-	err := installSystemd(deps, "customuser", "customgroup")
+	err := installSystemd(deps, "customuser", "customgroup", "")
 	if err != nil {
 		t.Fatalf("installSystemd failed: %v", err)
 	}
@@ -114,5 +114,74 @@ func TestInstallSystemdCustomUserGroup(t *testing.T) {
 	}
 	if !strings.Contains(writtenContent, "Group=customgroup") {
 		t.Errorf("service file missing Group=customgroup: %s", writtenContent)
+	}
+}
+
+// installUnit runs installSystemd against fakes and returns the written unit.
+func installUnit(t *testing.T, user, group, home string) (string, error) {
+	t.Helper()
+	fakeOs := &testutil.FakeOsProvider{}
+	deps := core.Dependencies{}
+	deps.SetOsProvider(fakeOs)
+	deps.SetLogger(&testutil.FakeLogger{})
+
+	buf := &bytes.Buffer{}
+	fakeOs.OpenFileFunc = func(_ string, _ int, _ os.FileMode) (core.FileApi, error) {
+		return &mockFile{buf: buf}, nil
+	}
+	fakeOs.CommandFunc = func(_ string, _ ...string) core.CommandApi {
+		return &testutil.FakeCommand{}
+	}
+
+	err := installSystemd(deps, user, group, home)
+	return buf.String(), err
+}
+
+// The default must stay byte-identical to the pre---home unit, so installing on
+// every other host is unaffected.
+func TestInstallSystemdOmitsHomeByDefault(t *testing.T) {
+	unit, err := installUnit(t, "root", "root", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(unit, "Environment=") || strings.Contains(unit, "WorkingDirectory=") {
+		t.Errorf("no --home should mean no HOME/WorkingDirectory lines:\n%s", unit)
+	}
+	if !strings.Contains(unit, "Group=root\n\n[Install]") {
+		t.Errorf("section spacing changed:\n%s", unit)
+	}
+}
+
+// The matrix/alarm shape: runs as root for /dev/mem, but keeps its data in the
+// login user's home, which is what `sudo -E` preserves today.
+func TestInstallSystemdWithHome(t *testing.T) {
+	unit, err := installUnit(t, "root", "root", "/home/wu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"User=root",
+		"Environment=HOME=/home/wu",
+		"WorkingDirectory=/home/wu",
+	} {
+		if !strings.Contains(unit, want) {
+			t.Errorf("unit missing %q:\n%s", want, unit)
+		}
+	}
+	// The [Service] block must stay contiguous and still be followed by [Install].
+	if !strings.Contains(unit, "WorkingDirectory=/home/wu\n\n[Install]") {
+		t.Errorf("home lines misplaced relative to [Install]:\n%s", unit)
+	}
+}
+
+// A relative WorkingDirectory is rejected by systemd, so fail early with a clear
+// message instead of at service start.
+func TestInstallSystemdRejectsRelativeHome(t *testing.T) {
+	_, err := installUnit(t, "root", "root", "home/wu")
+	if err == nil {
+		t.Fatal("expected an error for a relative --home")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
