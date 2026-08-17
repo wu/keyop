@@ -129,6 +129,7 @@ var customKeywords = map[string][]customKeywordList{
 			"wpa_passphrase",
 			"xz",
 			"zfs",
+			"zsh",
 		}, tokenType: chroma.NameBuiltin},
 	},
 }
