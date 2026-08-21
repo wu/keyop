@@ -281,7 +281,7 @@ func ExtractAlertEvent(data any) (*AlertEvent, bool) {
 		return &aeVal, true
 	}
 	v := reflect.ValueOf(data)
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		if v.IsNil() {
 			return nil, false
 		}
@@ -300,7 +300,7 @@ func ExtractAlertEvent(data any) (*AlertEvent, bool) {
 			aeVal := f.Interface().(AlertEvent)
 			return &aeVal, true
 		}
-		if field.Type.Kind() == reflect.Ptr && field.Type.Elem() == alertType {
+		if field.Type.Kind() == reflect.Pointer && field.Type.Elem() == alertType {
 			if f.IsNil() {
 				return nil, false
 			}
@@ -313,7 +313,7 @@ func ExtractAlertEvent(data any) (*AlertEvent, bool) {
 				aeVal := f.Interface().(AlertEvent)
 				return &aeVal, true
 			}
-			if field.Type.Kind() == reflect.Ptr && field.Type.Elem() == alertType {
+			if field.Type.Kind() == reflect.Pointer && field.Type.Elem() == alertType {
 				if f.IsNil() {
 					return nil, false
 				}

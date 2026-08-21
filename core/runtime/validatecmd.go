@@ -91,7 +91,7 @@ With no argument the normal config directory is used (KEYOP_CONF_DIR or
 				services = append(services, ServiceWrapper{Service: service, Config: serviceConfig})
 			}
 
-			if err := validateServiceConfig(services, logger); err != nil {
+			if err := validateServiceConfig(services, payloadPrototypeLookup(deps), logger); err != nil {
 				return err
 			}
 			if errCount > 0 {

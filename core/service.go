@@ -28,6 +28,14 @@ type ServiceConfig struct {
 	Pubs   map[string]ChannelInfo
 	Subs   map[string]ChannelInfo
 	Config map[string]interface{}
+	// PubRules and SubRules are applied to a message's payload as it is
+	// published and as it is received, respectively. They exist so delivery
+	// decisions can be stated in the YAML of either the producing or the
+	// consuming service. Rules mutate only: they cannot drop a message, and
+	// because they act on the payload rather than the envelope they cannot
+	// change its channel.
+	PubRules []Rule
+	SubRules []Rule
 }
 
 // ChannelInfo describes a channel's metadata used by services.

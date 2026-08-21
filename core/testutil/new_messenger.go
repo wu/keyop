@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"time"
 
@@ -14,6 +15,10 @@ type FakeMessenger struct {
 	InstanceNameValue string
 	Mu                sync.Mutex
 	Handlers          map[string]km.HandlerFunc
+	// Prototypes records what RegisterPayloadType was called with, so tests that
+	// exercise startup validation can resolve a payload type the way the real
+	// messenger does.
+	Prototypes map[string]reflect.Type
 }
 
 // PublishedMessage records a message that was published.
@@ -29,6 +34,7 @@ func NewFakeMessenger() *FakeMessenger {
 	return &FakeMessenger{
 		PublishedMessages: []PublishedMessage{},
 		Handlers:          make(map[string]km.HandlerFunc),
+		Prototypes:        make(map[string]reflect.Type),
 	}
 }
 
@@ -45,9 +51,32 @@ func (f *FakeMessenger) Publish(ctx context.Context, channel string, payloadType
 	return nil
 }
 
-// RegisterPayloadType is a no-op for testing.
+// RegisterPayloadType records the prototype so PayloadPrototype can return it.
+// Like the real registry it stores the element type for a pointer prototype, so
+// what PayloadPrototype reports is the type a handler would receive.
 func (f *FakeMessenger) RegisterPayloadType(typeStr string, prototype interface{}) error {
+	if prototype == nil {
+		return nil
+	}
+	t := reflect.TypeOf(prototype)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	if f.Prototypes == nil {
+		f.Prototypes = make(map[string]reflect.Type)
+	}
+	f.Prototypes[typeStr] = t
 	return nil
+}
+
+// PayloadPrototype returns a prototype recorded by RegisterPayloadType.
+func (f *FakeMessenger) PayloadPrototype(typeStr string) (reflect.Type, bool) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	t, ok := f.Prototypes[typeStr]
+	return t, ok
 }
 
 // Subscribe captures the handler for the channel so tests can access it.

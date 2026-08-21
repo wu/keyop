@@ -70,7 +70,7 @@ func Test_validateServiceConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf.Reset()
-			tt.wantErr(t, validateServiceConfig(tt.services, slog.New(slog.NewJSONHandler(&buf, nil))), fmt.Sprintf("validateServiceConfig(%v, %v)", tt.services, slog.New(slog.NewJSONHandler(&buf, nil))))
+			tt.wantErr(t, validateServiceConfig(tt.services, nil, slog.New(slog.NewJSONHandler(&buf, nil))), fmt.Sprintf("validateServiceConfig(%v, %v)", tt.services, slog.New(slog.NewJSONHandler(&buf, nil))))
 			logs := buf.String()
 			for _, msg := range tt.logMsgs {
 				assert.Contains(t, logs, msg)

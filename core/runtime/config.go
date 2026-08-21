@@ -16,12 +16,14 @@ import (
 
 // YAML representation of services in the config file
 type serviceConfigYaml struct {
-	Name    string                      `yaml:"name,omitempty"`
-	Freq    string                      `yaml:"freq"`
-	Service string                      `yaml:"service"`
-	Pubs    map[string]eventChannelYaml `yaml:"pubs"`
-	Subs    map[string]eventChannelYaml `yaml:"subs"`
-	Config  map[string]interface{}      `yaml:"config,omitempty"`
+	Name     string                      `yaml:"name,omitempty"`
+	Freq     string                      `yaml:"freq"`
+	Service  string                      `yaml:"service"`
+	Pubs     map[string]eventChannelYaml `yaml:"pubs"`
+	Subs     map[string]eventChannelYaml `yaml:"subs"`
+	Config   map[string]interface{}      `yaml:"config,omitempty"`
+	PubRules []core.RuleSpec             `yaml:"pub_rules,omitempty"`
+	SubRules []core.RuleSpec             `yaml:"sub_rules,omitempty"`
 }
 
 type eventChannelYaml struct {
@@ -183,12 +185,27 @@ func loadServiceConfigs(deps core.Dependencies) ([]core.ServiceConfig, error) {
 		// use filename
 		name := wrapper.filename
 
+		// Rules are parsed here so a malformed condition stops startup at config
+		// load, in the same way a bad max_age does. Field paths and value types
+		// are checked later, in validateServiceConfig, once payload prototypes
+		// are registered.
+		pubRules, pubErrs := core.ParseRules(name+" pub_rules", serviceConfigSource.PubRules)
+		subRules, subErrs := core.ParseRules(name+" sub_rules", serviceConfigSource.SubRules)
+		if errs := append(pubErrs, subErrs...); len(errs) > 0 {
+			for _, err := range errs {
+				logger.Error("invalid rule in service config", "name", name, "error", err)
+			}
+			return nil, fmt.Errorf("invalid rules in service config %q", name)
+		}
+
 		svcConfig := core.ServiceConfig{
-			Name:   name,
-			Type:   serviceConfigSource.Service,
-			Pubs:   pubs,
-			Subs:   subs,
-			Config: serviceConfigSource.Config,
+			Name:     name,
+			Type:     serviceConfigSource.Service,
+			Pubs:     pubs,
+			Subs:     subs,
+			Config:   serviceConfigSource.Config,
+			PubRules: pubRules,
+			SubRules: subRules,
 		}
 
 		if serviceConfigSource.Freq != "" {

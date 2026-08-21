@@ -3,6 +3,7 @@ package core
 
 import (
 	"context"
+	"reflect"
 
 	km "github.com/wu/keyop-messenger"
 )
@@ -30,6 +31,11 @@ type PayloadTypeRegistrar interface {
 type MessengerApi interface {
 	Publish(ctx context.Context, channel string, payloadType string, payload interface{}) error
 	PayloadTypeRegistrar
+	// PayloadPrototype is the read side of RegisterPayloadType: it resolves a
+	// payload type string to the Go type registered for it, so configuration
+	// that names payload fields can be checked at startup rather than failing
+	// on whichever message happens to arrive first.
+	PayloadPrototype(typeStr string) (reflect.Type, bool)
 	Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc, opts ...km.SubscribeOption) error
 	InstanceName() string
 	Stats() km.Stats
