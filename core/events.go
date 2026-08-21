@@ -68,13 +68,21 @@ func ExtractMetricSourcePayload[T any](e *MetricEvent) (*T, bool) {
 // Timestamp indicates when the alert event was created, and Hostname indicates
 // the instance name from the messaging library. Link is an optional URL that can be
 // used to navigate to related content (e.g., the article in an RSS alert).
+//
+// Level carries severity only. How an alert is delivered -- spoken, texted, shown
+// as a persistent popup -- belongs in Notify, so that a routine event can be
+// important without being loud, and an unimportant one can still be shown. Category
+// names the kind of alert (e.g. "rss", "tide") and is the stable key for routing
+// rules, which do not have to fall back to matching on free text.
 type AlertEvent struct {
-	Timestamp time.Time `json:"timestamp"`
-	Hostname  string    `json:"hostname,omitempty"`
-	Summary   string    `json:"summary"`
-	Text      string    `json:"text"`
-	Level     string    `json:"level,omitempty"` // e.g., "info", "warning", "critical"
-	Link      string    `json:"link,omitempty"`
+	Timestamp time.Time    `json:"timestamp"`
+	Hostname  string       `json:"hostname,omitempty"`
+	Summary   string       `json:"summary"`
+	Text      string       `json:"text"`
+	Level     string       `json:"level,omitempty"` // severity: "info", "warning", "critical"
+	Link      string       `json:"link,omitempty"`
+	Category  string       `json:"category,omitempty"` // kind of alert, e.g. "rss", "tide"
+	Notify    *NotifyHints `json:"notify,omitempty"`   // delivery hints; nil = consumer decides
 }
 
 func (a AlertEvent) PayloadType() string { return "core.alert.v1" }
