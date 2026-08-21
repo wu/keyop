@@ -258,9 +258,7 @@ func (m *mockServiceWithPayloadTypes) ValidateConfig() []error {
 	return nil
 }
 
-func (m *mockServiceWithPayloadTypes) RegisterPayloadTypes(newMsgr interface {
-	RegisterPayloadType(typeStr string, prototype any) error
-}, logger core.Logger) error {
+func (m *mockServiceWithPayloadTypes) RegisterPayloadTypes(newMsgr core.PayloadTypeRegistrar, logger core.Logger) error {
 	m.registerPayloadsCalled = true
 	return nil
 }
@@ -452,9 +450,7 @@ func (m *mockServiceFailsPayloadRegistration) ValidateConfig() []error {
 	return nil
 }
 
-func (m *mockServiceFailsPayloadRegistration) RegisterPayloadTypes(newMsgr interface {
-	RegisterPayloadType(typeStr string, prototype any) error
-}, logger core.Logger) error {
+func (m *mockServiceFailsPayloadRegistration) RegisterPayloadTypes(newMsgr core.PayloadTypeRegistrar, logger core.Logger) error {
 	return assert.AnError
 }
 

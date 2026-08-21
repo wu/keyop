@@ -99,11 +99,12 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 			}
 		}
 
-		// Check if service implements RegisterPayloadTypes for the new messenger
+		// Check if service implements RegisterPayloadTypes for the new messenger.
+		// The parameter is core.PayloadTypeRegistrar on both sides: method
+		// signatures must be identical to satisfy an interface, so naming the
+		// type here is what lets services name it too.
 		if regFn, ok := service.(interface {
-			RegisterPayloadTypes(newMsgr interface {
-				RegisterPayloadType(typeStr string, prototype any) error
-			}, logger core.Logger) error
+			RegisterPayloadTypes(newMsgr core.PayloadTypeRegistrar, logger core.Logger) error
 		}); ok {
 			newMsgr := deps.MustGetMessenger()
 			if newMsgr != nil {

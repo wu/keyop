@@ -43,7 +43,7 @@ func (svc *Service) Initialize() error {
 	if newMsgr == nil {
 		return fmt.Errorf("new messenger not initialized; messenger.yaml must be present")
 	}
-	return RegisterPayloadTypes(newMsgr, svc.Deps.MustGetLogger())
+	return svc.RegisterPayloadTypes(newMsgr, svc.Deps.MustGetLogger())
 }
 
 // Check emits heartbeat events and a one-time restart event per instance.

@@ -7,6 +7,20 @@ import (
 	km "github.com/wu/keyop-messenger"
 )
 
+// PayloadTypeRegistrar is the one messenger capability a service needs in order
+// to declare its payload types: the mapping from a payload type string to the Go
+// type it decodes into.
+//
+// It is named rather than written inline at each use because the runtime matches
+// a service's RegisterPayloadTypes method against it, and Go requires method
+// signatures to be identical for interface satisfaction -- a defined type is
+// never identical to an unnamed one. Both sides therefore have to spell the
+// parameter the same way, and spelling it once is better than restating the
+// interface literal at every service.
+type PayloadTypeRegistrar interface {
+	RegisterPayloadType(typeStr string, prototype any) error
+}
+
 // MessengerApi is the interface for the new keyop-messenger library.
 //
 // It is intended to be the complete contract services depend on: anything a
@@ -15,7 +29,7 @@ import (
 // services never need to type-assert back to a concrete type.
 type MessengerApi interface {
 	Publish(ctx context.Context, channel string, payloadType string, payload interface{}) error
-	RegisterPayloadType(typeStr string, prototype interface{}) error
+	PayloadTypeRegistrar
 	Subscribe(ctx context.Context, channel string, subscriberID string, handler km.HandlerFunc, opts ...km.SubscribeOption) error
 	InstanceName() string
 	Stats() km.Stats

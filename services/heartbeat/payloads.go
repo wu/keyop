@@ -24,7 +24,7 @@ type HeartbeatEvent struct {
 func (h HeartbeatEvent) PayloadType() string { return "service.heartbeat.v1" }
 
 // RegisterPayloadTypes registers heartbeat payload types with the new messenger.
-func RegisterPayloadTypes(msgr core.MessengerApi, logger core.Logger) error {
+func (svc *Service) RegisterPayloadTypes(msgr core.PayloadTypeRegistrar, logger core.Logger) error {
 	heartbeatProto := &HeartbeatEvent{}
 	if err := msgr.RegisterPayloadType("service.heartbeat.v1", heartbeatProto); err != nil {
 		if core.IsDuplicatePayloadRegistration(err) {
