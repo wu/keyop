@@ -163,6 +163,17 @@ type MCPTool struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	InputSchema MCPToolInputSchema `json:"inputSchema"`
+
+	// SummaryArgs names the arguments a UI should show alongside the tool name when a call is
+	// collapsed — the ones that say which call this was ("which article", "which query"), so a
+	// transcript can be read without expanding every call. The service that defines the tool
+	// chooses them, since only it knows which of its arguments identify a call and which can be
+	// arbitrarily large: an argument carrying a whole document is worse than nothing on a summary
+	// row. Empty (the default) means the call displays as its name alone.
+	//
+	// Excluded from JSON: this is a hint for the UI, not part of the MCP tool schema, and
+	// tools/list responses are spent out of the model's context window.
+	SummaryArgs []string `json:"-"`
 }
 
 // MCPToolProvider is implemented by services that expose tools to the LLM.
