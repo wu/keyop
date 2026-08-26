@@ -38,12 +38,15 @@ func run(deps core.Dependencies, serviceConfigs []core.ServiceConfig) error {
 
 		// Give the service a messenger that auto-applies the SubscribeOptions
 		// configured on its subs (max_age, max_retries, retry_backoff_*), so
-		// services never have to read and forward those options themselves.
+		// services never have to read and forward those options themselves, and
+		// that applies the service's pub_rules and sub_rules to message payloads.
 		// deps is a value type, so the per-service copy only changes this
 		// service's view of the messenger.
 		svcDeps := deps
 		if raw := deps.GetMessenger(); raw != nil {
-			svcDeps.SetMessenger(core.NewConfigMessenger(raw, serviceConfig.Subs))
+			svcDeps.SetMessenger(core.NewRulesMessenger(
+				core.NewConfigMessenger(raw, serviceConfig.Subs),
+				serviceConfig.PubRules, serviceConfig.SubRules, logger, serviceConfig.Name))
 		}
 		svcInstance := serviceFunc(svcDeps, serviceConfig, svcCtx)
 		service, ok := svcInstance.(core.Service)

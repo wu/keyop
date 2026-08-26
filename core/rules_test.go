@@ -580,6 +580,50 @@ func TestValidateRules_OperatorFieldTypes(t *testing.T) {
 	}
 }
 
+// TestApplyRules_SoundHintOnAlertWithNoHints covers the shape the llm service's pub_rules use: an
+// alert sent with no delivery opinion at all (Notify nil) gets a sound name written into it, which
+// on its own selects the "sound" audio mode. Without the pointer being allocated here the rule
+// would silently do nothing, and an info-level alert produces no audio at all.
+func TestApplyRules_SoundHintOnAlertWithNoHints(t *testing.T) {
+	alert := core.AlertEvent{Summary: "response available", Level: "info", Category: "llm"}
+	require.Nil(t, alert.Notify, "the sender expressed no opinion about delivery")
+
+	r := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{"category": "llm"},
+		Set:  map[string]any{"notify.sound": "click"},
+	})
+	require.Empty(t, core.ValidateRules("llm.yaml pub_rules", []core.Rule{r}, alertLookup))
+
+	out, changes, errs := core.ApplyRules(alertType, alert, []core.Rule{r})
+	require.Empty(t, errs)
+	require.Len(t, changes, 1)
+
+	got, ok := out.(core.AlertEvent)
+	require.True(t, ok)
+	require.NotNil(t, got.Notify, "writing through a nil hints pointer must allocate it")
+	assert.Equal(t, "click", got.Notify.Sound)
+	assert.Equal(t, core.AudioSound, got.Notify.AudioMode(), "naming a sound selects the sound mode")
+	assert.Empty(t, got.Notify.Validate())
+
+	assert.Nil(t, alert.Notify, "the caller's own value must not be touched")
+}
+
+// A rule that names a sound must not fire for an alert of another category sharing the channel.
+func TestApplyRules_SoundHintSkipsOtherCategories(t *testing.T) {
+	alert := core.AlertEvent{Summary: "disk full", Level: "critical", Category: "diskspace"}
+	r := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{"category": "llm"},
+		Set:  map[string]any{"notify.sound": "click"},
+	})
+
+	out, changes, errs := core.ApplyRules(alertType, alert, []core.Rule{r})
+	require.Empty(t, errs)
+	assert.Empty(t, changes)
+	assert.Nil(t, out.(core.AlertEvent).Notify)
+}
+
 func TestValidateRules_AcceptsRealisticRules(t *testing.T) {
 	rules, parseErrs := core.ParseRules("tides.yaml pub_rules", []core.RuleSpec{
 		{
