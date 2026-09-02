@@ -251,6 +251,48 @@ func ValidateRules(key string, rules []Rule, lookup PrototypeLookup) []error {
 	return errs
 }
 
+// ValidateConditions checks the When clauses of match-only rules: rules used to
+// select messages rather than to mutate them, which therefore carry no Set or
+// Force. Everything else is as ValidateRules — an unknown payload type, or a field
+// path that is not part of that payload, is a configuration error rather than
+// something to discover on the first message that silently fails to match.
+//
+// The absent writes are the whole reason this exists apart from ValidateRules,
+// which reports a rule that writes nothing as an error. That is right for
+// pub_rules and sub_rules, whose only effect is the write, and wrong for a rule
+// whose only job is to decide whether a message is interesting.
+//
+// A rule with no conditions at all is accepted: it selects every payload of its
+// type, which is a legitimate thing to ask for.
+//
+// lookup may be nil, in which case the type-specific checks are skipped and only
+// the structural ones run.
+func ValidateConditions(key string, rules []Rule, lookup PrototypeLookup) []error {
+	var errs []error
+
+	for i, rule := range rules {
+		prefix := fmt.Sprintf("%s: rule %d", key, i)
+
+		if rule.PayloadType == "" {
+			errs = append(errs, fmt.Errorf("%s: 'type' is required (e.g. type: core.alert.v1)", prefix))
+			continue
+		}
+
+		if lookup == nil {
+			continue
+		}
+		protoType, ok := lookup(rule.PayloadType)
+		if !ok {
+			errs = append(errs, fmt.Errorf("%s: unknown payload type %q; no service registers it", prefix, rule.PayloadType))
+			continue
+		}
+
+		errs = append(errs, validateConditions(prefix, rule, protoType)...)
+	}
+
+	return errs
+}
+
 func validateConditions(prefix string, rule Rule, protoType reflect.Type) []error {
 	var errs []error
 	for _, path := range sortedKeys(rule.When) {

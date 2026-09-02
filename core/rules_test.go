@@ -661,6 +661,113 @@ func TestValidateRules_ReportsEveryProblem(t *testing.T) {
 	assert.Len(t, core.ValidateRules("test", rules, alertLookup), 4)
 }
 
+// --- match-only validation -------------------------------------------------
+
+// A match-only rule carries no set/force, which ValidateRules calls an error and
+// ValidateConditions must not: selecting a message is the whole point of the rule.
+func TestValidateConditions_AcceptsRuleWithNoWrites(t *testing.T) {
+	r := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{
+			"level":    []any{"warning", "critical"},
+			"summary":  map[string]any{"contains": "disk"},
+			"category": "rss",
+		},
+	})
+	assert.Empty(t, core.ValidateConditions("llmtrigger.yaml triggers", []core.Rule{r}, alertLookup))
+	assert.NotEmpty(t, core.ValidateRules("speak.yaml sub_rules", []core.Rule{r}, alertLookup),
+		"ValidateRules must keep reporting a rule that writes nothing")
+}
+
+// No conditions selects every payload of the type. That is a legitimate ask, not a
+// typo, so it validates clean.
+func TestValidateConditions_AcceptsEmptyWhen(t *testing.T) {
+	r := core.Rule{PayloadType: alertType}
+	assert.Empty(t, core.ValidateConditions("test", []core.Rule{r}, alertLookup))
+}
+
+func TestValidateConditions_Structural(t *testing.T) {
+	tests := []struct {
+		name string
+		rule core.Rule
+		want string
+	}{
+		{
+			name: "missing payload type",
+			rule: core.Rule{When: map[string]core.Condition{}},
+			want: "'type' is required",
+		},
+		{
+			name: "unknown payload type",
+			rule: core.Rule{PayloadType: "service.nope.v1"},
+			want: "unknown payload type",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := core.ValidateConditions("llmtrigger.yaml", []core.Rule{tt.rule}, alertLookup)
+			require.NotEmpty(t, errs)
+			assert.Contains(t, errs[0].Error(), tt.want)
+			assert.Contains(t, errs[0].Error(), "llmtrigger.yaml: rule 0")
+		})
+	}
+}
+
+// The check this function exists for: a typo'd field in a trigger's when: must stop
+// startup rather than become a trigger that never fires.
+func TestValidateConditions_UnknownFieldPath(t *testing.T) {
+	r := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{"sumary": "disk full"},
+	})
+	errs := core.ValidateConditions("llmtrigger.yaml", []core.Rule{r}, alertLookup)
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), `when: "sumary" is not a field of`)
+}
+
+// Operator/field-type checking comes along with the field-path check.
+func TestValidateConditions_OperatorFieldTypes(t *testing.T) {
+	numericOnString := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{"summary": map[string]any{"gt": 90}},
+	})
+	errs := core.ValidateConditions("test", []core.Rule{numericOnString}, alertLookup)
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "needs a numeric field")
+
+	stringOnBool := rule(t, core.RuleSpec{
+		Type: alertType,
+		When: map[string]any{"notify.persist": map[string]any{"contains": "x"}},
+	})
+	errs = core.ValidateConditions("test", []core.Rule{stringOnBool}, alertLookup)
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "needs a string field")
+}
+
+// A trigger may name a payload published by a service running on another host, which
+// registers no prototype in this process. Callers that tolerate that pass a nil
+// lookup; the structural checks still run.
+func TestValidateConditions_NilLookupSkipsTypeChecks(t *testing.T) {
+	r := rule(t, core.RuleSpec{
+		Type: "service.mail.email.v1",
+		When: map[string]any{"nosuchfield": "x"},
+	})
+	assert.Empty(t, core.ValidateConditions("test", []core.Rule{r}, nil))
+
+	noType := core.Rule{When: map[string]core.Condition{}}
+	assert.NotEmpty(t, core.ValidateConditions("test", []core.Rule{noType}, nil))
+}
+
+func TestValidateConditions_ReportsEveryProblem(t *testing.T) {
+	rules := []core.Rule{
+		{},                               // missing type
+		{PayloadType: "service.nope.v1"}, // unknown type
+		rule(t, core.RuleSpec{Type: alertType, When: map[string]any{"nosuch": "x"}}),   // bad path
+		rule(t, core.RuleSpec{Type: alertType, When: map[string]any{"level": "info"}}), // fine
+	}
+	assert.Len(t, core.ValidateConditions("test", rules, alertLookup), 3)
+}
+
 // Timestamps and other non-scalar fields should still be reachable, so that a rule
 // can be validated against the whole payload rather than a convenient subset.
 func TestApplyRules_TimeFieldIsAddressableButTyped(t *testing.T) {
