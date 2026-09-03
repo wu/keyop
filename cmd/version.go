@@ -4,6 +4,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+	"github.com/wu/keyop/core"
 )
 
 var (
@@ -16,6 +17,12 @@ var (
 	// BuildTime contains the build timestamp for the binary.
 	BuildTime = "unknown"
 )
+
+// init publishes the link-time version to core so services can report it
+// without importing this package.
+func init() {
+	core.Version = Version
+}
 
 // NewVersionCmd returns a cobra command that prints build/version information.
 func NewVersionCmd() *cobra.Command {

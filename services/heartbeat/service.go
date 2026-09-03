@@ -69,6 +69,7 @@ func (svc *Service) Check() error {
 		Now:           now,
 		Uptime:        uptime.Round(time.Second).String(),
 		UptimeSeconds: int64(uptime / time.Second),
+		Version:       core.Version,
 	}
 	logger.Debug("heartbeat", "data", heartbeat)
 

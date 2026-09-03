@@ -18,6 +18,7 @@ type HeartbeatEvent struct {
 	Now           time.Time `json:"now"`
 	Uptime        string    `json:"uptime"`
 	UptimeSeconds int64     `json:"uptimeSeconds"`
+	Version       string    `json:"version"`
 }
 
 // PayloadType returns the canonical payload type for heartbeat events.
