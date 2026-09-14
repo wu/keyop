@@ -24,8 +24,11 @@ This utility is a work in progress.
 			// first so that profiles cover service initialization.
 			startPprofServer(deps)
 
-			// 1. Initialise the new keyop-messenger
-			msgr, err := initMessenger(deps)
+			// 1. Initialise the new keyop-messenger. A hub connection that fails
+			// permanently after startup shuts keyop down; the failure is returned
+			// once services have stopped so the process exits non-zero.
+			hubFatal := newHubFatalShutdown(logger, func() { deps.MustGetCancel()() })
+			msgr, err := initMessenger(deps, hubFatal.handle)
 			if err != nil {
 				logger.Error("new messenger init", "error", err)
 				return err
@@ -57,7 +60,10 @@ This utility is a work in progress.
 			}
 
 			// 4. Start services/subscribers
-			return run(deps, svcs)
+			if err := run(deps, svcs); err != nil {
+				return err
+			}
+			return hubFatal.err()
 		},
 	}
 

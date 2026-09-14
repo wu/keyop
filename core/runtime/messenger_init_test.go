@@ -48,7 +48,7 @@ func TestInitNewMessenger_FileNotFound(t *testing.T) {
 	deps.SetLogger(logger)
 
 	// Don't create messenger.yaml, should return nil gracefully
-	msgr, err := initMessenger(deps)
+	msgr, err := initMessenger(deps, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, msgr)
 }
@@ -66,7 +66,7 @@ func TestInitNewMessenger_InvalidYAML(t *testing.T) {
 	logger := &testutil.FakeLogger{}
 	deps.SetLogger(logger)
 
-	msgr, err := initMessenger(deps)
+	msgr, err := initMessenger(deps, nil)
 	assert.Error(t, err)
 	assert.Nil(t, msgr)
 	assert.Contains(t, err.Error(), "parse messenger.yaml")
@@ -89,7 +89,7 @@ storage:
 	logger := &testutil.FakeLogger{}
 	deps.SetLogger(logger)
 
-	msgr, err := initMessenger(deps)
+	msgr, err := initMessenger(deps, nil)
 	// Should succeed and expand the ~ in data_dir
 	if err != nil {
 		// If it fails, that's OK - just verify the function runs

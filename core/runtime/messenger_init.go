@@ -27,8 +27,11 @@ type messengerFileConfig struct {
 //  3. Creates and starts a *km.Messenger
 //  4. Registers all canonical core payload types with the new messenger
 //
+// onHubFatal, when non-nil, replaces the messenger's default handling of a hub
+// connection that fails permanently after startup (which panics).
+//
 // The caller is responsible for calling messenger.Close() when the context is done.
-func initMessenger(deps core.Dependencies) (*km.Messenger, error) {
+func initMessenger(deps core.Dependencies, onHubFatal km.HubFatalHandler) (*km.Messenger, error) {
 	logger := deps.MustGetLogger()
 
 	cfgPath := filepath.Join(configDirPath(), "messenger.yaml")
@@ -61,7 +64,11 @@ func initMessenger(deps core.Dependencies) (*km.Messenger, error) {
 		return nil, fmt.Errorf("invalid messenger.yaml: %w", err)
 	}
 
-	m, err := km.New(cfg, km.WithLogger(logger))
+	opts := []km.Option{km.WithLogger(logger)}
+	if onHubFatal != nil {
+		opts = append(opts, km.WithHubFatalHandler(onHubFatal))
+	}
+	m, err := km.New(cfg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create new messenger: %w", err)
 	}
