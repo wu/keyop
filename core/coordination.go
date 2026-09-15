@@ -46,6 +46,14 @@ type SQLiteMultiInserter interface {
 	SQLiteInserts(ctx *InsertContext) []SQLiteStatement
 }
 
+// SQLiteAfterInserter is an optional interface for SchemaProviders that need to act on a
+// message's rows once they are written, e.g. to read back an autoincrement id. The sqlite
+// service calls SQLiteAfterInsert only after all of the provider's statements have succeeded.
+// The write is already committed, so the hook cannot fail it and must handle its own errors.
+type SQLiteAfterInserter interface {
+	SQLiteAfterInsert(ctx *InsertContext, db *sql.DB)
+}
+
 // SQLiteMigrator is an optional interface for services that need to run
 // imperative data migrations after their schema DDL has been applied.
 // The SQLite service calls SQLiteMigrate immediately after executing a
