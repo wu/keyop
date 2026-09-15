@@ -143,10 +143,25 @@ type SearchableDocument struct {
 	Extra      map[string]string
 }
 
+// BulkIndexSink receives an IndexProvider's documents during a bulk index.
+type BulkIndexSink interface {
+	// Add indexes one document.
+	Add(doc SearchableDocument)
+	// Skip records a source record that could not be turned into a document,
+	// e.g. a row that failed to scan; the bulk index carries on. sourceID may
+	// be empty when the record's id could not be read either. Records a
+	// provider deliberately keeps out of search are not skips.
+	Skip(sourceID string, err error)
+}
+
 // IndexProvider is implemented by services that participate in full-text search.
 type IndexProvider interface {
 	SearchSourceType() string
-	BulkIndex() (<-chan SearchableDocument, error)
+	// BulkIndex passes every document to sink and returns once it has. It
+	// returns an error when it cannot finish, e.g. the database cannot be
+	// opened or reading stops early (rows.Err); documents already added are
+	// kept.
+	BulkIndex(ctx context.Context, sink BulkIndexSink) error
 }
 
 // SearchCoordinator is implemented by the search service.
