@@ -371,12 +371,17 @@ func PreprocessPlainLinks(content string) string {
 	return result
 }
 
+// journalDatePattern matches a wiki-link to a journal day: yyyy-mm-dd or yyyy.mm.dd.
+var journalDatePattern = regexp.MustCompile(`^\d{4}(-\d{2}-\d{2}|\.\d{2}\.\d{2})$`)
+
 // PreprocessWikiLinks converts wiki-style links to markdown links.
 // Supports two formats:
 //  1. Internal reference format: [[source:id]] -> [source:id](#/source/id)
 //     Example: [[contacts:550e8400-e29b-41d4-a716-446655440000]] (UUID)
 //     Example: [[contacts:12]] (numeric ID)
-//  2. Wiki-link format: [[page title]] -> [page title](#wiki-link "page title")
+//  2. Journal date format: [[yyyy-mm-dd]] or [[yyyy.mm.dd]] -> [date](#/journal/yyyy-mm-dd)
+//     Example: [[2026.09.17]] -> [2026.09.17](#/journal/2026-09-17)
+//  3. Wiki-link format: [[page title]] -> [page title](#wiki-link "page title")
 //     Example: [[My Note]] -> [My Note](#wiki-link "My Note")
 //
 // Properly handles multi-byte UTF-8 characters like emoji.
@@ -398,6 +403,11 @@ func PreprocessWikiLinks(content string) string {
 			id := parts[2]
 			// Convert to hash-based URL format for markdown (prevents browser treating it as external link)
 			return `[` + linkText + `](#/` + source + `/` + id + `)`
+		}
+
+		// A date links to that day's journal page, which is keyed by yyyy-mm-dd.
+		if journalDatePattern.MatchString(linkText) {
+			return `[` + linkText + `](#/journal/` + strings.ReplaceAll(linkText, ".", "-") + `)`
 		}
 
 		// Otherwise, treat it as a wiki-link (note title lookup)

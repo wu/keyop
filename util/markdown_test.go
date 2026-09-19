@@ -233,6 +233,21 @@ func TestPreprocessWikiLinks(t *testing.T) {
 			expected: `Check out [My Important Note](#wiki-link "My Important Note")`,
 		},
 		{
+			name:     "journal date with dashes",
+			input:    "See [[2026-09-17]] for more",
+			expected: "See [2026-09-17](#/journal/2026-09-17) for more",
+		},
+		{
+			name:     "journal date with dots",
+			input:    "See [[2026.09.17]] for more",
+			expected: "See [2026.09.17](#/journal/2026-09-17) for more",
+		},
+		{
+			name:     "mixed date separators stay a wiki link",
+			input:    "[[2026-09.17]]",
+			expected: `[2026-09.17](#wiki-link "2026-09.17")`,
+		},
+		{
 			name:     "no wiki links",
 			input:    "Just regular text [with link](https://example.com)",
 			expected: "Just regular text [with link](https://example.com)",
