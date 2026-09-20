@@ -374,6 +374,18 @@ func PreprocessPlainLinks(content string) string {
 // journalDatePattern matches a wiki-link to a journal day: yyyy-mm-dd or yyyy.mm.dd.
 var journalDatePattern = regexp.MustCompile(`^\d{4}(-\d{2}-\d{2}|\.\d{2}\.\d{2})$`)
 
+// JournalDate reports whether the text inside a [[...]] wiki link names a
+// journal day, and returns that day in the yyyy-mm-dd form the journal keys
+// entries by. PreprocessWikiLinks renders such a link as a link to the day;
+// anything that records a document's links has to recognise the same form, or
+// the day it points at never learns of the link.
+func JournalDate(linkText string) (string, bool) {
+	if !journalDatePattern.MatchString(linkText) {
+		return "", false
+	}
+	return strings.ReplaceAll(linkText, ".", "-"), true
+}
+
 // PreprocessWikiLinks converts wiki-style links to markdown links.
 // Supports two formats:
 //  1. Internal reference format: [[source:id]] -> [source:id](#/source/id)
@@ -406,8 +418,8 @@ func PreprocessWikiLinks(content string) string {
 		}
 
 		// A date links to that day's journal page, which is keyed by yyyy-mm-dd.
-		if journalDatePattern.MatchString(linkText) {
-			return `[` + linkText + `](#/journal/` + strings.ReplaceAll(linkText, ".", "-") + `)`
+		if date, ok := JournalDate(linkText); ok {
+			return `[` + linkText + `](#/journal/` + date + `)`
 		}
 
 		// Otherwise, treat it as a wiki-link (note title lookup)

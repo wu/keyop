@@ -521,6 +521,30 @@ func TestPreprocessWikiLinksWithEmoji(t *testing.T) {
 	}
 }
 
+// JournalDate is what tells a renderer and a link extractor the same thing
+// about a [[...]] wiki link, so both spellings map to the dashed key.
+func TestJournalDate(t *testing.T) {
+	tests := []struct {
+		linkText string
+		date     string
+		ok       bool
+	}{
+		{linkText: "2026-09-19", date: "2026-09-19", ok: true},
+		{linkText: "2026.09.19", date: "2026-09-19", ok: true},
+		{linkText: "2026.9.19"},
+		{linkText: "20260919"},
+		{linkText: "2026-09-19 evening"},
+		{linkText: "Plain Title"},
+		{linkText: "contacts:12"},
+		{linkText: ""},
+	}
+	for _, tt := range tests {
+		date, ok := JournalDate(tt.linkText)
+		assert.Equal(t, tt.ok, ok, tt.linkText)
+		assert.Equal(t, tt.date, date, tt.linkText)
+	}
+}
+
 func TestPreprocessWikiLinksWithSourceId(t *testing.T) {
 	tests := []struct {
 		name     string
