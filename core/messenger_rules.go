@@ -86,7 +86,7 @@ func (m *rulesMessenger) apply(rules []Rule, side, channel, payloadType string, 
 			"service", m.service, "side", side, "channel", channel,
 			"payloadType", payloadType, "rule", change.RuleIndex,
 			"path", change.Path, "from", change.From, "to", change.To,
-			"forced", change.Forced)
+			"forced", change.Forced, "added", change.Added)
 	}
 
 	return out

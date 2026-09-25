@@ -69,6 +69,11 @@ type Rule struct {
 	Set map[string]any
 	// Force writes each value at its dotted field path unconditionally.
 	Force map[string]any
+	// Add appends each value to the list field at its dotted path, skipping values
+	// the list already holds. Unlike Set it accumulates: two rules adding to the
+	// same field both take effect, which is what makes it the way to build up a
+	// list such as tags one rule at a time.
+	Add map[string]any
 }
 
 // RuleSpec is the decoded YAML form of a Rule, before parsing. Condition values
@@ -79,6 +84,7 @@ type RuleSpec struct {
 	When  map[string]any `yaml:"when" json:"when"`
 	Set   map[string]any `yaml:"set" json:"set"`
 	Force map[string]any `yaml:"force" json:"force"`
+	Add   map[string]any `yaml:"add" json:"add"`
 }
 
 // RuleChange records one field a rule actually altered. The messenger wrapper logs
@@ -90,6 +96,9 @@ type RuleChange struct {
 	From      any
 	To        any
 	Forced    bool
+	// Added marks an `add` write: To holds the values the rule offered, of which
+	// only those not already present were appended.
+	Added bool
 }
 
 // PrototypeLookup resolves a payload type string to the Go type registered for it.
@@ -184,6 +193,7 @@ func ParseRules(key string, specs []RuleSpec) ([]Rule, []error) {
 			PayloadType: spec.Type,
 			Set:         spec.Set,
 			Force:       spec.Force,
+			Add:         spec.Add,
 		}
 
 		failed := false
@@ -226,13 +236,20 @@ func ValidateRules(key string, rules []Rule, lookup PrototypeLookup) []error {
 			errs = append(errs, fmt.Errorf("%s: 'type' is required (e.g. type: core.alert.v1)", prefix))
 			continue
 		}
-		if len(rule.Set) == 0 && len(rule.Force) == 0 {
-			errs = append(errs, fmt.Errorf("%s: has no 'set' or 'force' and would change nothing", prefix))
+		if len(rule.Set) == 0 && len(rule.Force) == 0 && len(rule.Add) == 0 {
+			errs = append(errs, fmt.Errorf("%s: has no 'set', 'force' or 'add' and would change nothing", prefix))
 		}
-		for _, path := range sortedKeys(rule.Set) {
-			if _, dup := rule.Force[path]; dup {
-				errs = append(errs, fmt.Errorf("%s: %q appears in both 'set' and 'force'", prefix, path))
+		for _, pair := range [][2]string{{"set", "force"}, {"set", "add"}, {"force", "add"}} {
+			first, second := rule.writesNamed(pair[0]), rule.writesNamed(pair[1])
+			for _, path := range sortedKeys(first) {
+				if _, dup := second[path]; dup {
+					errs = append(errs, fmt.Errorf("%s: %q appears in both '%s' and '%s'", prefix, path, pair[0], pair[1]))
+				}
 			}
+		}
+		captures, captureErrs := rule.captureNames()
+		for _, err := range captureErrs {
+			errs = append(errs, fmt.Errorf("%s: %w", prefix, err))
 		}
 
 		if lookup == nil {
@@ -245,10 +262,21 @@ func ValidateRules(key string, rules []Rule, lookup PrototypeLookup) []error {
 		}
 
 		errs = append(errs, validateConditions(prefix, rule, protoType)...)
-		errs = append(errs, validateWrites(prefix, rule, protoType)...)
+		errs = append(errs, validateWrites(prefix, rule, protoType, captures)...)
 	}
 
 	return errs
+}
+
+// writesNamed returns the write map called label: "set", "force" or "add".
+func (r Rule) writesNamed(label string) map[string]any {
+	switch label {
+	case "set":
+		return r.Set
+	case "force":
+		return r.Force
+	}
+	return r.Add
 }
 
 // ValidateConditions checks the When clauses of match-only rules: rules used to
@@ -318,38 +346,101 @@ func validateConditions(prefix string, rule Rule, protoType reflect.Type) []erro
 	return errs
 }
 
-// validateWrites checks each set/force path by performing the write against a
+// validateWrites checks each set/force/add path by performing the write against a
 // throwaway zero value of the payload type. Using the same code as the runtime is
-// the point: anything that would fail later fails here instead.
-func validateWrites(prefix string, rule Rule, protoType reflect.Type) []error {
+// the point: anything that would fail later fails here instead. ${...} references
+// in values are checked against the payload type and the rule's named groups, and
+// stand in as a placeholder string for the probe write.
+func validateWrites(prefix string, rule Rule, protoType reflect.Type, captures map[string]bool) []error {
 	var errs []error
-	for _, which := range []struct {
-		label  string
-		writes map[string]any
-	}{{"set", rule.Set}, {"force", rule.Force}} {
-		for _, path := range sortedKeys(which.writes) {
+	resolve := staticResolver(protoType, captures)
+	for _, which := range []string{"set", "force", "add"} {
+		writes := rule.writesNamed(which)
+		for _, path := range sortedKeys(writes) {
+			value, _, err := interpolate(writes[path], resolve)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %s: %q: %w", prefix, which, path, err))
+				continue
+			}
 			probe := reflect.New(protoType).Elem()
-			if _, _, err := setPath(probe, path, which.writes[path], false); err != nil {
-				errs = append(errs, fmt.Errorf("%s: %s: %q: %w", prefix, which.label, path, err))
+			if which == "add" {
+				_, _, err = addPath(probe, path, value)
+			} else {
+				_, _, err = setPath(probe, path, value, false)
+			}
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %s: %q: %w", prefix, which, path, err))
 			}
 		}
 	}
 	return errs
 }
 
+// captureNames returns the named regexp groups the rule's `matches` conditions
+// define, which values can reference as ${match.NAME}. A name defined by two
+// conditions is an error: the reference would be ambiguous.
+func (r Rule) captureNames() (map[string]bool, []error) {
+	var errs []error
+	names := map[string]bool{}
+	for _, path := range sortedKeys(r.When) {
+		cond := r.When[path]
+		if cond.Op != OpMatches || cond.re == nil {
+			continue
+		}
+		for _, name := range cond.re.SubexpNames() {
+			if name == "" {
+				continue
+			}
+			if names[name] {
+				errs = append(errs, fmt.Errorf("when: named group %q is defined by more than one 'matches' condition", name))
+			}
+			names[name] = true
+		}
+	}
+	return names, errs
+}
+
 // Match reports whether the rule applies to this payload. Every condition must
 // match; a condition naming a field that is absent or nil does not match.
 func (r Rule) Match(payloadType string, payload any) bool {
+	_, ok := r.match(payloadType, payload)
+	return ok
+}
+
+// match is Match that also returns the named groups captured by the rule's
+// `matches` conditions, keyed by group name. A group that took no part in the
+// match captures the empty string.
+func (r Rule) match(payloadType string, payload any) (map[string]string, bool) {
 	if r.PayloadType != payloadType || payload == nil {
-		return false
+		return nil, false
 	}
+	var captures map[string]string
 	for path, cond := range r.When {
 		value, ok := getPath(payload, path)
 		if !ok || !cond.matches(value) {
-			return false
+			return nil, false
+		}
+		if cond.Op != OpMatches || cond.re == nil {
+			continue
+		}
+		names := cond.re.SubexpNames()
+		var groups []string
+		for i, name := range names {
+			if name == "" {
+				continue
+			}
+			if groups == nil {
+				groups = cond.re.FindStringSubmatch(fmt.Sprint(value))
+			}
+			if captures == nil {
+				captures = map[string]string{}
+			}
+			if i < len(groups) {
+				captures[name] = groups[i]
+			}
 		}
 	}
-	return true
+	return captures, true
 }
 
 func (c Condition) matches(value any) bool {
@@ -403,10 +494,14 @@ func ApplyRules(payloadType string, payload any, rules []Rule) (any, []RuleChang
 		return payload, nil, nil
 	}
 
-	var matched []int
+	type matchedRule struct {
+		index    int
+		captures map[string]string
+	}
+	var matched []matchedRule
 	for i, rule := range rules {
-		if rule.Match(payloadType, payload) {
-			matched = append(matched, i)
+		if captures, ok := rule.match(payloadType, payload); ok {
+			matched = append(matched, matchedRule{i, captures})
 		}
 	}
 	if len(matched) == 0 {
@@ -430,21 +525,38 @@ func ApplyRules(payloadType string, payload any, rules []Rule) (any, []RuleChang
 
 	var changes []RuleChange
 	var errs []error
-	for _, i := range matched {
+	for _, m := range matched {
+		i := m.index
 		rule := rules[i]
-		for _, which := range []struct {
-			writes map[string]any
-			forced bool
-		}{{rule.Set, false}, {rule.Force, true}} {
-			for _, path := range sortedKeys(which.writes) {
-				from, changed, err := setPath(working.Elem(), path, which.writes[path], !which.forced)
+		// References in values read the payload as it was published, not what an
+		// earlier rule wrote, so a rule's result does not depend on rule order.
+		resolve := payloadResolver(payload, m.captures)
+		for _, which := range []string{"set", "force", "add"} {
+			writes := rule.writesNamed(which)
+			for _, path := range sortedKeys(writes) {
+				value, skip, err := interpolate(writes[path], resolve)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("rule %d: %q: %w", i, path, err))
+					continue
+				}
+				if skip {
+					continue
+				}
+				var from any
+				var changed bool
+				if which == "add" {
+					from, changed, err = addPath(working.Elem(), path, value)
+				} else {
+					from, changed, err = setPath(working.Elem(), path, value, which == "set")
+				}
 				if err != nil {
 					errs = append(errs, fmt.Errorf("rule %d: %q: %w", i, path, err))
 					continue
 				}
 				if changed {
 					changes = append(changes, RuleChange{
-						RuleIndex: i, Path: path, From: from, To: which.writes[path], Forced: which.forced,
+						RuleIndex: i, Path: path, From: from, To: value,
+						Forced: which == "force", Added: which == "add",
 					})
 				}
 			}
@@ -499,15 +611,12 @@ func getPath(root any, path string) (any, bool) {
 	return final.Interface(), true
 }
 
-// setPath writes value at a dotted field path within the addressable value root,
-// returning the previous value and whether anything changed.
-//
-// When onlyIfUnset is true the write is skipped unless the field currently holds
-// its zero value. Note that a plain bool field is indistinguishable from unset
-// when false; that ambiguity is why the delivery hints use *bool.
-func setPath(root reflect.Value, path string, value any, onlyIfUnset bool) (any, bool, error) {
+// writableField walks a dotted path from the addressable value root to the field
+// it names, cloning pointers on the way so a write never reaches memory the caller
+// still holds.
+func writableField(root reflect.Value, path string) (reflect.Value, error) {
 	if path == "" {
-		return nil, false, fmt.Errorf("empty field path")
+		return reflect.Value{}, fmt.Errorf("empty field path")
 	}
 	segs := strings.Split(path, ".")
 
@@ -515,19 +624,33 @@ func setPath(root reflect.Value, path string, value any, onlyIfUnset bool) (any,
 	for i, seg := range segs {
 		var err error
 		if cur, err = derefForWrite(cur); err != nil {
-			return nil, false, err
+			return reflect.Value{}, err
 		}
 		if cur.Kind() != reflect.Struct {
-			return nil, false, fmt.Errorf("%q is %s, not a struct", strings.Join(segs[:i], "."), cur.Kind())
+			return reflect.Value{}, fmt.Errorf("%q is %s, not a struct", strings.Join(segs[:i], "."), cur.Kind())
 		}
 		field, found := fieldByJSONTag(cur, seg)
 		if !found {
-			return nil, false, fmt.Errorf("no such field %q", seg)
+			return reflect.Value{}, fmt.Errorf("no such field %q", seg)
 		}
 		if !field.CanSet() {
-			return nil, false, fmt.Errorf("field %q cannot be set", seg)
+			return reflect.Value{}, fmt.Errorf("field %q cannot be set", seg)
 		}
 		cur = field
+	}
+	return cur, nil
+}
+
+// setPath writes value at a dotted field path within the addressable value root,
+// returning the previous value and whether anything changed.
+//
+// When onlyIfUnset is true the write is skipped unless the field currently holds
+// its zero value. Note that a plain bool field is indistinguishable from unset
+// when false; that ambiguity is why the delivery hints use *bool.
+func setPath(root reflect.Value, path string, value any, onlyIfUnset bool) (any, bool, error) {
+	cur, err := writableField(root, path)
+	if err != nil {
+		return nil, false, err
 	}
 
 	if onlyIfUnset && !cur.IsZero() {
@@ -541,6 +664,174 @@ func setPath(root reflect.Value, path string, value any, onlyIfUnset bool) (any,
 		return nil, false, nil
 	}
 	return before, true, nil
+}
+
+// addPath appends value to the list field at a dotted path within the addressable
+// value root, skipping elements the list already holds. value is one element or a
+// list of them. It returns the previous list and whether anything was appended.
+//
+// The list is rebuilt rather than appended to in place: the caller's slice may
+// share a backing array with the original payload, which must not be touched.
+func addPath(root reflect.Value, path string, value any) (any, bool, error) {
+	cur, err := writableField(root, path)
+	if err != nil {
+		return nil, false, err
+	}
+	if cur.Kind() != reflect.Slice {
+		return nil, false, fmt.Errorf("%q is %s, not a list, so 'add' cannot append to it", path, cur.Type())
+	}
+
+	items, ok := value.([]any)
+	if !ok {
+		items = []any{value}
+	}
+
+	before := cur.Interface()
+	next := reflect.MakeSlice(cur.Type(), cur.Len(), cur.Len()+len(items))
+	reflect.Copy(next, cur)
+	for _, item := range items {
+		elem := reflect.New(cur.Type().Elem()).Elem()
+		if err := assignValue(elem, item); err != nil {
+			return nil, false, err
+		}
+		present := false
+		for i := 0; i < next.Len(); i++ {
+			if reflect.DeepEqual(next.Index(i).Interface(), elem.Interface()) {
+				present = true
+				break
+			}
+		}
+		if !present {
+			next = reflect.Append(next, elem)
+		}
+	}
+	if next.Len() == cur.Len() {
+		return nil, false, nil
+	}
+	cur.Set(next)
+	return before, true, nil
+}
+
+// Value templates. A string written by set, force or add may hold ${ref}
+// references, replaced when the rule applies:
+//
+//	${mailbox}      the payload field at that dotted JSON path
+//	${match.alias}  the named group (?P<alias>...) of one of the rule's `matches`
+//	                conditions
+//
+// A reference to a field the payload does not carry, or to a group that took no
+// part in the match, expands to the empty string. A write whose value then comes
+// out empty is skipped rather than made, so a rule never files an empty tag. A `$`
+// not followed by `{` is literal.
+
+// expandTemplate replaces each ${ref} in s with resolve(ref). hadRef reports
+// whether s held any reference.
+func expandTemplate(s string, resolve func(ref string) (string, error)) (out string, hadRef bool, err error) {
+	if !strings.Contains(s, "${") {
+		return s, false, nil
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != '$' || i+1 >= len(s) || s[i+1] != '{' {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		end := strings.IndexByte(s[i:], '}')
+		if end < 0 {
+			return "", true, fmt.Errorf("unterminated ${ in %q", s)
+		}
+		ref := strings.TrimSpace(s[i+2 : i+end])
+		if ref == "" {
+			return "", true, fmt.Errorf("empty ${} in %q", s)
+		}
+		val, err := resolve(ref)
+		if err != nil {
+			return "", true, err
+		}
+		b.WriteString(val)
+		hadRef = true
+		i += end + 1
+	}
+	return b.String(), hadRef, nil
+}
+
+// interpolate expands the templates in a write's value: a string, or the strings
+// of a list. skip is true when the write should not be made because expansion left
+// nothing to write: a string that held a reference and came out empty, or a list
+// in which every element did.
+func interpolate(value any, resolve func(ref string) (string, error)) (out any, skip bool, err error) {
+	switch v := value.(type) {
+	case string:
+		s, hadRef, err := expandTemplate(v, resolve)
+		if err != nil {
+			return nil, false, err
+		}
+		if hadRef && s == "" {
+			return nil, true, nil
+		}
+		return s, false, nil
+
+	case []any:
+		items := make([]any, 0, len(v))
+		for _, item := range v {
+			str, ok := item.(string)
+			if !ok {
+				items = append(items, item)
+				continue
+			}
+			s, hadRef, err := expandTemplate(str, resolve)
+			if err != nil {
+				return nil, false, err
+			}
+			if hadRef && s == "" {
+				continue
+			}
+			items = append(items, s)
+		}
+		if len(items) == 0 && len(v) > 0 {
+			return nil, true, nil
+		}
+		return items, false, nil
+	}
+	return value, false, nil
+}
+
+// payloadResolver resolves references against a live payload and the rule's
+// captured groups.
+func payloadResolver(payload any, captures map[string]string) func(string) (string, error) {
+	return func(ref string) (string, error) {
+		if name, ok := strings.CutPrefix(ref, "match."); ok {
+			return captures[name], nil
+		}
+		v, ok := getPath(payload, ref)
+		if !ok {
+			return "", nil
+		}
+		return fmt.Sprint(v), nil
+	}
+}
+
+// staticResolver checks references against the payload type and the rule's named
+// groups, for startup validation. It returns a placeholder for each, which is
+// enough to probe the write it appears in.
+func staticResolver(protoType reflect.Type, captures map[string]bool) func(string) (string, error) {
+	return func(ref string) (string, error) {
+		if name, ok := strings.CutPrefix(ref, "match."); ok {
+			if !captures[name] {
+				return "", fmt.Errorf("${%s}: no named group %q in the rule's 'matches' conditions", ref, name)
+			}
+			return "x", nil
+		}
+		fieldType, ok := resolveFieldType(protoType, ref)
+		if !ok {
+			return "", fmt.Errorf("${%s}: not a field of %s", ref, protoType)
+		}
+		if kind := baseType(fieldType).Kind(); kind != reflect.String && kind != reflect.Bool && !isNumericKind(kind) {
+			return "", fmt.Errorf("${%s}: field is %s; only strings, numbers and bools can be interpolated", ref, fieldType)
+		}
+		return "x", nil
+	}
 }
 
 // derefForWrite follows pointers, allocating a nil one and cloning a non-nil one
